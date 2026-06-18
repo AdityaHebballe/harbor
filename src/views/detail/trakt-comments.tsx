@@ -117,7 +117,7 @@ function CommentCard({
           {comment.userRating != null && (
               <span className="ml-auto flex items-center gap-1 text-[12px] font-medium text-accent">
                 <span className="text-[10px]">★</span>
-                {comment.userRating}
+                {Math.round(comment.userRating / 2)}
               </span>
           )}
         </div>
@@ -351,7 +351,7 @@ export function TraktComments({ resolution }: { resolution: IdResolution | null 
           </div>
           {(hoverRating || userRating) > 0 && (
             <span className="text-[12px] font-medium text-ink-muted">
-              {hoverRating || userRating}
+              {(hoverRating || userRating) / 2}
             </span>
           )}
           {userRating > 0 && !hoverRating && (
