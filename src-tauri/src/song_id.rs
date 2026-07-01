@@ -1,7 +1,27 @@
-#[cfg(windows)]
-use std::collections::VecDeque;
+mod capture;
 
+use capture::AudioClip;
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static IDENTIFICATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+struct IdentificationGuard;
+
+impl IdentificationGuard {
+    fn acquire() -> Result<Self, String> {
+        IDENTIFICATION_IN_PROGRESS
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| Self)
+            .map_err(|_| "Song identification is already running".to_string())
+    }
+}
+
+impl Drop for IdentificationGuard {
+    fn drop(&mut self) {
+        IDENTIFICATION_IN_PROGRESS.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Serialize)]
 pub struct SongResult {
@@ -21,103 +41,69 @@ pub async fn recognize_now_playing(
     api_token: String,
     seconds: Option<u32>,
 ) -> Result<Option<SongResult>, String> {
-    #[cfg(windows)]
-    {
-        let secs = seconds.unwrap_or(7).clamp(3, 15);
-        let (pcm, sample_rate, channels, bits) =
-            tauri::async_runtime::spawn_blocking(move || capture_loopback(secs))
-                .await
-                .map_err(|e| e.to_string())??;
-        let wav = pcm_to_wav(&pcm, sample_rate, channels, bits)?;
-        audd_recognize(wav, api_token).await
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (api_token, seconds);
-        Err("Song identification is only supported on Windows for now".into())
-    }
+    let _guard = IdentificationGuard::acquire()?;
+    let seconds = normalize_capture_seconds(seconds);
+    let clip = tauri::async_runtime::spawn_blocking(move || capture::capture(seconds))
+        .await
+        .map_err(|e| format!("Audio capture task failed: {e}"))??;
+    validate_clip(&clip, seconds)?;
+
+    let wav = pcm_to_wav(&clip)?;
+    audd_recognize(wav, api_token).await
 }
 
-#[cfg(windows)]
-fn capture_loopback(seconds: u32) -> Result<(Vec<u8>, u32, u16, u16), String> {
-    use wasapi::*;
-    initialize_mta().ok().map_err(|e| format!("COM init failed: {e}"))?;
-
-    let sample_rate = 44100u32;
-    let channels = 2u16;
-    let bits = 16u16;
-
-    // Loopback = open the default *render* device, but initialize it for capture.
-    let device = get_default_device(&Direction::Render).map_err(|e| e.to_string())?;
-    let mut audio_client = device.get_iaudioclient().map_err(|e| e.to_string())?;
-
-    let format = WaveFormat::new(
-        bits as usize,
-        bits as usize,
-        &SampleType::Int,
-        sample_rate as usize,
-        channels as usize,
-        None,
-    );
-
-    let (_default_period, min_period) = audio_client.get_periods().map_err(|e| e.to_string())?;
-    audio_client
-        .initialize_client(&format, min_period, &Direction::Capture, &ShareMode::Shared, true)
-        .map_err(|e| e.to_string())?;
-
-    let h_event = audio_client.set_get_eventhandle().map_err(|e| e.to_string())?;
-    let capture_client = audio_client.get_audiocaptureclient().map_err(|e| e.to_string())?;
-    let blockalign = format.get_blockalign() as usize;
-
-    audio_client.start_stream().map_err(|e| e.to_string())?;
-
-    let target_bytes = sample_rate as usize * seconds as usize * blockalign;
-    let mut queue: VecDeque<u8> = VecDeque::new();
-    while queue.len() < target_bytes {
-        capture_client
-            .read_from_device_to_deque(&mut queue)
-            .map_err(|e| e.to_string())?;
-        if h_event.wait_for_event(2000).is_err() {
-            break;
-        }
-    }
-    audio_client.stop_stream().map_err(|e| e.to_string())?;
-
-    let pcm: Vec<u8> = queue.into_iter().take(target_bytes).collect();
-    Ok((pcm, sample_rate, channels, bits))
+fn normalize_capture_seconds(seconds: Option<u32>) -> u32 {
+    seconds.unwrap_or(7).clamp(3, 15)
 }
 
-#[cfg(windows)]
-fn pcm_to_wav(pcm: &[u8], sample_rate: u32, channels: u16, bits: u16) -> Result<Vec<u8>, String> {
+fn validate_clip(clip: &AudioClip, seconds: u32) -> Result<(), String> {
+    if clip.samples.is_empty() {
+        return Err("System audio capture returned no samples".into());
+    }
+    if clip.sample_rate == 0 || clip.channels == 0 {
+        return Err("System audio capture returned an invalid audio format".into());
+    }
+
+    let expected = clip.sample_rate as usize * clip.channels as usize * seconds as usize;
+    if clip.samples.len() < expected {
+        return Err(format!(
+            "System audio capture ended early (received {} of {expected} samples)",
+            clip.samples.len()
+        ));
+    }
+    if !clip.samples.iter().any(|sample| sample.unsigned_abs() > 8) {
+        return Err("No audible system audio was detected".into());
+    }
+    Ok(())
+}
+
+fn pcm_to_wav(clip: &AudioClip) -> Result<Vec<u8>, String> {
     use hound::{SampleFormat, WavSpec, WavWriter};
     use std::io::Cursor;
 
     let spec = WavSpec {
-        channels,
-        sample_rate,
-        bits_per_sample: bits,
+        channels: clip.channels,
+        sample_rate: clip.sample_rate,
+        bits_per_sample: 16,
         sample_format: SampleFormat::Int,
     };
     let mut cursor = Cursor::new(Vec::<u8>::new());
     {
         let mut writer = WavWriter::new(&mut cursor, spec).map_err(|e| e.to_string())?;
-        for chunk in pcm.chunks_exact(2) {
-            let s = i16::from_le_bytes([chunk[0], chunk[1]]);
-            writer.write_sample(s).map_err(|e| e.to_string())?;
+        for sample in &clip.samples {
+            writer.write_sample(*sample).map_err(|e| e.to_string())?;
         }
         writer.finalize().map_err(|e| e.to_string())?;
     }
     Ok(cursor.into_inner())
 }
 
-#[cfg(windows)]
 fn parse_timecode(tc: &str) -> f64 {
-    // "MM:SS" or "HH:MM:SS" -> seconds.
-    tc.split(':')
-        .fold(0.0f64, |acc, p| acc * 60.0 + p.parse::<f64>().unwrap_or(0.0))
+    tc.split(':').fold(0.0f64, |acc, p| {
+        acc * 60.0 + p.parse::<f64>().unwrap_or(0.0)
+    })
 }
 
-#[cfg(windows)]
 async fn audd_recognize(wav: Vec<u8>, api_token: String) -> Result<Option<SongResult>, String> {
     use reqwest::multipart::{Form, Part};
 
@@ -156,17 +142,16 @@ async fn audd_recognize(wav: Vec<u8>, api_token: String) -> Result<Option<SongRe
     let album = r["album"].as_str().unwrap_or("").to_string();
     let link = r["song_link"].as_str().unwrap_or("").to_string();
 
-    let mut artwork = String::new();
-    if let Some(u) = r["apple_music"]["artwork"]["url"].as_str() {
-        artwork = u.replace("{w}", "300").replace("{h}", "300");
-    } else if let Some(u) = r["spotify"]["album"]["images"][0]["url"].as_str() {
-        artwork = u.to_string();
-    }
+    let artwork = if let Some(url) = r["apple_music"]["artwork"]["url"].as_str() {
+        url.replace("{w}", "300").replace("{h}", "300")
+    } else {
+        r["spotify"]["album"]["images"][0]["url"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
 
-    // Offset inside the song at the moment of the match (AudD "timecode", "MM:SS").
     let start_sec = r["timecode"].as_str().map(parse_timecode).unwrap_or(0.0);
-
-    // Total track length: Apple Music (ms) -> Spotify (ms) -> 0 if unknown.
     let duration_sec = r["apple_music"]["durationInMillis"]
         .as_f64()
         .map(|ms| ms / 1000.0)
@@ -182,4 +167,65 @@ async fn audd_recognize(wav: Vec<u8>, api_token: String) -> Result<Option<SongRe
         duration_sec,
         start_sec,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn capture_duration_defaults_and_clamps() {
+        assert_eq!(normalize_capture_seconds(None), 7);
+        assert_eq!(normalize_capture_seconds(Some(1)), 3);
+        assert_eq!(normalize_capture_seconds(Some(10)), 10);
+        assert_eq!(normalize_capture_seconds(Some(30)), 15);
+    }
+
+    #[test]
+    fn parses_audd_timecodes() {
+        assert_eq!(parse_timecode("01:23"), 83.0);
+        assert_eq!(parse_timecode("01:02:03.5"), 3723.5);
+    }
+
+    #[test]
+    fn writes_pcm_as_wav() {
+        let clip = AudioClip {
+            samples: vec![-100, 100, -200, 200],
+            sample_rate: 44_100,
+            channels: 2,
+        };
+        let wav = pcm_to_wav(&clip).expect("WAV encoding should succeed");
+        assert_eq!(&wav[0..4], b"RIFF");
+        assert_eq!(&wav[8..12], b"WAVE");
+    }
+
+    #[test]
+    fn rejects_silent_and_truncated_captures() {
+        let silent = AudioClip {
+            samples: vec![0; 12],
+            sample_rate: 2,
+            channels: 2,
+        };
+        assert_eq!(
+            validate_clip(&silent, 3).unwrap_err(),
+            "No audible system audio was detected"
+        );
+
+        let truncated = AudioClip {
+            samples: vec![100; 11],
+            sample_rate: 2,
+            channels: 2,
+        };
+        assert!(validate_clip(&truncated, 3)
+            .unwrap_err()
+            .starts_with("System audio capture ended early"));
+    }
+
+    #[test]
+    fn identification_guard_rejects_concurrent_work() {
+        let first = IdentificationGuard::acquire().expect("first command should acquire the guard");
+        assert!(IdentificationGuard::acquire().is_err());
+        drop(first);
+        assert!(IdentificationGuard::acquire().is_ok());
+    }
 }

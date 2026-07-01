@@ -61,6 +61,7 @@
           "libgl1",
           "libegl1",
           "libayatana-appindicator3-1",
+          "libpulse0",
           "libssl3",
           "ca-certificates",
           "gstreamer1.0-plugins-good",
@@ -75,6 +76,7 @@
           "mesa-libGL",
           "mesa-libEGL",
           "libappindicator-gtk3",
+          "pulseaudio-libs",
           "openssl-libs",
           "ca-certificates"
         ]

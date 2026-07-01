@@ -85,7 +85,8 @@ export async function identifyNowPlaying(apiToken: string): Promise<void> {
     });
   } catch (e) {
     console.error("song-id failed", e);
-    toast({ kind: "error", title: "Song identification failed" });
+    const detail = typeof e === "string" ? e : e instanceof Error ? e.message : String(e);
+    toast({ kind: "error", title: "Song identification failed", body: detail });
   } finally {
     busy = false;
   }
