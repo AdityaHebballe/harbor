@@ -19,7 +19,7 @@ import { CastIcon } from "@/components/player/cast-icon";
 import { HarborLoader } from "@/components/harbor-loader";
 import { HarborMark } from "@/components/icons/harbor-mark";
 import type { CastDeviceInfo } from "@/lib/cast";
-import { useKeyboardNavigation } from "@/lib/use-keyboard-navigation";
+import { useKeyboardNavigation } from "@/lib/keyboard-navigation";
 import { useRemoteClient } from "@/lib/remote/use-remote-client";
 import type { RemoteCastDevice, RemoteNavKey, RemoteSnapshot, RemoteTextEntry } from "@/lib/remote/protocol";
 
@@ -164,6 +164,7 @@ function TouchpadSurface({
   const lastStepRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
   const pointerIdRef = useRef<number | null>(null);
+  const lastSwipeTimeRef = useRef<number>(0);
 
   const fireDir = useCallback(
     (dx: number, dy: number) => {
@@ -176,6 +177,7 @@ function TouchpadSurface({
         : dy > 0
           ? "down"
           : "up";
+      lastSwipeTimeRef.current = Date.now();
       onNav(key);
     },
     [onNav],
@@ -209,7 +211,12 @@ function TouchpadSurface({
     } catch {
       /* already released */
     }
-    if (!movedRef.current) onNav("select");
+    if (!movedRef.current) {
+      const timeSinceSwipe = Date.now() - lastSwipeTimeRef.current;
+      if (timeSinceSwipe > 200) {
+        onNav("select");
+      }
+    }
     pointerIdRef.current = null;
     originRef.current = null;
     lastStepRef.current = null;

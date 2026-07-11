@@ -1,4 +1,4 @@
-import { dispatchTvNav } from "@/lib/use-keyboard-navigation";
+import { dispatchTvNav } from "@/lib/keyboard-navigation";
 import type { RemoteNavKey } from "./protocol";
 
 /** Phone touchpad → host library focus (select/back are imperative; arrows reuse key nav). */

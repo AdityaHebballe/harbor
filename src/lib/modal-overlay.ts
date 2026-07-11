@@ -6,12 +6,26 @@ export type ModalPayload = {
   state: unknown;
 };
 
+let overlayOpen = false;
+
+if (typeof window !== "undefined") {
+  void listen("modal://closed", () => {
+    overlayOpen = false;
+  });
+}
+
+export function isModalOverlayOpen(): boolean {
+  return overlayOpen;
+}
+
 export async function modalOverlayOpen(kind: string, state: unknown): Promise<void> {
   await invoke("modal_overlay_open", { payload: { kind, state } });
+  overlayOpen = true;
 }
 
 export async function modalOverlayClose(): Promise<void> {
   await invoke("modal_overlay_close").catch(() => {});
+  overlayOpen = false;
 }
 
 export async function modalOverlayEmitState(kind: string, state: unknown): Promise<void> {
