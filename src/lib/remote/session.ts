@@ -39,6 +39,8 @@ export type RemotePlaybackBinding = {
   onNextEpisode?: () => void;
   hasPrevEpisode?: boolean;
   hasNextEpisode?: boolean;
+  /** Show the in-player volume HUD (same as wheel / hotkeys). */
+  onVolumeFeedback?: (volume: number, muted: boolean) => void;
 };
 
 type StickyMedia = {
@@ -452,12 +454,15 @@ export async function dispatchRemoteCommand(command: RemoteCommand): Promise<voi
       if (!b?.bridge) return;
       const v = Math.max(0, Math.min(1, command.volume));
       b.bridge.setVolume(v);
+      const muted = v > 0 ? false : b.snap.muted;
       if (v > 0 && b.snap.muted) b.bridge.setMuted(false);
+      b.onVolumeFeedback?.(v, muted);
       notify();
       return;
     }
     case "setMuted": {
       b?.bridge?.setMuted(command.muted);
+      if (b) b.onVolumeFeedback?.(b.snap.volume, command.muted);
       notify();
       return;
     }

@@ -259,24 +259,6 @@ export function PlayerView({ src }: { src: PlayerSrc }) {
   adjacentRef.current = adjacent;
   const onPrevEpisode = useCallback(() => goToEpisode(adjacentRef.current.prev), [goToEpisode]);
   const onNextEpisode = useCallback(() => goToEpisode(adjacentRef.current.next), [goToEpisode]);
-  useRemotePlaybackBinding({
-    bridgeRef,
-    bridgeReady,
-    snap,
-    src,
-    castDevice: cast.castDevice,
-    castPlaying: cast.castPlaying,
-    castPositionSec: cast.castPositionSec,
-    playCast: cast.playCast,
-    pauseCast: cast.pauseCast,
-    seekCast: cast.seekCast,
-    stopCast: cast.stopCast,
-    onPickDevice: cast.onPickDevice,
-    onPrevEpisode,
-    onNextEpisode,
-    hasPrevEpisode: canChangeEpisode && !!adjacent.prev,
-    hasNextEpisode: canChangeEpisode && !!adjacent.next,
-  });
 
   const roomGuest = inRoom && !isHost;
   const broadcastEpisode = useCallback(
@@ -599,6 +581,26 @@ export function PlayerView({ src }: { src: PlayerSrc }) {
       }
     };
   }, []);
+
+  useRemotePlaybackBinding({
+    bridgeRef,
+    bridgeReady,
+    snap,
+    src,
+    castDevice: cast.castDevice,
+    castPlaying: cast.castPlaying,
+    castPositionSec: cast.castPositionSec,
+    playCast: cast.playCast,
+    pauseCast: cast.pauseCast,
+    seekCast: cast.seekCast,
+    stopCast: cast.stopCast,
+    onPickDevice: cast.onPickDevice,
+    onPrevEpisode,
+    onNextEpisode,
+    hasPrevEpisode: canChangeEpisode && !!adjacent.prev,
+    hasNextEpisode: canChangeEpisode && !!adjacent.next,
+    onVolumeFeedback: showVolumeFeedback,
+  });
 
   const videoFill = useVideoFill(bridgeRef, src.url, playing);
   useLivePictureEq(bridgeRef, src.url);

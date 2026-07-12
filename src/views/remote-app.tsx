@@ -727,7 +727,7 @@ function RemoteBody({
             <button
               type="button"
               aria-label="Volume up"
-              onClick={() => onVolumeStep(0.08)}
+              onClick={() => onVolumeStep(0.1)}
               className="flex items-center justify-center text-ink active:bg-white/[0.1]"
             >
               <Plus size={22} strokeWidth={1.7} />
@@ -738,7 +738,7 @@ function RemoteBody({
             <button
               type="button"
               aria-label="Volume down"
-              onClick={() => onVolumeStep(-0.08)}
+              onClick={() => onVolumeStep(-0.1)}
               className="flex items-center justify-center text-ink active:bg-white/[0.1]"
             >
               <Minus size={22} strokeWidth={1.7} />
