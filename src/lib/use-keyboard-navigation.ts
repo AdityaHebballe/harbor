@@ -216,15 +216,18 @@ function getSpatialOrder(list: HTMLElement[]) {
 }
 
 type TVNavigationOptions = {
+  enabled?: boolean;
   wrap?: boolean;
   onBack?: () => boolean;
   onBackToNav?: () => void;
 };
 
 export function useKeyboardNavigation(options: TVNavigationOptions = {}) {
-  const { wrap = true, onBack, onBackToNav } = options;
+  const { enabled = true, wrap = true, onBack, onBackToNav } = options;
 
   useEffect(() => {
+    if (!enabled) return;
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       if (e.altKey || e.ctrlKey || e.metaKey) return;
