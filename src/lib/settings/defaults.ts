@@ -4,7 +4,7 @@ import type { Settings } from "./types";
 export const STORAGE_KEY = "harbor.settings";
 
 export const DEFAULT: Settings = {
-  soundTheme: 'glass',
+  soundTheme: 'none',
   blurComments: false,
   blurEpisodes: false,
   tmdbKey: "",
