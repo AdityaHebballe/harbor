@@ -10,9 +10,7 @@ use libmpv2_sys::mpv_handle;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, AnyThread, ClassType, MainThreadOnly, Message};
-use objc2_app_kit::{
-    NSOpenGLContext, NSOpenGLPixelFormat, NSOpenGLView, NSView, NSWindow, NSWindowOrderingMode,
-};
+use objc2_app_kit::{NSOpenGLPixelFormat, NSOpenGLView, NSView, NSWindow, NSWindowOrderingMode};
 use objc2_foundation::{MainThreadMarker, NSNumber, NSString};
 
 const NSOPENGLPFA_OPENGL_PROFILE: u32 = 99;
@@ -50,10 +48,6 @@ const RTLD_DEFAULT: *mut c_void = -2isize as *mut c_void;
 fn main_queue() -> *mut c_void {
     unsafe { (&_dispatch_main_q as *const c_void) as *mut c_void }
 }
-
-#[derive(Copy, Clone)]
-struct MpvHandlePtr(NonNull<mpv_handle>);
-unsafe impl Send for MpvHandlePtr {}
 
 pub struct Embed {
     view: Retained<NSOpenGLView>,

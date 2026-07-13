@@ -877,13 +877,13 @@ pub async fn mpv_get_property(
 #[tauri::command]
 pub async fn mpv_set_geometry(
     app: AppHandle,
-    state: State<'_, MpvState>,
+    _state: State<'_, MpvState>,
     geom: MpvGeometry,
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
         let embedded = {
-            let g = state.inner.lock().await;
+            let g = _state.inner.lock().await;
             g.as_ref().map(|s| s.embedded).unwrap_or(false)
         };
         if embedded {
@@ -915,7 +915,7 @@ pub async fn mpv_set_geometry(
     #[cfg(target_os = "linux")]
     {
         let embedded = {
-            let g = state.inner.lock().await;
+            let g = _state.inner.lock().await;
             g.as_ref().map(|s| s.embedded).unwrap_or(false)
         };
         if embedded {
@@ -937,15 +937,18 @@ pub async fn mpv_set_geometry(
     #[cfg(all(not(windows), not(target_os = "macos")))]
     let _ = app;
 
-    let mpv = {
-        let g = state.inner.lock().await;
-        g.as_ref().map(|s| s.mpv.clone()).ok_or_else(|| "mpv not started".to_string())?
-    };
-    let geo = format!(
-        "{}x{}+{}+{}",
-        geom.css_width as i32, geom.css_height as i32, geom.css_left as i32, geom.css_top as i32
-    );
-    mpv.set_property("geometry", geo.as_str()).map_err(|e| format!("geometry: {}", e))
+    #[cfg(not(target_os = "macos"))]
+    {
+        let mpv = {
+            let g = _state.inner.lock().await;
+            g.as_ref().map(|s| s.mpv.clone()).ok_or_else(|| "mpv not started".to_string())?
+        };
+        let geo = format!(
+            "{}x{}+{}+{}",
+            geom.css_width as i32, geom.css_height as i32, geom.css_left as i32, geom.css_top as i32
+        );
+        mpv.set_property("geometry", geo.as_str()).map_err(|e| format!("geometry: {}", e))
+    }
 }
 
 #[tauri::command]
@@ -1899,4 +1902,3 @@ fn position_embedded_mpv_child(
     }
     Ok(())
 }
-
