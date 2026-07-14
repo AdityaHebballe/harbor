@@ -754,7 +754,12 @@ class SoundEffects {
 
 
     if (this.activeTheme === "modern") {
-      this.playTone(1180, "sine", 0.018, 0.004, 1250);
+      
+      this.playGlass({
+        freq: 1600,
+        dur: 0.045,
+        vol: 0.01
+      });
       return;
     }
 
@@ -999,7 +1004,11 @@ class SoundEffects {
     } 
     else if (this.activeTheme === 'modern') {
       
-      this.playTone(isUp ? 600 : 450, 'sine', 0.02, 0.02);
+      this.playGlass({
+        freq: isUp ? 1500 : 1100,
+        dur: 0.1,
+        vol: 0.015,
+      });
     } 
     else if (this.activeTheme === 'glass') {
       

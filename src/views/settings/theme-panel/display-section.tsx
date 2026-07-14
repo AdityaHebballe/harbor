@@ -114,7 +114,7 @@ export function DisplaySection() {
             <option value="modern">{t("Modern 🍎 (Apple TV Style)")}</option>
             <option value="retro">{t("Retro 🕹️ (8-Bit Clean)")}</option>
             <option value="cinematic">{t("Cinematic 🎬 (Deep Bass)")}</option>
-            <option value="cloudy">{t("Cloudy 💧 (Bubbles & Drops)")}</option>
+            <option value="cloudy">{t("Bubbles 💧 (Bubbles & Drops)")}</option>
           </select>
 
           

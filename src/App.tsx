@@ -431,7 +431,7 @@ function parseDeepLinkEpisode(videoId?: string): { season: number; episode: numb
 function Shell() {
   const { topKind, service, meta, metaLiveContext, metaEpisodeHint, episodeDetail, personId, collectionId, filter, grid, awardType, animeAwardSource, picker, player, setView, canGoBack, goBack, canGoForward, goForward, openMeta, openPlayer, exitPlayback, exitPickerToDetail, stackKinds, chromeHidden } = useView();
   const { settings, update } = useSettings();
-  const { setOpen: setSearchOpen } = useSearch();
+  const { setOpen: setSearchOpen, open: searchOpen } = useSearch();
   const uiScaleRef = useRef(settings.uiScale);
   const { activeProfile } = useProfiles();
   const kid = activeProfile?.kid ?? null;
@@ -449,6 +449,7 @@ function Shell() {
     layout === "stremio";
   useViewPreloader();
 
+  
   const handleTvBack = useCallback(() => {
     if (searchOpen) {
       setSearchOpen(false);
@@ -489,7 +490,7 @@ function Shell() {
     onBack: handleTvBack,
     onBackToNav: handleTvBackToNav,
   });
-useEffect(() => {
+  useEffect(() => {
     if (settings.soundTheme) {
       SFX.setTheme(settings.soundTheme);
     }
@@ -506,98 +507,89 @@ useEffect(() => {
     window.addEventListener("pointerdown", initAudio, { once: true });
     window.addEventListener("keydown", initAudio, { once: true });
   
-    const normalizeText = (value: string) =>
-      value
-        .toLocaleLowerCase("es")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-  
     const onMouseOver = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
   
-      const isInteractive = target.closest(
+      const interactive = target.closest(
         'a[href], button, [data-focusable="true"], [role="button"]'
-      );
+      ) as HTMLElement | null;
   
-      if (isInteractive && !isInteractive.contains(e.relatedTarget as Node)) {
-        SFX.hover();
-      }
+      if (!interactive) return;
+  
+      const related = e.relatedTarget as Node | null;
+      if (related && interactive.contains(related)) return;
+  
+      SFX.hover();
     };
   
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-  
+    
       const btn = target.closest(
         'button, a[href], [data-focusable="true"], [role="button"]'
       ) as HTMLElement | null;
-  
+    
       if (!btn) return;
-  
-      const label = normalizeText(
-        [
-          btn.getAttribute("aria-label") || "",
-          btn.getAttribute("title") || "",
-          btn.textContent || "",
-          btn.getAttribute("data-action") || "",
-        ].join(" ")
-      );
-  
-      const isBack =
-        label.includes("back") ||
-        label.includes("close") ||
-        label.includes("dismiss") ||
-        label.includes("رجوع") ||
-        label.includes("إغلاق") ||
-        label.includes("اغلاق") ||
-        label.includes("voltar") ||
-        label.includes("cerrar") ||
-        label.includes("atras") ||
+    
+      const isCloseAction =
+        btn.matches(
+          '[data-harbor-back], [data-back], [data-close], [data-tv-modal-close], .close-btn, .back-btn'
+        ) ||
         !!btn.closest(
-          ".close-btn, .back-btn, [data-harbor-back], [data-back], [data-close]"
+          '[data-harbor-back], [data-back], [data-close], [data-tv-modal-close], .close-btn, .back-btn'
         );
-  
+    
       const isMovieCard =
-        !!btn.querySelector("img") ||
         btn.hasAttribute("data-media-card") ||
+        btn.hasAttribute("data-movie-card") ||
         btn.classList.contains("media-card") ||
+        !!btn.querySelector("img") ||
         !!btn.closest("[data-tv-hero-zone]");
-  
+    
       const isMenuOrSettings =
-        !!btn.closest('.settings-panel, [role="menu"], [role="dialog"]') ||
-        label.includes("settings") ||
-        label.includes("إعدادات") ||
-        label.includes("Configurações") ||
-        label.includes("ajustes");
-  
-      if (isBack) {
+        !!btn.closest(
+          '.settings-panel, [role="menu"], [role="dialog"], [data-settings-root], [data-settings-panel]'
+        );
+    
+      if (isCloseAction) {
         SFX.close();
-      } else if (isMovieCard || isMenuOrSettings) {
-        SFX.open();
-      } else {
-        SFX.click();
+        return;
       }
+    
+      if (isMovieCard || isMenuOrSettings) {
+        SFX.open();
+        return;
+      }
+    
+      SFX.click();
     };
   
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        SFX.close();
+      if (e.key !== "Escape" && e.key !== "Esc") return;
+  
+      SFX.close();
+  
+      const handled = handleTvBack();
+      if (handled) {
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
   
     window.addEventListener("mouseover", onMouseOver);
     window.addEventListener("click", onClick, true);
-    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
   
     return () => {
       window.removeEventListener("pointerdown", initAudio);
       window.removeEventListener("keydown", initAudio);
       window.removeEventListener("mouseover", onMouseOver);
       window.removeEventListener("click", onClick, true);
-      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keydown", onKeyDown, true);
     };
-  }, []);
+  }, [handleTvBack]);
   
   useEffect(() => startMaintenance(), []);
 

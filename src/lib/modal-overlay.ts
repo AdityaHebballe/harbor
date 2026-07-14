@@ -8,14 +8,7 @@ export type ModalPayload = {
 
 let overlayOpen = false;
 
-if (typeof window !== "undefined") {
-  void listen("modal://closed", () => {
-    overlayOpen = false;
-  });
-  void listen("modal://show", () => {
-    overlayOpen = true;
-  });
-}
+
 
 export function isModalOverlayOpen(): boolean {
   return overlayOpen;
