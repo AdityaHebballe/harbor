@@ -22,13 +22,13 @@ const supportedLanguages = new Set<string>(LANGUAGES.map(({ code }) => code));
 const catalogs: Record<UiLanguage, Catalog> = { en, ar, pt };
 const sourceKeysByTranslation = Object.fromEntries(
   (Object.keys(catalogs) as UiLanguage[]).map((language) => {
-    const reverse = new Map<string, string | null>();
+    const reverse = new Map<string, string>();
     for (const [key, value] of Object.entries(catalogs[language])) {
-      reverse.set(value, reverse.has(value) ? null : key);
+      if (!reverse.has(value)) reverse.set(value, key);
     }
     return [language, reverse];
   }),
-) as Record<UiLanguage, Map<string, string | null>>;
+) as Record<UiLanguage, Map<string, string>>;
 const rtlLanguages = new Set([
   "ar",
   "arc",
