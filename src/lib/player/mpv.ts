@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { subtitleDownloadArgs } from "./subtitle-load";
 import { isMacDesktop, isWindowsDesktop } from "@/lib/platform";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -225,6 +226,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       if (name === "dheight" && typeof data === "number") snap.videoHeight = data;
       if (name === "video-params/gamma" && typeof data === "string" && data) snap.hdrGamma = data;
       if (name === "demuxer-cache-duration" && typeof data === "number") snap.bufferedSec = data;
+      if (name === "paused-for-cache" && typeof data === "boolean") snap.buffering = data;
       if (name === "af") {
         const repr = typeof data === "string" ? data : JSON.stringify(data ?? "");
         snap.audioNormalize = repr.includes("dynaudnorm");
@@ -299,6 +301,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       snap.positionSec = 0;
       snap.durationSec = 0;
       snap.bufferedSec = 0;
+      snap.buffering = false;
       snap.hdrGamma = "";
       pendingTracks = {};
       urlByExternalFilename.clear();
@@ -331,7 +334,10 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
                 let url = s.url;
                 if (/^https?:/i.test(url)) {
                   try {
-                    url = await invoke<string>("sub_download", { url: s.url });
+                    url = await invoke<string>(
+                      "sub_download",
+                      subtitleDownloadArgs(s.url, { lang: s.lang }),
+                    );
                   } catch {
                     /* fall back to remote URL */
                   }
@@ -514,11 +520,14 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         value: shaders.filter(Boolean).join(sep),
       }).catch(() => {});
     },
-    async addSubtitle(url, lang, title, select): Promise<boolean> {
+    async addSubtitle(url, lang, title, select, metadata): Promise<boolean> {
       let mpvUrl = url;
       if (/^https?:/i.test(url)) {
         try {
-          mpvUrl = await invoke<string>("sub_download", { url });
+          mpvUrl = await invoke<string>(
+            "sub_download",
+            subtitleDownloadArgs(url, { ...metadata, lang }),
+          );
         } catch (e) {
           console.warn("[mpv] sub_download failed, falling back to URL", e);
         }

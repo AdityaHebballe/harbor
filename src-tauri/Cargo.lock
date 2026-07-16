@@ -2009,6 +2009,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "core-video",
  "discord-rich-presence",
+ "encoding_rs",
  "flate2",
  "futures-util",
  "gtk",
