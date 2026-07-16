@@ -60,6 +60,12 @@ body,
   overflow: hidden;
 }
 
+html[data-mpv-embed="1"],
+html[data-mpv-embed="1"] body,
+html[data-mpv-embed="1"] #root {
+  background: transparent;
+}
+
 html[data-os="linux"]:not([data-mpv-embed="1"]),
 html[data-os="linux"]:not([data-mpv-embed="1"]) body,
 html[data-os="linux"]:not([data-mpv-embed="1"]) #root {
