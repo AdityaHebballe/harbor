@@ -15,7 +15,7 @@
   --color-raised: oklch(0.32 0.004 260);
   --color-ink: oklch(0.97 0.003 260);
   --color-ink-muted: oklch(0.72 0.003 260);
-  --color-ink-subtle: oklch(0.5 0.003 260);
+  --color-ink-subtle: oklch(0.65 0.003 260);
   --color-edge: oklch(0.36 0.004 260 / 0.55);
   --color-edge-soft: oklch(0.36 0.004 260 / 0.25);
   --color-accent: oklch(0.78 0.13 60);
@@ -69,6 +69,19 @@ html[data-os="linux"]:not([data-mpv-embed="1"]) #root {
 body {
   user-select: none;
   cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
 }
 
 :root[data-player-black="on"] {
