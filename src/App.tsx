@@ -86,7 +86,7 @@ import { AnilistProvider } from "@/lib/anilist/provider";
 import { MalProvider } from "@/lib/mal/provider";
 import { SimklProvider } from "@/lib/simkl/provider";
 import { LetterboxdProvider } from "@/lib/stremboxd/provider";
-import { focusTvPageDefault, useKeyboardNavigation } from "@/lib/keyboard-navigation";
+import { useKeyboardNavigation } from "@/lib/keyboard-navigation";
 import { SFX } from "@/lib/sfx";
 
 const importAnime = () => import("@/views/anime");
@@ -490,11 +490,6 @@ function Shell() {
     onBack: handleTvBack,
     onBackToNav: handleTvBackToNav,
   });
-  useEffect(() => {
-    if (!settings.tvNavigation || searchOpen || topKind === "player") return;
-    const id = window.requestAnimationFrame(() => focusTvPageDefault());
-    return () => window.cancelAnimationFrame(id);
-  }, [settings.tvNavigation, topKind, meta?.id, searchOpen]);
   useEffect(() => {
     if (settings.soundTheme) {
       SFX.setTheme(settings.soundTheme);
