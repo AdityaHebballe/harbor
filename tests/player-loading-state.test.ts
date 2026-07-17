@@ -23,6 +23,14 @@ const bufferingIndicatorSource = readFileSync(
   new URL("../src/views/player/buffering-indicator.tsx", import.meta.url),
   "utf8",
 );
+const controlRendererSource = readFileSync(
+  new URL("../src/components/player/transport/control-renderer.tsx", import.meta.url),
+  "utf8",
+);
+const stremioButtonSource = readFileSync(
+  new URL("../src/components/player/transport/stremio-btn.tsx", import.meta.url),
+  "utf8",
+);
 
 test("native mpv buffering is published through the player snapshot", () => {
   assert.match(nativeMpvSource, /\("paused-for-cache",\s*\d+,\s*PropertyKind::Flag\)/);
@@ -41,6 +49,9 @@ test("playback stalls use a distinct quiet buffering indicator", () => {
   assert.match(playerOverlayLayersSource, /buffering=\{p\.snap\.buffering\}/);
   assert.match(playerOverlayLayersSource, /suppressed=\{p\.loaderActive/);
   assert.doesNotMatch(bufferingIndicatorSource, /HarborLoader/);
+  assert.match(bufferingIndicatorSource, /createPortal/);
+  assert.match(bufferingIndicatorSource, /\[data-player-play-pause\]/);
   assert.match(bufferingIndicatorSource, /motion-safe:animate-spin/);
-  assert.match(bufferingIndicatorSource, /border-t-white\/70/);
+  assert.match(controlRendererSource, /data-player-play-pause/);
+  assert.match(stremioButtonSource, /data-player-play-pause/);
 });

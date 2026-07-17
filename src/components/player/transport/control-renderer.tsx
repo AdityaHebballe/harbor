@@ -334,10 +334,11 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
             <button
               type="button"
               onClick={ctx.onPlayPause}
+              data-player-play-pause
               data-tv-initial-focus
               aria-label={ctx.playing ? t("Pause") : t("Play")}
               className="
-                flex h-full w-full
+                relative flex h-full w-full
                 items-center justify-center
                 rounded-full
                 bg-transparent
