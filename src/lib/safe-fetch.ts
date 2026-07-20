@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { fetch as tauriFetchImpl } from "@tauri-apps/plugin-http";
 import { TrackerBlockedError, isBlockedUrl, noteBlocked } from "./privacy/blocklist";
-import { canFallbackAfterNativeFetchError } from "./safe-fetch-policy";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -13,7 +12,6 @@ const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 const DIRECT_HOSTS = new Set([
   "torrentio.strem.fun",
   "stremio.torbox.app",
-  "api.balloonerismm.workers.dev",
 ]);
 
 const PROXY_HOSTS = new Set([
@@ -45,6 +43,17 @@ const PROXY_SUFFIXES = [
   ".deno.dev",
 ];
 
+let proxyOriginCache: boolean | null = null;
+function webProxyAvailable(): boolean {
+  if (proxyOriginCache !== null) return proxyOriginCache;
+  try {
+    proxyOriginCache = /(^|\.)harbor\.site$/i.test(window.location.hostname);
+  } catch {
+    proxyOriginCache = false;
+  }
+  return proxyOriginCache;
+}
+
 function rewriteForWeb(url: string, init?: RequestInit): { url: string; init?: RequestInit } {
   if (isTauri) return { url, init };
   let parsed: URL;
@@ -57,6 +66,7 @@ function rewriteForWeb(url: string, init?: RequestInit): { url: string; init?: R
   const proxiable =
     PROXY_HOSTS.has(parsed.hostname) || PROXY_SUFFIXES.some((s) => parsed.hostname.endsWith(s));
   if (!proxiable) return { url, init };
+  if (!webProxyAvailable()) return { url, init };
 
   const proxied = `/api-proxy/${parsed.hostname}${parsed.pathname}${parsed.search}`;
   if (!init?.headers) return { url: proxied, init };
@@ -74,17 +84,10 @@ type HarborFetchResponse = {
   ok: boolean;
   body: string;
   contentType: string | null;
+  headers?: Record<string, string>;
 };
 
-function abortError(): DOMException {
-  return new DOMException("The operation was aborted", "AbortError");
-}
-
 async function tauriHarborFetch(input: string, init?: RequestInit): Promise<Response> {
-  if (init?.signal?.aborted) {
-    throw abortError();
-  }
-  const requestId = crypto.randomUUID();
   const headers: Record<string, string> = {};
   if (init?.headers) {
     const h = new Headers(init.headers as HeadersInit);
@@ -100,40 +103,65 @@ async function tauriHarborFetch(input: string, init?: RequestInit): Promise<Resp
         : init?.body
           ? JSON.stringify(init.body)
           : undefined;
-  const nativeRequest = invoke<HarborFetchResponse>("harbor_fetch", {
+  const resp = await invoke<HarborFetchResponse>("harbor_fetch", {
     args: {
       url: input,
-      requestId,
       method: init?.method ?? "GET",
       headers,
       body,
       timeoutMs: 30000,
     },
   });
-  let onAbort: (() => void) | undefined;
-  const aborted = new Promise<never>((_, reject) => {
-    onAbort = () => {
-      void invoke("harbor_fetch_cancel", { requestId }).catch(() => {});
-      reject(abortError());
-    };
-    init?.signal?.addEventListener("abort", onAbort, { once: true });
-    if (init?.signal?.aborted) onAbort();
-  });
-  let resp: HarborFetchResponse;
-  try {
-    resp = await Promise.race([nativeRequest, aborted]);
-  } finally {
-    if (onAbort) init?.signal?.removeEventListener("abort", onAbort);
-  }
   return new Response(resp.body, {
     status: resp.status,
-    headers: resp.contentType ? { "content-type": resp.contentType } : {},
+    headers: resp.headers ?? (resp.contentType ? { "content-type": resp.contentType } : {}),
   });
 }
 
 function isIdempotent(method: string | undefined): boolean {
   const m = (method ?? "GET").toUpperCase();
   return m === "GET" || m === "HEAD" || m === "OPTIONS";
+}
+
+// The Tauri http plugin rejects an aborted request with a plain Error("Request cancelled").
+// Normalize it to a standard AbortError so callers (and the global rejection handler) treat
+// a cancel as the benign abort it is instead of surfacing the app-wide error screen.
+function normalizeAbort(p: Promise<Response>): Promise<Response> {
+  return p.catch((e: unknown) => {
+    const msg = (e as { message?: string } | undefined)?.message ?? "";
+    if (/request cancell?ed/i.test(msg)) throw new DOMException("Aborted", "AbortError");
+    throw e;
+  });
+}
+
+const HARBOR_FETCH_DEADLINE_MS = 35000;
+
+function withDeadline(p: Promise<Response>, signal?: AbortSignal | null): Promise<Response> {
+  if (signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise<Response>((resolve, reject) => {
+    let settled = false;
+    const cleanups: Array<() => void> = [];
+    const finish = (run: () => void) => {
+      if (settled) return;
+      settled = true;
+      for (const c of cleanups) c();
+      run();
+    };
+    const timer = setTimeout(
+      () => finish(() => reject(new DOMException("harbor_fetch exceeded deadline", "TimeoutError"))),
+      HARBOR_FETCH_DEADLINE_MS,
+    );
+    cleanups.push(() => clearTimeout(timer));
+    if (signal) {
+      const onAbort = () => finish(() => reject(new DOMException("Aborted", "AbortError")));
+      signal.addEventListener("abort", onAbort);
+      cleanups.push(() => signal.removeEventListener("abort", onAbort));
+    }
+    p.then(
+      (v) => finish(() => resolve(v)),
+      (e) => finish(() => reject(e)),
+    );
+  });
 }
 
 export const safeFetch: typeof fetch = (input, init) => {
@@ -148,21 +176,14 @@ export const safeFetch: typeof fetch = (input, init) => {
   }
   if (isTauri) {
     if (typeof input === "string") {
-      if (isIdempotent(init?.method)) {
-        return tauriHarborFetch(input, init).catch((error) => {
-          if (
-            init?.signal?.aborted ||
-            (error instanceof DOMException && error.name === "AbortError")
-          ) {
-            throw abortError();
-          }
-          if (!canFallbackAfterNativeFetchError(error)) throw error;
-          return tauriFetchImpl(input as string, init as RequestInit) as Promise<Response>;
-        });
-      }
-      return tauriHarborFetch(input, init);
+      const exec = isIdempotent(init?.method)
+        ? tauriHarborFetch(input, init).catch(
+            () => normalizeAbort(tauriFetchImpl(input as string, init as RequestInit) as Promise<Response>),
+          )
+        : tauriHarborFetch(input, init);
+      return withDeadline(exec, init?.signal);
     }
-    return tauriFetchImpl(input as unknown as string, init as RequestInit) as Promise<Response>;
+    return normalizeAbort(tauriFetchImpl(input as unknown as string, init as RequestInit) as Promise<Response>);
   }
   if (typeof input === "string") {
     const r = rewriteForWeb(input, init);

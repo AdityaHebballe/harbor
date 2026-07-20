@@ -261,9 +261,7 @@ export function createHtml5Bridge(): PlayerBridge {
       ms.setActionHandler("seekforward", (details) => {
         if (!video) return;
         const offset = details && details.seekOffset != null ? details.seekOffset : 30;
-        const max = Number.isFinite(video.duration)
-          ? video.duration - 0.25
-          : video.currentTime + offset;
+        const max = Number.isFinite(video.duration) ? video.duration - 0.25 : video.currentTime + offset;
         video.currentTime = Math.min(max, video.currentTime + offset);
       });
       ms.setActionHandler("seekto", (details) => {
@@ -280,11 +278,7 @@ export function createHtml5Bridge(): PlayerBridge {
     if (!mediaSessionBound || !video) return;
     if (!("mediaSession" in navigator)) return;
     const ms = navigator.mediaSession as MediaSession & {
-      setPositionState?: (state: {
-        duration: number;
-        position: number;
-        playbackRate: number;
-      }) => void;
+      setPositionState?: (state: { duration: number; position: number; playbackRate: number }) => void;
     };
     if (!ms.setPositionState) return;
     if (!Number.isFinite(video.duration) || video.duration <= 0) return;
@@ -336,9 +330,7 @@ export function createHtml5Bridge(): PlayerBridge {
       unbind();
       stopCueTicker();
       if (hls) {
-        try {
-          hls.destroy();
-        } catch {}
+        try { hls.destroy(); } catch {}
         hls = null;
       }
       teardownTs();
@@ -359,9 +351,7 @@ export function createHtml5Bridge(): PlayerBridge {
       isLiveSrc = src.notWebReady === true;
       pendingStart = src.startAtSec ?? null;
       if (hls) {
-        try {
-          hls.destroy();
-        } catch {}
+        try { hls.destroy(); } catch {}
         hls = null;
       }
       teardownTs();
@@ -378,20 +368,12 @@ export function createHtml5Bridge(): PlayerBridge {
 
       const bare = src.url.toLowerCase().split("?")[0];
       const lowerUrl = src.url.toLowerCase();
-      const isHls =
-        /\.m3u8$/.test(bare) || lowerUrl.includes("m3u8") || lowerUrl.includes("/playlist/");
-      const isTs =
-        bare.endsWith(".ts") ||
-        (src.notWebReady === true && !isHls && !/\.(mp4|webm|mov|mkv|mpd)$/.test(bare));
+      const isHls = /\.m3u8$/.test(bare) || lowerUrl.includes("m3u8") || lowerUrl.includes("/playlist/");
+      const isTs = bare.endsWith(".ts") || (src.notWebReady === true && !isHls && !/\.(mp4|webm|mov|mkv|mpd)$/.test(bare));
       if (isHls && Hls.isSupported()) {
         hls = new Hls(
           src.notWebReady === true || src.isLive === true
-            ? {
-                enableWorker: true,
-                lowLatencyMode: false,
-                liveDurationInfinity: true,
-                backBufferLength: 30,
-              }
+            ? { enableWorker: true, lowLatencyMode: false, liveDurationInfinity: true, backBufferLength: 30 }
             : { enableWorker: true },
         );
         hls.loadSource(src.url);
@@ -580,16 +562,7 @@ export function createHtml5Bridge(): PlayerBridge {
         } catch {}
       }
       const id = `ext-${subTracks.length}-${Date.now()}`;
-      const track: SubTrack = {
-        id,
-        url: resolvedUrl,
-        lang,
-        title,
-        external: true,
-        cues: null,
-        loading: false,
-        metadata,
-      };
+      const track: SubTrack = { id, url: resolvedUrl, lang, title, external: true, cues: null, loading: false, metadata };
       subTracks.push(track);
       if (select === true) {
         activeSubId = id;
@@ -627,9 +600,7 @@ export function createHtml5Bridge(): PlayerBridge {
         const ctx = canvas.getContext("2d");
         if (!ctx) return { ok: false, error: "no 2d context" };
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const blob: Blob | null = await new Promise((res) =>
-          canvas.toBlob((b) => res(b), "image/png"),
-        );
+        const blob: Blob | null = await new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
         if (!blob) return { ok: false, error: "encode failed" };
         if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
           const fs = await import("@tauri-apps/plugin-fs");
@@ -658,13 +629,7 @@ export function createHtml5Bridge(): PlayerBridge {
       if (!video || !host) return;
       if (pipWindow) return;
       bindMediaSession();
-      const dpip = (
-        window as Window & {
-          documentPictureInPicture?: {
-            requestWindow: (o: { width: number; height: number }) => Promise<Window>;
-          };
-        }
-      ).documentPictureInPicture;
+      const dpip = (window as Window & { documentPictureInPicture?: { requestWindow: (o: { width: number; height: number }) => Promise<Window> } }).documentPictureInPicture;
       const tryDocumentPip = async (): Promise<boolean> => {
         if (DOCUMENT_PIP_KNOWN_BROKEN) return false;
         if (!dpip || typeof dpip.requestWindow !== "function") return false;
@@ -677,13 +642,7 @@ export function createHtml5Bridge(): PlayerBridge {
             ),
           );
           const w = await dpip.requestWindow({ width: aspectW, height: 280 });
-          mountCustomPip(
-            w,
-            video!,
-            host!,
-            () => emit(),
-            () => snap,
-          );
+          mountCustomPip(w, video!, host!, () => emit(), () => snap);
           pipWindow = w;
           pipCleanup = () => {
             if (!host || !video) {
@@ -762,15 +721,12 @@ export function createHtml5Bridge(): PlayerBridge {
       }
     },
     capabilities(): PlayerCapabilities {
-      const nativePiP =
-        "pictureInPictureEnabled" in document ? document.pictureInPictureEnabled : false;
+      const nativePiP = "pictureInPictureEnabled" in document ? document.pictureInPictureEnabled : false;
       const docPiP = "documentPictureInPicture" in window;
       return {
         engine: "html5",
         pictureInPicture: !!nativePiP || docPiP,
-        airplay:
-          typeof (window as { WebKitPlaybackTargetAvailabilityEvent?: unknown })
-            .WebKitPlaybackTargetAvailabilityEvent !== "undefined",
+        airplay: typeof (window as { WebKitPlaybackTargetAvailabilityEvent?: unknown }).WebKitPlaybackTargetAvailabilityEvent !== "undefined",
         chromecast: false,
         hdrPassthrough: false,
         hardwareDecode: true,
@@ -788,9 +744,7 @@ export function createHtml5Bridge(): PlayerBridge {
       subTracks.length = 0;
       activeSubId = null;
       if (hls) {
-        try {
-          hls.destroy();
-        } catch {}
+        try { hls.destroy(); } catch {}
         hls = null;
       }
       teardownTs();

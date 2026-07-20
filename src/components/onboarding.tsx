@@ -7,19 +7,42 @@ import { SplashStep } from "@/components/onboarding/splash-step";
 import { StreamingStep } from "@/components/onboarding/streaming-step";
 import { StremioStep } from "@/components/onboarding/stremio-step";
 import { SubtitlesStep } from "@/components/onboarding/subtitles-step";
+import { TasteStep, TASTE_MAX } from "@/components/onboarding/taste-step";
 import { TmdbStep } from "@/components/onboarding/tmdb-step";
 import { WelcomeStep } from "@/components/onboarding/welcome-step";
+import type { Meta } from "@/lib/cinemeta";
+import { setVote } from "@/lib/feed/preferences";
 import { useT } from "@/lib/i18n";
 import { useOnboarding } from "@/lib/onboarding";
 
-type StepId = "splash" | "welcome" | "layout" | "tmdb" | "stremio" | "streaming" | "subtitles" | "done";
-const STEPS: StepId[] = ["splash", "welcome", "layout", "tmdb", "stremio", "streaming", "subtitles", "done"];
+type StepId =
+  | "splash"
+  | "welcome"
+  | "layout"
+  | "tmdb"
+  | "stremio"
+  | "streaming"
+  | "subtitles"
+  | "taste"
+  | "done";
+const STEPS: StepId[] = [
+  "splash",
+  "welcome",
+  "layout",
+  "tmdb",
+  "stremio",
+  "streaming",
+  "subtitles",
+  "taste",
+  "done",
+];
 
 export function OnboardingModal() {
   const { onboarded, finishOnboarding } = useOnboarding();
   const t = useT();
   const [stepIdx, setStepIdx] = useState(0);
   const [closing, setClosing] = useState(false);
+  const [tastePicks, setTastePicks] = useState<Meta[]>([]);
 
   useEffect(() => {
     if (!onboarded) document.body.style.overflow = "hidden";
@@ -32,7 +55,20 @@ export function OnboardingModal() {
 
   const step = STEPS[stepIdx];
   const isSplash = step === "splash";
-  const next = () => setStepIdx((i) => Math.min(i + 1, STEPS.length - 1));
+  const isTaste = step === "taste";
+  const toggleTaste = (m: Meta) =>
+    setTastePicks((prev) =>
+      prev.some((p) => p.id === m.id)
+        ? prev.filter((p) => p.id !== m.id)
+        : prev.length >= TASTE_MAX
+          ? prev
+          : [...prev, m],
+    );
+  const next = () => {
+    if (isTaste) for (const m of tastePicks) setVote(m.id, "up", { name: m.name, type: m.type });
+    setStepIdx((i) => Math.min(i + 1, STEPS.length - 1));
+  };
+  const skip = () => setStepIdx((i) => Math.min(i + 1, STEPS.length - 1));
   const back = () => setStepIdx((i) => Math.max(i - 1, 0));
   const finish = () => {
     setClosing(true);
@@ -46,9 +82,9 @@ export function OnboardingModal() {
       }`}
     >
       <div
-        className={`relative flex w-[min(92vw,580px)] flex-col overflow-hidden rounded-[28px] border border-edge-soft bg-elevated/95 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] ${
-          closing ? "scale-[0.97] opacity-0 transition-all duration-300" : "animate-modal-in"
-        }`}
+        className={`relative flex flex-col overflow-hidden rounded-[28px] border border-edge-soft bg-elevated/95 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.6)] ${
+          isTaste ? "w-[min(93vw,640px)]" : "w-[min(92vw,580px)]"
+        } transition-[width] duration-300 ${closing ? "scale-[0.97] opacity-0 !transition-all !duration-300" : "animate-modal-in"}`}
       >
         {!isSplash && (
           <button
@@ -64,7 +100,9 @@ export function OnboardingModal() {
           <SplashStep onAdvance={next} />
         ) : (
           <>
-            <div className="flex min-h-[440px] flex-col justify-center px-12 py-10">
+            <div
+              className={`flex min-h-[440px] flex-col ${isTaste ? "px-8 pt-9 pb-3" : "justify-center px-12 py-10"}`}
+            >
               <div key={step} className="animate-step-in">
                 {step === "welcome" && <WelcomeStep />}
                 {step === "layout" && <LayoutStep />}
@@ -72,6 +110,7 @@ export function OnboardingModal() {
                 {step === "stremio" && <StremioStep />}
                 {step === "streaming" && <StreamingStep />}
                 {step === "subtitles" && <SubtitlesStep />}
+                {step === "taste" && <TasteStep selected={tastePicks} onToggle={toggleTaste} />}
                 {step === "done" && <DoneStep />}
               </div>
             </div>
@@ -83,10 +122,14 @@ export function OnboardingModal() {
                 onJump={(i) => setStepIdx(i + 1)}
               />
               <div className="flex items-center gap-2.5">
-                {(step === "tmdb" || step === "stremio" || step === "streaming" || step === "subtitles") && (
+                {(step === "tmdb" ||
+                  step === "stremio" ||
+                  step === "streaming" ||
+                  step === "subtitles" ||
+                  step === "taste") && (
                   <button
                     key={`skip-${step}`}
-                    onClick={next}
+                    onClick={skip}
                     className="animate-skip-in h-11 rounded-full px-4 text-[13px] font-medium text-ink-subtle transition-colors hover:text-ink"
                   >
                     {t("Skip for now")}

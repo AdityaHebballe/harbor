@@ -7,6 +7,7 @@ import { useT } from "@/lib/i18n";
 import { tmdbLogo, useTmdbImdbId } from "@/lib/providers/tmdb";
 import { useImdbRating } from "@/lib/imdb-rating";
 import { useSettings } from "@/lib/settings";
+import { useTitleLogo } from "@/lib/title-logo";
 import { smartPlayEpisode } from "@/lib/smart-play";
 import { useView } from "@/lib/view";
 import { observe, usePageVisible } from "@/lib/visibility";
@@ -196,7 +197,9 @@ function PeekSlide({
   const { openMeta, openPicker } = useView();
   const resolvedImdb = useTmdbImdbId(meta.id);
   const imdbRating = useImdbRating(meta, resolvedImdb);
-  const [logo, setLogo] = useState<string | undefined>(meta.logo);
+  const [logoState, setLogo] = useState<string | undefined>(meta.logo);
+  const pinnedLogo = useTitleLogo(meta.id);
+  const logo = pinnedLogo ?? logoState;
   const [logoLoaded, setLogoLoaded] = useState(false);
   const bg = upsizeTmdb(meta.background || meta.poster);
 
@@ -318,5 +321,5 @@ function PeekSlide({
 
 function upsizeTmdb(url?: string): string | undefined {
   if (!url) return url;
-  return url.replace("/t/p/w780/", "/t/p/w1280/");
+  return url.replace(/\/t\/p\/(w780|original)\//, "/t/p/w1280/");
 }

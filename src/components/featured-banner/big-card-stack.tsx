@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { NavArrow } from "@/components/nav-arrow";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
@@ -209,36 +209,26 @@ export function BigCardStack({
         <MetaAwardsCorner meta={current} imdbId={resolvedImdb} />
       </div>
       {onPrev && items.length > 1 && (
-        <button
-          type="button"
+        <div
           data-no-drag
-          aria-label={t("Previous")}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onPrev();
-          }}
-          style={{ position: "absolute", insetInlineStart: 12, top: "50%", transform: "translateY(-50%)", zIndex: 10 }}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas/65 text-ink opacity-0 backdrop-blur-md transition-all duration-200 hover:bg-canvas/85 hover:scale-105 group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: "absolute", insetInlineStart: 6, top: "50%", transform: "translateY(-50%)", zIndex: 10 }}
+          className="opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         >
-          <ChevronLeft size={22} strokeWidth={2.2} className="dir-icon" />
-        </button>
+          <NavArrow dir="left" onClick={onPrev} label={t("Previous")} size={34} className="h-12 w-12" />
+        </div>
       )}
       {onNext && items.length > 1 && (
-        <button
-          type="button"
+        <div
           data-no-drag
-          aria-label={t("Next")}
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            onNext();
-          }}
-          style={{ position: "absolute", insetInlineEnd: 12, top: "50%", transform: "translateY(-50%)", zIndex: 10 }}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-canvas/65 text-ink opacity-0 backdrop-blur-md transition-all duration-200 hover:bg-canvas/85 hover:scale-105 group-hover:opacity-100"
+          onClick={(e) => e.stopPropagation()}
+          style={{ position: "absolute", insetInlineEnd: 6, top: "50%", transform: "translateY(-50%)", zIndex: 10 }}
+          className="opacity-0 transition-opacity duration-200 group-hover:opacity-100"
         >
-          <ChevronRight size={22} strokeWidth={2.2} className="dir-icon" />
-        </button>
+          <NavArrow dir="right" onClick={onNext} label={t("Next")} size={34} className="h-12 w-12" />
+        </div>
       )}
       <ThumbsDock meta={current} />
     </div>

@@ -31,17 +31,27 @@ export function AnchoredMenu({
       setPos({ top, left, width: w });
     };
     place();
-    const raf = requestAnimationFrame(place);
+    let raf: number | null = requestAnimationFrame(() => {
+      raf = null;
+      place();
+    });
+    const onScroll = () => {
+      if (raf != null) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        place();
+      });
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("keydown", onKey);
     return () => {
-      cancelAnimationFrame(raf);
+      if (raf != null) cancelAnimationFrame(raf);
       window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("keydown", onKey);
     };
   }, [open, anchorRef, width, onClose]);

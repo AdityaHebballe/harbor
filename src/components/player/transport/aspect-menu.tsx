@@ -55,17 +55,7 @@ export function AspectMenu({
         </button>
       </Tooltip>
       {open && (
-        <div
-          data-tv-focus-scope
-          className={`absolute bottom-[calc(100%+10px)] ${side === "start" ? "start-0" : "end-0"} flex max-h-[70vh] w-[360px] max-w-[calc(100vw-32px)] flex-col overflow-y-auto rounded-2xl border border-edge bg-elevated shadow-[0_24px_60px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl`}
-        >
-          <button
-            onClick={() => setOpen(false)}
-            aria-label={t("Close")}
-            data-tv-modal-close
-            tabIndex={-1}
-            className="hidden"
-          />
+        <div className={`absolute bottom-[calc(100%+10px)] ${side === "start" ? "start-0" : "end-0"} flex max-h-[70vh] w-[360px] max-w-[calc(100vw-32px)] flex-col overflow-y-auto rounded-2xl border border-edge bg-elevated shadow-[0_24px_60px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl`}>
           <div className="p-3">
             <div className="flex items-center justify-between px-1 pb-2">
               <span className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink-subtle">

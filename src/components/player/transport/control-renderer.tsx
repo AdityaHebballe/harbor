@@ -1,32 +1,13 @@
 import { t as translate } from "@/lib/i18n";
-import {
-  Camera,
-  ChevronLeft,
-  Info,
-  Maximize,
-  Minimize,
-  PauseCircle,
-  PictureInPicture2,
-  PlayCircle,
-  Replace,
-  Tv,
-} from "lucide-react";
+import { Camera, ChevronLeft, Info, Maximize, Minimize, PauseCircle, PictureInPicture2, PlayCircle, Replace, Tv } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PlayerCapabilities, PlayerSnapshot } from "@/lib/player/bridge";
 import type { SubtitleAddHandler } from "@/lib/player/subtitle-load";
 import type { Meta } from "@/lib/cinemeta";
-import {
-  getCustomIcon,
-  type ControlVariant,
-  type CustomIconMap,
-  type PlayerControlId,
-  type TimeFormat,
-  type VolumeStyle,
-} from "@/lib/player-chrome";
+import { getCustomIcon, type ControlVariant, type CustomIconMap, type PlayerControlId, type TimeFormat, type VolumeStyle } from "@/lib/player-chrome";
 import type { DownloadStatus } from "@/views/player/hooks/use-video-download";
 import { renderCustomIconControl } from "./custom-icon-renderer";
-import { realQualityLabel } from "@/lib/player/resolution-label";
-import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
+import { hdrFormatLabel, realQualityLabel } from "@/lib/player/resolution-label";
 
 function getControlState(id: PlayerControlId, ctx: ControlContext): string | undefined {
   const preview = ctx.previewStates?.[id];
@@ -169,7 +150,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
           <button
             onClick={ctx.onBack}
             aria-label={t("Back")}
-            className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-colors hover:bg-black/80"
+            className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
           >
             <ChevronLeft size={26} strokeWidth={2.2} />
           </button>
@@ -183,6 +164,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
       const primary = swap ? ctx.subtitle : ctx.title;
       const secondary = swap ? ctx.title : ctx.subtitle;
       const qual = realQualityLabel(ctx.snap.videoWidth, ctx.snap.videoHeight);
+      const hdr = hdrFormatLabel(ctx.snap.hdrGamma);
       const lines = (
         <>
           <div className="flex items-center gap-2">
@@ -195,6 +177,11 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
             {qual && (
               <span className="shrink-0 rounded-md bg-white/15 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-white/85">
                 {qual}
+              </span>
+            )}
+            {hdr && (
+              <span className="shrink-0 rounded-md bg-amber-400/20 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-amber-200">
+                {hdr}
               </span>
             )}
           </div>
@@ -226,9 +213,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
         );
       }
       return (
-        <div className="pointer-events-none flex flex-col items-start gap-0.5 text-start">
-          {lines}
-        </div>
+        <div className="pointer-events-none flex flex-col items-start gap-0.5 text-start">{lines}</div>
       );
     }
     case "time-start": {
@@ -271,13 +256,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
     }
     case "download": {
       if (ctx.mid || ctx.isLiveChannel) return null;
-      if (
-        !ctx.download ||
-        !ctx.onDownloadStart ||
-        !ctx.onDownloadCancel ||
-        !ctx.onDownloadReveal ||
-        !ctx.onDownloadReset
-      ) {
+      if (!ctx.download || !ctx.onDownloadStart || !ctx.onDownloadCancel || !ctx.onDownloadReveal || !ctx.onDownloadReset) {
         return null;
       }
       return (
@@ -297,7 +276,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
       return (
         <EpisodeNavBtn
           direction="prev"
-          label={t("Previous Episode")}
+          label={t("Previous")}
           onClick={ctx.onPrevEp}
           disabled={!ctx.hasPrevEp}
           iconOnly={iconOnly}
@@ -309,51 +288,21 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
       return <SeekStepBtn direction="back" seconds={10} onSeekStep={ctx.onSeekStep} />;
     }
     case "play-pause": {
-      const sizeClass = ctx.tight ? "h-12 w-12" : ctx.compact ? "h-14 w-14" : "h-16 w-16";
-
-      const iconSize = ctx.tight ? 28 : ctx.compact ? 32 : 36;
-
       return (
         <Tooltip label={ctx.playing ? t("Pause") : t("Play")}>
-          <ThreeLiquidGlassSurface
-            radius="9999px"
-            shaderRadius={1}
-            intensity={1.05}
-            refractionStrength={1.18}
-            className={`
-              shrink-0 rounded-full
-              border border-white/[0.10]
-              ${sizeClass}
-            `}
-            contentClassName="h-full w-full"
-            style={{
-              background: "transparent",
-              boxShadow: "none",
-            }}
+          <button
+            onClick={ctx.onPlayPause}
+            className={`flex items-center justify-center rounded-full bg-white/[0.16] text-white transition-[background-color,transform] hover:bg-white/22 active:scale-95 ${
+              ctx.tight ? "h-12 w-12" : ctx.compact ? "h-14 w-14" : "h-16 w-16"
+            }`}
+            aria-label={ctx.playing ? t("Pause") : t("Play")}
           >
-            <button
-              type="button"
-              onClick={ctx.onPlayPause}
-              data-player-play-pause
-              data-tv-initial-focus
-              aria-label={ctx.playing ? t("Pause") : t("Play")}
-              className="
-                relative flex h-full w-full
-                items-center justify-center
-                rounded-full
-                bg-transparent
-                text-white outline-none
-                transition-transform duration-150
-                active:scale-95
-              "
-            >
-              {ctx.playing ? (
-                <PauseCircle size={iconSize} strokeWidth={1.5} />
-              ) : (
-                <PlayCircle size={iconSize} strokeWidth={1.5} />
-              )}
-            </button>
-          </ThreeLiquidGlassSurface>
+            {ctx.playing ? (
+              <PauseCircle size={ctx.tight ? 28 : ctx.compact ? 32 : 36} strokeWidth={1.5} />
+            ) : (
+              <PlayCircle size={ctx.tight ? 28 : ctx.compact ? 32 : 36} strokeWidth={1.5} />
+            )}
+          </button>
         </Tooltip>
       );
     }
@@ -368,7 +317,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
       return (
         <EpisodeNavBtn
           direction="next"
-          label={t("Next Episode")}
+          label={t("Next")}
           onClick={ctx.onNextEp}
           disabled={!ctx.hasNextEp}
           iconOnly={iconOnly}
@@ -449,8 +398,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
       );
     }
     case "anime4k-menu": {
-      if (ctx.tight || ctx.engine === "html5" || !ctx.onAnime4kMode || !ctx.anime4kAvailable)
-        return null;
+      if (ctx.tight || ctx.engine === "html5" || !ctx.onAnime4kMode || !ctx.anime4kAvailable) return null;
       return (
         <Anime4kMenu
           mode={(ctx.anime4kMode as Anime4kChoice) ?? "auto"}
@@ -493,11 +441,7 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
     case "pip": {
       if (!ctx.capabilities.pictureInPicture) return null;
       return (
-        <BigButton
-          onClick={ctx.onPiP}
-          ariaLabel={t("Picture in Picture")}
-          tooltip={t("Picture in Picture")}
-        >
+        <BigButton onClick={ctx.onPiP} ariaLabel={t("Picture in Picture")} tooltip={t("Picture in Picture")}>
           <PictureInPicture2 size={22} strokeWidth={1.9} />
         </BigButton>
       );

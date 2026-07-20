@@ -2,9 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-#[cfg(windows)]
-use tauri::Manager;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 use tokio::process::{Child, Command};
 use tokio::sync::{Mutex, Semaphore};
 
@@ -547,7 +545,10 @@ fn spawn_mpv(
         .stderr(std::process::Stdio::null());
     #[cfg(windows)]
     cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd.spawn().map_err(|e| format!("spawn mpv: {e}"))
+    crate::proc_guard::configure_command(&mut cmd);
+    let child = cmd.spawn().map_err(|e| format!("spawn mpv: {e}"))?;
+    crate::proc_guard::adopt(&child);
+    Ok(child)
 }
 
 fn ipc_loadfile_msg(url: &str) -> String {
@@ -900,6 +901,22 @@ pub async fn multiview_stop_all(
         }
     }
     Ok(())
+}
+
+pub(crate) fn shutdown(app: &AppHandle) {
+    let state = app.state::<MultiviewState>();
+    let drained: Vec<Slot> = tauri::async_runtime::block_on(async {
+        let mut slots = state.slots.lock().await;
+        slots.drain().map(|(_, s)| s).collect()
+    });
+    for mut s in drained {
+        if let Some(pid) = s.pid {
+            kill_pid(pid);
+        }
+        if let Some(child) = s.child.as_mut() {
+            let _ = child.start_kill();
+        }
+    }
 }
 
 #[cfg(test)]

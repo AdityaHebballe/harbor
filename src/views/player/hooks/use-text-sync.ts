@@ -6,7 +6,6 @@ import type { SubCue } from "@/lib/subtitles/parser";
 import { getCuesAnySource } from "@/lib/subtitles/extract";
 import { toSrt, toVtt } from "@/lib/subtitles/serialize";
 import { applyLinear, deltaFn, type SyncPoint, type SyncSegment } from "@/lib/subtitles/text-sync";
-import { writePlayerPrefs } from "@/lib/player-prefs";
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -157,15 +156,12 @@ export function useTextSync(bridge: PlayerBridge | null, metaId: string) {
 
   const discard = useCallback(() => {
     const b = bridgeRef.current;
-    const mid = metaIdRef.current;
     b?.setSubDelay(stateRef.current.baseOffset);
-    if (mid) writePlayerPrefs(mid, { subDelaySec: stateRef.current.baseOffset });
     exit();
   }, [exit]);
 
   const save = useCallback(async (): Promise<SaveResult> => {
     const b = bridgeRef.current;
-    const mid = metaIdRef.current;
     const cur = stateRef.current;
     if (cur.syncMode !== "active" || !cur.cues) return { ok: false, reason: "not-active" };
     try {
@@ -183,7 +179,6 @@ export function useTextSync(bridge: PlayerBridge | null, metaId: string) {
         if (!saved) return { ok: false, reason: "save-cancelled" };
       }
       b?.setSubDelay(0);
-      if (mid) writePlayerPrefs(mid, { subDelaySec: 0 });
       exit();
       return { ok: true };
     } catch (e) {

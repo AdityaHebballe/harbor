@@ -3,11 +3,37 @@ import { setItemWithRecovery, freeStorageSpace } from "@/lib/storage-recovery";
 import { randomUuid } from "@/lib/uuid";
 
 const KEY = "harbor.customlists.v1";
+const PROFILES_KEY = "harbor.profiles.v1";
 const subs = new Set<() => void>();
+
+function activeListsKey(): string {
+  try {
+    const raw = localStorage.getItem(PROFILES_KEY);
+    if (!raw) return KEY;
+    const s = JSON.parse(raw) as {
+      profiles?: Array<{ id: string; settingsLinked?: boolean }>;
+      activeId?: string | null;
+    };
+    const id = s.activeId;
+    if (!id) return KEY;
+    const p = s.profiles?.find((x) => x.id === id);
+    if (!p || p.settingsLinked !== false) return KEY;
+    return `harbor.customlists.${id}`;
+  } catch {
+    return KEY;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("harbor:profiles-updated", () => {
+    memoryFallback = null;
+    for (const s of subs) s();
+  });
+}
 
 export type ListItem = {
   id: string;
-  type: "movie" | "series";
+  type: "movie" | "series" | "manga";
   name: string;
   poster?: string;
   addedAt: number;
@@ -30,12 +56,14 @@ export const MAX_ITEMS = 100;
 let memoryFallback: CustomList[] | null = null;
 
 function inferType(id: string): "movie" | "series" {
+  if (/^(kitsu|mal|anilist|anidb):/i.test(id)) return "series";
   return id.includes(":tv:") || id.includes(":series:") ? "series" : "movie";
 }
 
-function normalizeType(type: string | undefined, id: string): "movie" | "series" {
-  if (type === "series" || type === "tv") return "series";
+function normalizeType(type: string | undefined, id: string): "movie" | "series" | "manga" {
+  if (type === "series" || type === "tv" || type === "anime") return "series";
   if (type === "movie") return "movie";
+  if (type === "manga") return "manga";
   return inferType(id);
 }
 
@@ -52,7 +80,8 @@ function toItem(input: ListItemInput): ListItem {
 function read(): CustomList[] {
   if (memoryFallback) return memoryFallback.map((l) => ({ ...l, items: [...l.items] }));
   try {
-    const raw = localStorage.getItem(KEY);
+    const key = activeListsKey();
+    const raw = localStorage.getItem(key) ?? (key !== KEY ? localStorage.getItem(KEY) : null);
     if (!raw) return [];
     const arr = JSON.parse(raw) as unknown;
     if (!Array.isArray(arr)) return [];
@@ -69,7 +98,7 @@ function read(): CustomList[] {
           if (typeof it.id !== "string") continue;
           items.push({
             id: it.id,
-            type: it.type === "series" ? "series" : "movie",
+            type: it.type === "series" ? "series" : it.type === "manga" ? "manga" : "movie",
             name: typeof it.name === "string" ? it.name : "",
             poster: typeof it.poster === "string" ? it.poster : undefined,
             addedAt: typeof it.addedAt === "number" ? it.addedAt : 0,
@@ -92,11 +121,12 @@ function read(): CustomList[] {
 }
 
 function write(lists: CustomList[]): void {
+  const key = activeListsKey();
   const payload = JSON.stringify(lists);
-  const ok = setItemWithRecovery(KEY, payload);
+  const ok = setItemWithRecovery(key, payload);
   if (!ok) {
     freeStorageSpace();
-    const retry = setItemWithRecovery(KEY, payload);
+    const retry = setItemWithRecovery(key, payload);
     if (!retry) {
       memoryFallback = lists;
       console.warn("[custom-lists] localStorage exhausted, holding lists in memory only");
@@ -125,6 +155,24 @@ export function reorderLists(orderedIds: string[]): void {
     const p = pos.get(l.id);
     if (p != null) l.order = p;
   }
+  write(lists);
+}
+
+export function reorderListItems(listId: string, orderedIds: string[]): void {
+  const lists = read();
+  const list = lists.find((l) => l.id === listId);
+  if (!list) return;
+  const byId = new Map(list.items.map((it) => [it.id, it] as const));
+  const next: ListItem[] = [];
+  for (const id of orderedIds) {
+    const it = byId.get(id);
+    if (it) {
+      next.push(it);
+      byId.delete(id);
+    }
+  }
+  for (const it of list.items) if (byId.has(it.id)) next.push(it);
+  list.items = next;
   write(lists);
 }
 

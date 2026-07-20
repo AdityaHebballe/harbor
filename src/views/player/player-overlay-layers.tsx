@@ -1,15 +1,15 @@
-import { memo, type ComponentProps, type RefObject } from "react";
+import { type ComponentProps, type RefObject } from "react";
 import { DrawCanvas, StrokesLayer, type Stroke } from "@/components/player/draw-canvas";
 import { StreamSwitcher } from "@/components/player/stream-switcher";
 import { StreamCheckPill } from "@/components/player/stream-check-pill";
 import { AdReportButton } from "@/components/player/ad-report-button";
+import { XrayOverlay } from "@/components/player/xray/xray-overlay";
 import { P2pStatusChip } from "@/components/player/p2p-status-chip";
 import type { VolumeHudPosition, VolumeIndicatorState } from "@/components/player/volume-indicator";
 import type { ParentalCategory } from "@/lib/providers/harbor-imdb";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import type { PlayerSrc, PlayEpisode } from "@/lib/view";
 import { CastLayer } from "./cast-layer";
-import { BufferingIndicator } from "./buffering-indicator";
 import { DragClickStage } from "./drag-click-stage";
 import { LiveLayer } from "./live-layer";
 import { LoaderLayer } from "./loader-layer";
@@ -87,6 +87,9 @@ export type PlayerOverlayLayersProps = {
   allowAutoSkip: boolean;
   seekTo: (sec: number) => void;
   goToEpisode: (ep: PlayEpisode | null) => void;
+  playNext: () => void;
+  playPrev: () => void;
+  hasPrevEpisodeNow: boolean;
   setAutoNextCancelled: (v: boolean) => void;
   showChrome: boolean;
   ab: Tools["ab"];
@@ -182,7 +185,7 @@ export type PlayerOverlayLayersProps = {
   onSyncPlayPause: () => void;
 };
 
-export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
+export function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
   return (
     <>
       <StageOverlays
@@ -198,17 +201,9 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         videoFillPill={p.videoFillPill}
         subDropToast={p.subDropToast}
         contentAdvisory={p.contentAdvisory}
-        onSubDelay={(s) => {
-          p.bridgeRef.current?.setSubDelay(s);
-        }}
+        onSubDelay={(s) => { p.bridgeRef.current?.setSubDelay(s); }}
         onEnterSync={p.onEnterSync}
         chromeVisible={p.showChrome}
-      />
-      <BufferingIndicator
-        key={p.src.url}
-        buffering={p.snap.buffering}
-        status={p.snap.status}
-        suppressed={p.loaderActive || p.pipMode || p.cast.castDevice != null}
       />
       <CastLayer
         cast={p.cast}
@@ -269,7 +264,7 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         pillsVisible={p.pillsVisible}
         allowAutoSkip={p.allowAutoSkip}
         onSkip={p.seekTo}
-        onNextEpisode={() => p.goToEpisode(p.adjacentNext)}
+        onNextEpisode={p.playNext}
         onCancelAutoNext={() => p.setAutoNextCancelled(true)}
         showChrome={p.showChrome}
         ab={p.ab}
@@ -287,6 +282,10 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
           durationSec={p.snap.durationSec}
           hasNextEp={p.hasNextEpDisplay}
         />
+      )}
+
+      {!p.pipMode && !p.drawMode && (
+        <XrayOverlay meta={p.src.meta} visible={p.showChrome} isPaused={p.snap.status === "paused"} bridgeRef={p.bridgeRef} />
       )}
 
       {!p.loaderActive && p.syncMode === "idle" && (
@@ -331,16 +330,17 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
           subtitle={p.src.subtitle}
           resolution={p.src.streamRef?.resolution}
           quality={p.src.streamRef?.quality}
+          releaseName={p.src.streamRef?.title ?? p.src.streamRef?.parsedTitle}
           hoverTitle={p.src.meta.name}
           hoverSub={
             p.src.episode
               ? `S${p.src.episode.imdbSeason ?? p.src.episode.season} · E${String(p.src.episode.imdbEpisode ?? p.src.episode.episode).padStart(2, "0")}`
               : undefined
           }
-          hasPrevEp={p.canChangeEpisode && !!p.adjacentPrev}
-          hasNextEp={p.canChangeEpisode && !!p.adjacentNext}
-          onPrevEp={() => p.goToEpisode(p.adjacentPrev)}
-          onNextEp={() => p.goToEpisode(p.adjacentNext)}
+          hasPrevEp={p.hasPrevEpisodeNow}
+          hasNextEp={p.hasNextEpisode}
+          onPrevEp={p.playPrev}
+          onNextEp={p.playNext}
           metaImdbId={p.resolvedImdbId}
           metaTitle={p.src.meta.name ?? null}
           metaReleaseDate={p.src.meta.releaseDate ?? null}
@@ -407,9 +407,7 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
           visible
           compact={p.mpvEmbedWindowsActive}
           live={p.liveOverlay.isLive}
-          onLooksGood={
-            p.streamPillVariant === "check" ? () => p.setStreamCheckOpen(false) : undefined
-          }
+          onLooksGood={p.streamPillVariant === "check" ? () => p.setStreamCheckOpen(false) : undefined}
           onPickAnother={p.pickAnotherOrGuide}
         />
       )}
@@ -470,4 +468,4 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
       />
     </>
   );
-});
+}

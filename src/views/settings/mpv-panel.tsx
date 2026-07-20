@@ -68,18 +68,6 @@ export function MpvPanel() {
         />
       </Section>
 
-      <Section
-        title={t("Audio")}
-        subtitle={t("For laptop speakers and headphones. Movies mixed for 5.1 or 7.1 surround can sound hollow or have quiet dialogue on two speakers. This folds them down properly.")}
-      >
-        <ToggleRow
-          label={t("Mix surround sound down to stereo")}
-          sub={t("Turn on if you watch on a laptop or headphones and dialogue feels too quiet next to the effects. Leave off if you have a real surround setup or a soundbar.")}
-          value={settings.mpvDownmixStereo}
-          onChange={(v) => update({ mpvDownmixStereo: v })}
-        />
-      </Section>
-
       <AdvancedMpvSection />
     </>
   );

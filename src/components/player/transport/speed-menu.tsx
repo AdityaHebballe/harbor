@@ -1,4 +1,4 @@
-import { Clock, Gauge, Plus, Settings2, X } from "lucide-react";
+import { Clock, Gauge, Pin, Plus, Settings2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SLEEP_PRESETS, type SleepMode, type SleepTimerState } from "@/views/player/hooks/use-sleep-timer";
 import { useSettings } from "@/lib/settings";
@@ -138,31 +138,32 @@ export function SpeedMenu({
       </Tooltip>
       {open && (
         <div
-          data-tv-focus-scope
           className={`absolute bottom-[calc(100%+10px)] ${side === "start" ? "start-0" : "end-0"} w-[400px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-edge bg-elevated shadow-[0_24px_60px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl`}
         >
-          <button
-            onClick={() => setOpen(false)}
-            aria-label={t("Close")}
-            data-tv-modal-close
-            tabIndex={-1}
-            className="hidden"
-          />
           <div className={`grid ${sleep ? "grid-cols-2" : "grid-cols-1"}`}>
             <Section title={t("Playback speed")}>
-              {speedList.map((s) => (
-                <Row
-                  key={s.value}
-                  selected={Math.abs(s.value - rate) < 0.01}
-                  label={s.value === 1 ? t("Normal") : `${s.value}×`}
-                  hint={s.value === 1 ? t("default") : undefined}
-                  onRemove={editing && s.custom ? () => removeSpeed(s.value) : undefined}
-                  onClick={() => {
-                    onRate(s.value);
-                    setOpen(false);
-                  }}
-                />
-              ))}
+              {speedList.map((s) => {
+                const isDefault = Math.abs(s.value - (settings.defaultPlaybackSpeed ?? 1)) < 0.01;
+                return (
+                  <Row
+                    key={s.value}
+                    selected={Math.abs(s.value - rate) < 0.01}
+                    label={s.value === 1 ? t("Normal") : `${s.value}×`}
+                    isDefaultRow={isDefault}
+                    onMakeDefault={
+                      isDefault || editing
+                        ? undefined
+                        : () => update({ defaultPlaybackSpeed: s.value })
+                    }
+                    makeDefaultLabel={t("Set as default speed")}
+                    onRemove={editing && s.custom ? () => removeSpeed(s.value) : undefined}
+                    onClick={() => {
+                      onRate(s.value);
+                      setOpen(false);
+                    }}
+                  />
+                );
+              })}
               {editing && <AddPresetInput placeholder={t("e.g. 1.35")} suffix="×" onAdd={addSpeed} />}
             </Section>
             {sleep && (
@@ -255,26 +256,54 @@ function Row({
   hint,
   onClick,
   onRemove,
+  onMakeDefault,
+  makeDefaultLabel,
+  isDefaultRow,
 }: {
   selected: boolean;
   label: string;
   hint?: string;
   onClick: () => void;
   onRemove?: () => void;
+  onMakeDefault?: () => void;
+  makeDefaultLabel?: string;
+  isDefaultRow?: boolean;
 }) {
+  const hasPin = !onRemove && (isDefaultRow || !!onMakeDefault);
   return (
-    <div className="relative flex items-center">
+    <div className="group relative flex items-center">
       <button
         onClick={onClick}
         className={`flex h-10 w-full items-center justify-between rounded-lg px-3 text-start text-[14px] transition-colors ${
           selected ? "bg-elevated text-ink ring-1 ring-edge" : "text-ink-muted hover:bg-canvas/55 hover:text-ink"
-        } ${onRemove ? "pe-10" : ""}`}
+        } ${onRemove || hasPin ? "pe-10" : ""}`}
       >
         <span className={selected ? "font-medium" : ""}>{label}</span>
-        {hint && !onRemove && (
+        {hint && !onRemove && !hasPin && (
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink-subtle">{hint}</span>
         )}
       </button>
+      {hasPin && isDefaultRow && (
+        <span
+          aria-label="Default speed"
+          className="pointer-events-none absolute end-2 grid h-7 w-7 place-items-center rounded-md text-accent"
+        >
+          <Pin size={14} strokeWidth={2.4} className="rotate-45 fill-current" />
+        </span>
+      )}
+      {hasPin && !isDefaultRow && onMakeDefault && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onMakeDefault();
+          }}
+          aria-label={makeDefaultLabel}
+          title={makeDefaultLabel}
+          className="absolute end-2 grid h-7 w-7 place-items-center rounded-md text-ink-subtle/50 opacity-70 transition-colors hover:bg-canvas/55 hover:text-ink group-hover:opacity-100"
+        >
+          <Pin size={14} strokeWidth={2.2} className="rotate-45" />
+        </button>
+      )}
       {onRemove && (
         <button
           onClick={(e) => {

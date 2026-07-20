@@ -15,6 +15,7 @@ export function FloatingBack({
   const deep =
     topKind === "meta" ||
     topKind === "collection" ||
+    topKind === "addon-collection" ||
     topKind === "person" ||
     topKind === "filter" ||
     topKind === "award" ||

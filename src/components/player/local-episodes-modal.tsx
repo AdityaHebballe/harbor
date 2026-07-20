@@ -13,7 +13,6 @@ import {
   subscribeLocalEpisodes,
   type LocalEpisodesPayload,
 } from "@/lib/player/local-episodes-modal";
-import { focusTvPageDefault } from "@/lib/keyboard-navigation";
 
 export function LocalEpisodesModal() {
   const state = useSyncExternalStore(subscribeLocalEpisodes, getLocalEpisodes);
@@ -166,8 +165,6 @@ function GridModal({ payload }: { payload: LocalEpisodesPayload }) {
         : t("Ascending");
 
   useEffect(() => {
-    focusTvPageDefault();
-
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -194,7 +191,6 @@ function GridModal({ payload }: { payload: LocalEpisodesPayload }) {
 
   return createPortal(
     <div
-      data-tv-focus-scope
       className="animate-fade-in fixed inset-0 z-[210] flex items-center justify-center bg-canvas/80 p-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) closeLocalEpisodes();
@@ -219,7 +215,6 @@ function GridModal({ payload }: { payload: LocalEpisodesPayload }) {
           </div>
           <button
             type="button"
-            data-tv-modal-close
             onClick={() => closeLocalEpisodes()}
             aria-label={t("Close")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
@@ -333,8 +328,6 @@ function GridModal({ payload }: { payload: LocalEpisodesPayload }) {
                 key={ep.id}
                 type="button"
                 onClick={() => play(ep)}
-                autoFocus={isHighlight}
-                data-tv-initial-focus={isHighlight || undefined}
                 className={`group/ep relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-start transition-colors hover:bg-raised ${
                   isHighlight ? "bg-accent/10 ring-1 ring-accent" : ""
                 }`}

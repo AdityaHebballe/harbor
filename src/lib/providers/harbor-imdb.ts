@@ -1,3 +1,6 @@
+import { lruSet } from "@/lib/cache";
+import { registerEvictable } from "@/lib/maintenance";
+
 const BASE = "https://harbor.site/api/imdb";
 
 export type ParentalCategory = { category: string; severity: string };
@@ -7,6 +10,10 @@ const parentalCache = new Map<string, ParentalCategory[]>();
 const parentalInflight = new Map<string, Promise<ParentalCategory[]>>();
 const episodeCache = new Map<string, Map<string, number>>();
 const episodeInflight = new Map<string, Promise<Map<string, number>>>();
+
+registerEvictable("harbor-imdb-episodes", (aggressive) => {
+  if (aggressive) episodeCache.clear();
+});
 
 export async function harborImdbEpisodes(seriesTt: string): Promise<Map<string, number>> {
   if (!seriesTt.startsWith("tt")) return new Map();
@@ -25,11 +32,11 @@ export async function harborImdbEpisodes(seriesTt: string): Promise<Map<string, 
           if (Number.isFinite(v) && v > 0) map.set(k, v);
         }
       }
-      episodeCache.set(seriesTt, map);
+      lruSet(episodeCache, seriesTt, map, 200);
       return map;
     } catch {
       const empty = new Map<string, number>();
-      episodeCache.set(seriesTt, empty);
+      lruSet(episodeCache, seriesTt, empty, 200);
       return empty;
     } finally {
       episodeInflight.delete(seriesTt);
@@ -62,6 +69,10 @@ export async function harborImdbTitle(tt: string): Promise<number | null> {
   }
 }
 
+export function harborImdbTitleCached(tt: string): number | null | undefined {
+  return titleCache.get(tt);
+}
+
 export async function harborImdbParental(tt: string): Promise<ParentalCategory[]> {
   if (!tt.startsWith("tt")) return [];
   const cached = parentalCache.get(tt);
@@ -91,4 +102,8 @@ export async function harborImdbParental(tt: string): Promise<ParentalCategory[]
   })();
   parentalInflight.set(tt, p);
   return p;
+}
+
+export function harborImdbParentalCached(tt: string): ParentalCategory[] | undefined {
+  return parentalCache.get(tt);
 }

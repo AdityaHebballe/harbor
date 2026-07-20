@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAnilist } from "@/lib/anilist/provider";
 import { fetchListEntry } from "@/lib/anilist/mutations";
 import { resolveAnilistMediaId } from "@/lib/anilist/sync";
@@ -8,38 +8,62 @@ export type AnilistWatched = { watchedKeys: Set<string>; completed: boolean };
 
 const EMPTY: AnilistWatched = { watchedKeys: new Set(), completed: false };
 
+function airedEpisodes(episodes: KitsuEpisode[]): KitsuEpisode[] {
+  const now = Date.now();
+  return episodes.filter((e) => {
+    if (!e.airdate) return true;
+    const t = Date.parse(e.airdate);
+    return !Number.isFinite(t) || t <= now;
+  });
+}
+
 export function useAnilistWatched(harborId: string, episodes: KitsuEpisode[]): AnilistWatched {
   const { isConnected } = useAnilist();
   const [result, setResult] = useState<AnilistWatched>(EMPTY);
+  const epSig = useMemo(
+    () =>
+      episodes.map((e) => `${e.id}:${e.seasonNumber ?? 1}:${e.number}:${e.airdate ?? ""}`).join("|"),
+    [episodes],
+  );
+  const episodesRef = useRef(episodes);
+  episodesRef.current = episodes;
 
   useEffect(() => {
-    setResult(EMPTY);
-    if (!isConnected || !harborId) return;
+    if (!isConnected || !harborId) {
+      setResult(EMPTY);
+      return;
+    }
     let cancelled = false;
     void (async () => {
       const mediaId = await resolveAnilistMediaId(harborId).catch(() => null);
       if (cancelled || mediaId == null) return;
       const info = await fetchListEntry(mediaId).catch(() => null);
-      if (cancelled || !info?.entry) return;
+      if (cancelled || !info) return;
+      if (!info.entry) {
+        setResult(EMPTY);
+        return;
+      }
       const { status, progress } = info.entry;
-      const sorted = [...episodes].sort(
-        (a, b) => (a.seasonNumber || 1) - (b.seasonNumber || 1) || a.number - b.number,
+      const sorted = airedEpisodes(episodesRef.current).sort(
+        (a, b) => (a.seasonNumber ?? 1) - (b.seasonNumber ?? 1) || a.number - b.number,
       );
-      const total = sorted.length;
+      const mediaTotal = info.episodes;
+      const cap =
+        mediaTotal != null && mediaTotal > 0 ? Math.min(sorted.length, mediaTotal) : sorted.length;
       const watchedCount =
-        status === "COMPLETED" ? total : Math.max(0, Math.min(progress, total));
+        status === "COMPLETED" ? cap : Math.max(0, Math.min(progress, cap));
       const watchedKeys = new Set<string>();
       for (let i = 0; i < watchedCount; i++) {
         const ep = sorted[i];
-        watchedKeys.add(`${ep.seasonNumber || 1}:${ep.number}`);
+        watchedKeys.add(`${ep.seasonNumber ?? 1}:${ep.number}`);
       }
-      const completed = status === "COMPLETED" || (total <= 1 && progress >= 1);
+      const completed = status === "COMPLETED" || (cap <= 1 && progress >= 1);
       setResult({ watchedKeys, completed });
     })();
     return () => {
       cancelled = true;
     };
-  }, [harborId, isConnected, episodes]);
+  }, [harborId, isConnected, epSig]);
 
   return result;
 }

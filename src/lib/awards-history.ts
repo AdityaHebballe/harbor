@@ -6,6 +6,8 @@ export type CategoryWinner = {
   year: number;
   workTitle: string;
   recipients: string[];
+  imdb?: string;
+  nominees?: Array<{ title: string; imdb?: string }>;
 };
 
 export type CategoryHistory = {
@@ -17,6 +19,8 @@ type RawEntry = {
   year: number;
   title: string | null;
   recipients: string[];
+  won?: boolean;
+  imdb?: string;
 };
 
 type RawData = Record<string, Record<string, { name: string; entries: RawEntry[] }>>;
@@ -32,12 +36,22 @@ export function readAwardHistory(
     .map((cat) => {
       const raw = bucket[cat.key];
       if (!raw) return null;
+      const nomineesByYear = new Map<number, Array<{ title: string; imdb?: string }>>();
+      for (const e of raw.entries) {
+        if (e.won !== false || !e.title) continue;
+        const list = nomineesByYear.get(e.year) ?? [];
+        list.push({ title: e.title, imdb: e.imdb });
+        nomineesByYear.set(e.year, list);
+      }
       const entries: CategoryWinner[] = raw.entries
+        .filter((e) => e.won !== false)
         .filter((e) => e.title || e.recipients.length > 0)
         .map((e) => ({
           year: e.year,
           workTitle: e.title ?? e.recipients[0] ?? "",
           recipients: e.recipients,
+          imdb: e.imdb,
+          nominees: nomineesByYear.get(e.year),
         }))
         .filter((e) => e.workTitle.length > 0);
       return { category: cat, entries };
@@ -55,6 +69,15 @@ const BUNDLED_AWARD_NAME: Partial<Record<AwardType, string>> = {
   cannes: "Cannes Film Festival",
   venice: "Venice Film Festival",
   berlin: "Berlin International Film Festival",
+  bafta_tv: "BAFTA Television Award",
+  annie: "Annie Award",
+  spirit: "Independent Spirit Award",
+  saturn: "Saturn Award",
+  cesar: "César Award",
+  goya: "Goya Award",
+  blue_dragon: "Blue Dragon Film Award",
+  baeksang: "Baeksang Arts Award",
+  bifa: "British Independent Film Award",
 };
 
 function normTitle(s: string): string {
@@ -83,8 +106,9 @@ function buildTitleIndex(): Map<string, AwardEntry[]> {
           awardName: `${prefix}: ${cat.name}`,
           category: cat.name,
           year: e.year,
-          result: "won",
+          result: e.won === false ? "nominated" : "won",
           workTitle: e.title,
+          workImdb: e.imdb,
           recipients: e.recipients.length > 0 ? e.recipients : undefined,
         });
         idx.set(key, list);
@@ -133,8 +157,9 @@ function buildPersonIndex(): Map<string, AwardEntry[]> {
             awardName: `${prefix}: ${cat.name}`,
             category: cat.name,
             year: e.year,
-            result: "won",
+            result: e.won === false ? "nominated" : "won",
             workTitle: e.title ?? undefined,
+            workImdb: e.imdb,
             recipient: r,
             recipients: [r],
           });
@@ -152,15 +177,21 @@ export function bundledAwardsForPerson(name: string | undefined): AwardEntry[] {
   return personIndex.get(normTitle(name)) ?? [];
 }
 
+const CATEGORY_STOPWORDS = new Set([
+  "outstanding", "performance", "by", "a", "an", "the", "in", "of", "for", "role",
+  "award", "awards", "best", "achievement", "motion", "picture", "television", "tv",
+  "miniseries", "series", "mini", "and", "or", "at", "as", "to",
+]);
+
 function normCategoryKey(s: string): string {
   return s
     .toLowerCase()
-    .replace(/\bmotion picture\b/g, " ")
-    .replace(/\btelevision\b/g, " ")
-    .replace(/\bmini[\s-]?series\b/g, " ")
+    .replace(/mini[\s-]?series/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
+    .split(" ")
+    .filter((w) => w && !CATEGORY_STOPWORDS.has(w))
+    .join(" ")
+    .trim();
 }
 
 export function dedupePersonAwards(entries: AwardEntry[]): AwardEntry[] {

@@ -1,14 +1,11 @@
 import { Check, Copy, ExternalLink, Loader2, Play, RotateCw, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useSettings } from "@/lib/settings";
 import { BUNDLED_SERVER_URL, getCastServerStatus, restartCastServer } from "@/lib/stremio-server";
 import { openUrl } from "@/lib/window";
-import { ToggleRow, settingsAnchor } from "../shared";
+import { settingsAnchor } from "../shared";
 import { isTauri } from "./internals";
 import { useT } from "@/lib/i18n";
-
-const WEB_PORT = 11471;
 
 type EngineState = "checking" | "running" | "starting" | "stopped";
 
@@ -38,7 +35,7 @@ async function readEngineState(): Promise<EngineState> {
   return (await probeBundled()) ? "running" : "stopped";
 }
 
-function AddressRow({ label, url, openable }: { label: string; url: string; openable?: boolean }) {
+export function AddressRow({ label, url, openable }: { label: string; url: string; openable?: boolean }) {
   const t = useT();
   const [copied, setCopied] = useState(false);
   const copy = () => {
@@ -107,11 +104,9 @@ function ControlButton({
 
 export function ServerAddressSection() {
   const t = useT();
-  const { settings, update } = useSettings();
   const [lanIp, setLanIp] = useState<string | null>(null);
   const [engine, setEngine] = useState<EngineState>("checking");
   const [acting, setActing] = useState(false);
-  const [webError, setWebError] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const aliveRef = useRef(true);
 
@@ -139,21 +134,6 @@ export function ServerAddressSection() {
       window.clearInterval(timer);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isTauri || !(settings.serveWebUi || settings.remoteControlEnabled)) {
-      setWebError(false);
-      return;
-    }
-    const t = window.setTimeout(() => {
-      void invoke<boolean>("web_serve_status")
-        .then((ok) => {
-          if (aliveRef.current) setWebError(!ok);
-        })
-        .catch(() => {});
-    }, 800);
-    return () => window.clearTimeout(t);
-  }, [settings.serveWebUi, settings.remoteControlEnabled]);
 
   if (!isTauri) return null;
 
@@ -235,27 +215,9 @@ export function ServerAddressSection() {
 
       <div className="h-px bg-edge-soft" />
 
-      <ToggleRow
-        label={t("Harbor in your browser")}
-        sub={t("Serves this exact install of Harbor as a web app on your network. Open it on a phone, laptop, or TV browser, sign in there, and it streams through this computer. You can also use the phone remote to control playback and cast to another device on this machine.")}
-        value={settings.serveWebUi || settings.remoteControlEnabled}
-        onChange={(v) => update({ serveWebUi: v, remoteControlEnabled: v })}
-      />
-      {(settings.serveWebUi || settings.remoteControlEnabled) && (
-        <>
-          <AddressRow label={t("Harbor in your browser (this computer)")} url={`http://127.0.0.1:${WEB_PORT}`} openable />
-          {lanIp && <AddressRow label={t("Harbor in your browser (Wi-Fi)")} url={`http://${lanIp}:${WEB_PORT}`} />}
-          <AddressRow label={t("Phone remote (this computer)")} url={`http://127.0.0.1:${WEB_PORT}/remote`} openable />
-          {lanIp && (
-            <AddressRow label={t("Phone remote (Wi-Fi)")} url={`http://${lanIp}:${WEB_PORT}/remote`} />
-          )}
-          {webError && (
-            <span className="text-[12px] text-danger">
-              {t("Couldn't start on port {WEB_PORT}. Another app may be using it; toggle off and on to retry.", { WEB_PORT: String(WEB_PORT) })}
-            </span>
-          )}
-        </>
-      )}
+      <p className="text-[12.5px] leading-relaxed text-ink-subtle">
+        {t("Looking for Harbor in your browser, the phone remote, or the manga reader remote? They moved to the Remotes page.")}
+      </p>
     </section>
   );
 }

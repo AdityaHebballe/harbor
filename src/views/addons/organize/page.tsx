@@ -1,7 +1,8 @@
-import { ArrowLeft, ChevronDown, History, Info, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, CloudUpload, History, Info, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getUserAddonsRaw, type Addon } from "@/lib/addons";
 import { loadInstalled, reorderInstalled, type InstalledAddon } from "@/lib/addon-store";
+import { moveDeviceAddonsToAccount, type MoveStep } from "@/lib/addons-store/move-to-account";
 import {
   applyOrderToItems,
   loadBackups,
@@ -45,6 +46,7 @@ export function OrganizeAddonsPage({
   const [workingDevice, setWorkingDevice] = useState<InstalledAddon[]>([]);
   const [backupsKey, setBackupsKey] = useState(0);
   const [backupsOpen, setBackupsOpen] = useState(false);
+  const [moving, setMoving] = useState<MoveStep | null>(null);
   const backupsWrapRef = useRef<HTMLDivElement>(null);
   const backedUpRef = useRef(false);
   const backupCount = useMemo(() => loadBackups().length, [backupsKey]);
@@ -96,6 +98,7 @@ export function OrganizeAddonsPage({
     escBlockRef.current =
       search.open ||
       phase.kind === "saving" ||
+      moving != null ||
       cloudDrag.dragIndex != null ||
       deviceDrag.dragIndex != null;
     backupsOpenRef.current = backupsOpen;
@@ -183,6 +186,47 @@ export function OrganizeAddonsPage({
     }
   };
 
+  const handleMoveAll = async () => {
+    if (!authKey || moving != null || saving || dirty || workingDevice.length === 0) return;
+    setNotice(null);
+    setMoving("preparing");
+    try {
+      const result = await moveDeviceAddonsToAccount(authKey, workingDevice, setMoving);
+      setBackupsKey((k) => k + 1);
+      if (!result.ok) {
+        setNotice({
+          tone: "danger",
+          text:
+            result.stage === "fetch"
+              ? t("Couldn't reach Stremio to confirm your collection. Nothing was written.")
+              : result.stage === "write"
+                ? t("Stremio didn't confirm the move. Your collection may be unchanged. Reload to see the current state.")
+                : t("Moved, but Harbor couldn't confirm the result. Reload to see the current state."),
+          reload: true,
+        });
+        return;
+      }
+      await load();
+      if (result.moved === 0) {
+        setNotice({ tone: "info", text: t("Everything here is already in your account.") });
+        return;
+      }
+      const movedText =
+        result.moved === 1
+          ? t("Moved 1 addon to your Stremio account. It now syncs everywhere you sign in.")
+          : t("Moved {n} addons to your Stremio account. They now sync everywhere you sign in.", {
+              n: result.moved,
+            });
+      const skippedText =
+        result.skipped.length > 0
+          ? " " + t("Couldn't reach {names}, so they stayed on this device.", { names: result.skipped.join(", ") })
+          : "";
+      setNotice({ tone: "info", text: movedText + skippedText });
+    } finally {
+      setMoving(null);
+    }
+  };
+
   const handleBackupNow = () => {
     if (workingCloud.length === 0) return;
     pushBackup(workingCloud);
@@ -214,7 +258,7 @@ export function OrganizeAddonsPage({
         <div className="mx-auto flex w-full max-w-[1160px] items-center gap-4 px-6 py-5 sm:px-10">
           <button
             onClick={onClose}
-            disabled={saving}
+            disabled={saving || moving != null}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-elevated text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-raised hover:text-ink disabled:opacity-40"
             aria-label={t("Back to addons")}
             title={t("Back to addons")}
@@ -269,14 +313,14 @@ export function OrganizeAddonsPage({
             <div className="flex shrink-0 items-center gap-2.5">
               <button
                 onClick={onClose}
-                disabled={saving}
+                disabled={saving || moving != null}
                 className="flex h-11 items-center rounded-full bg-elevated px-5 text-[13.5px] font-semibold text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-raised hover:text-ink disabled:opacity-40"
               >
                 {t("Cancel")}
               </button>
               <button
                 onClick={() => void handleSave()}
-                disabled={!dirty || phase.kind !== "ready"}
+                disabled={!dirty || phase.kind !== "ready" || moving != null}
                 className={`flex h-11 items-center gap-2 rounded-full bg-ink px-6 text-[14px] font-semibold text-canvas transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40 ${
                   dirty && !saving ? "ring-2 ring-accent/50" : ""
                 }`}
@@ -368,7 +412,7 @@ export function OrganizeAddonsPage({
                         <OrganizeList
                           entries={entriesOf(workingCloud)}
                           drag={cloudDrag}
-                          busy={saving}
+                          busy={saving || moving != null}
                           onMove={(i, delta) => setWorkingCloud((l) => moveItem(l, i, i + delta))}
                           onMoveTop={(i) => setWorkingCloud((l) => moveItem(l, i, 0))}
                         />
@@ -379,11 +423,39 @@ export function OrganizeAddonsPage({
                         title={t("On this device only")}
                         sub={t("These live in Harbor on this computer and never touch your account.")}
                         count={workingDevice.length}
+                        action={
+                          <button
+                            onClick={() => void handleMoveAll()}
+                            disabled={saving || moving != null || dirty}
+                            title={
+                              dirty
+                                ? t("Save or discard your order changes first")
+                                : t("Add every addon below to your Stremio account")
+                            }
+                            className="flex h-9 items-center gap-1.5 rounded-full bg-raised px-3.5 text-[12.5px] font-semibold text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-elevated hover:text-ink disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            {moving != null ? (
+                              <>
+                                <Loader2 size={13} className="animate-spin" />
+                                {moving === "preparing"
+                                  ? t("Checking")
+                                  : moving === "saving"
+                                    ? t("Saving")
+                                    : t("Verifying")}
+                              </>
+                            ) : (
+                              <>
+                                <CloudUpload size={14} strokeWidth={2.2} />
+                                {t("Move all to account")}
+                              </>
+                            )}
+                          </button>
+                        }
                       >
                         <OrganizeList
                           entries={entriesOf(workingDevice)}
                           drag={deviceDrag}
-                          busy={saving}
+                          busy={saving || moving != null}
                           onMove={(i, delta) => setWorkingDevice((l) => moveItem(l, i, i + delta))}
                           onMoveTop={(i) => setWorkingDevice((l) => moveItem(l, i, 0))}
                         />

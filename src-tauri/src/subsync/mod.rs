@@ -1,6 +1,18 @@
-mod correlate;
+pub(crate) mod correlate;
 mod extract;
 pub mod moviehash;
+
+mod url_guard;
+mod vad;
+mod asr_match;
+pub mod scorer;
+pub mod torrent_sync;
+pub mod audio_tracks;
+pub mod asr;
+pub mod fingerprint;
+
+#[cfg(feature = "asr-whisper")]
+mod asr_whisper;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -60,7 +72,7 @@ pub async fn sync_subtitle(
     let hdrs = headers.unwrap_or_default();
     let mut audio: Vec<(f32, f32)> = Vec::new();
     for (start, len) in windows(duration_sec) {
-        if let Ok(iv) = extract::speech_intervals(&url, &hdrs, start, len).await {
+        if let Ok(iv) = extract::speech_intervals_reference(&url, &hdrs, start, len).await {
             audio.extend(iv);
         }
     }

@@ -61,6 +61,12 @@ impl PipState {
     }
 }
 
+pub fn window_pip_is_active(app: &AppHandle) -> bool {
+    app.try_state::<PipState>()
+        .map(|s| s.window_pip_active.load(Ordering::SeqCst))
+        .unwrap_or(false)
+}
+
 #[tauri::command]
 pub async fn pip_open(
     app: AppHandle,
@@ -284,7 +290,7 @@ pub async fn window_pip_exit(
     state.window_pip_active.store(false, Ordering::SeqCst);
 
     if let Some(s) = saved {
-        let _ = main.set_always_on_top(s.always_on_top);
+        let _ = main.set_always_on_top(s.always_on_top || crate::tray::always_on_top_pref());
         if s.maximized {
             let _ = main.set_min_size(Some(LogicalSize::new(960.0, 600.0)));
             let _ = main.maximize();
@@ -294,7 +300,7 @@ pub async fn window_pip_exit(
             let _ = main.set_min_size(Some(LogicalSize::new(960.0, 600.0)));
         }
     } else {
-        let _ = main.set_always_on_top(false);
+        let _ = main.set_always_on_top(crate::tray::always_on_top_pref());
         let _ = main.set_size(LogicalSize::new(1280.0, 800.0));
         let _ = main.set_min_size(Some(LogicalSize::new(960.0, 600.0)));
         let _ = main.center();

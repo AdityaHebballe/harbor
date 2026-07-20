@@ -51,16 +51,13 @@ export function CastMenu({
       if (!wrapRef.current?.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      onClose();
+      if (e.key === "Escape") onClose();
     };
     window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
 
@@ -69,7 +66,6 @@ export function CastMenu({
   return (
     <div
       ref={wrapRef}
-      data-tv-focus-scope
       onMouseDown={(e) => e.stopPropagation()}
       className="animate-popover-in fixed z-[140] w-[320px] rounded-2xl border border-edge bg-elevated p-4 shadow-[0_24px_60px_-18px_rgba(0,0,0,0.7)] backdrop-blur-md"
       style={{
@@ -84,7 +80,6 @@ export function CastMenu({
         </span>
         <button
           onClick={onClose}
-          data-tv-modal-close
           aria-label={t("Close")}
           className="flex h-6 w-6 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
         >

@@ -155,6 +155,13 @@ export function LocalEngineSection() {
         onChange={(v) => update({ torrentFullDownload: v })}
       />
 
+      <ToggleRow
+        label={t("Keep downloading after you leave")}
+        sub={t("When off, a torrent stops the moment you close or switch the stream, so nothing keeps downloading in the background. Turn on to let it keep going after you leave; manage or pause those from the Downloads tab.")}
+        value={settings.keepStreamDownloadsInBackground}
+        onChange={(v) => update({ keepStreamDownloadsInBackground: v })}
+      />
+
       <div className="flex items-center gap-2">
         <button
           type="button"

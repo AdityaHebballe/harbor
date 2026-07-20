@@ -1,19 +1,21 @@
 import { ArrowRight, Loader2, Play } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
 import { Check, Plus } from "lucide-react";
-import { openInAppBrowser } from "@/lib/window";
+import { openInAppBrowser, openUrl } from "@/lib/window";
 import { queueToggle, useIsQueued } from "@/lib/queue";
 import { useMetaWatched } from "@/lib/watched-flag";
 import { HeroRatings } from "@/views/detail/hero-ratings";
 import { HeroAwardsCorner } from "@/views/detail/hero-awards";
 import { isTitleUpcoming } from "@/views/detail/helpers";
 import { UpcomingCta } from "@/views/detail/upcoming-cta";
-import { awardSummary, useAwards } from "@/lib/providers/wikidata";
+import { awardSummary, pickHeroAwards, useAwards } from "@/lib/providers/wikidata";
 import { mergeBundledAwards } from "@/lib/awards-history";
 import { IMG } from "@/lib/providers/tmdb/tmdb-client";
+import type { CastEntry } from "@/lib/providers/tmdb/tmdb-details";
 import type { PersonRef } from "@/lib/providers/tmdb/tmdb-people";
+import { fetchTvdbCast } from "@/lib/providers/tvdb-cast";
 import { PeopleRail, PosterRail, RailSection, RailSkeleton, type Person } from "./rails";
 import { useModalRatings } from "./use-modal-ratings";
 import { useTitleDetail } from "./use-title-detail";
@@ -30,6 +32,8 @@ function posterUrl(poster: string | undefined, fallback: string | undefined): st
 export function TitlePanel({
   meta,
   tmdbKey,
+  showQueue = true,
+  onBackdrop,
   onOpenPerson,
   onOpenTitle,
   onOpenDetail,
@@ -39,6 +43,8 @@ export function TitlePanel({
 }: {
   meta: Meta;
   tmdbKey: string | null;
+  showQueue?: boolean;
+  onBackdrop?: (url: string | null) => void;
   onOpenPerson: (id: number, name: string) => void;
   onOpenTitle: (m: Meta) => void;
   onOpenDetail: (m: Meta) => void;
@@ -65,7 +71,11 @@ export function TitlePanel({
   const isSeries = meta.type === "series" || meta.id.startsWith("tmdb:tv:");
   const upcoming = !loading && !isSeries && isTitleUpcoming(detail, meta);
   const anime = isAnimeId(meta.id);
-  const titleWatched = useMetaWatched(meta.id, meta.type);
+  const titleWatched = useMetaWatched(
+    meta.id,
+    meta.type,
+    detail?.imdbId ?? (meta.id.startsWith("tt") ? meta.id : null),
+  );
   const queued = useIsQueued(meta);
   const imdbId = detail?.imdbId ?? (meta.id.startsWith("tt") ? meta.id : null);
   const mediaType: "movie" | "show" = isSeries ? "show" : "movie";
@@ -75,14 +85,34 @@ export function TitlePanel({
   const ratingSource: "imdb" | "tmdb" = imdbRating ? "imdb" : "tmdb";
   const tmdbRating = !anime && detail?.rating ? detail.rating : null;
 
-  const liveAwards = useAwards(imdbId ?? undefined);
+  const liveAwards = useAwards(imdbId ?? undefined, meta.type === "series");
   const awards = useMemo(
     () => mergeBundledAwards(liveAwards, title, year ? Number(year) : undefined),
     [liveAwards, title, year],
   );
-  const awardSummaryItems = awardSummary(awards).slice(0, 3);
+  const awardSummaryItems = pickHeroAwards(awardSummary(awards), 3);
 
-  const cast: Person[] = (detail?.cast ?? []).slice(0, 30).map((c) => ({
+  const [tvdbCast, setTvdbCast] = useState<CastEntry[]>([]);
+  useEffect(() => {
+    setTvdbCast([]);
+    if (loading) return;
+    if ((detail?.cast?.length ?? 0) > 0) return;
+    const tt = detail?.imdbId ?? (meta.id.startsWith("tt") ? meta.id : null);
+    const kitsuMatch = meta.id.match(/^kitsu:(\d+)/);
+    const kitsuId = kitsuMatch ? Number(kitsuMatch[1]) : null;
+    if (!tt && kitsuId == null) return;
+    let cancelled = false;
+    fetchTvdbCast({ imdb: tt, kitsuId, type: isSeries ? "series" : "movie" })
+      .then((c) => {
+        if (!cancelled) setTvdbCast(c);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [detail, loading, meta.id, isSeries]);
+
+  const cast: Person[] = (detail?.cast?.length ? detail.cast : tvdbCast).slice(0, 30).map((c) => ({
     id: c.id,
     name: c.name,
     role: c.character,
@@ -105,6 +135,10 @@ export function TitlePanel({
     ro.observe(el);
     return () => ro.disconnect();
   }, [overview, expanded]);
+
+  useEffect(() => {
+    onBackdrop?.(detail?.backdrop ?? meta.background ?? null);
+  }, [detail, meta.id, meta.background, onBackdrop]);
 
   return (
     <div className="flex flex-col gap-7 px-6 pb-8 pt-1 sm:px-8">
@@ -129,9 +163,11 @@ export function TitlePanel({
             {year && <span>{year}</span>}
             {runtime && <span>{runtime}</span>}
           </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          <div className="flex items-start gap-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <HeroRatings
               bare
+              compact
               rating={primaryRating}
               tmdbRating={tmdbRating}
               isAnime={anime}
@@ -140,17 +176,10 @@ export function TitlePanel({
               imdbId={imdbId}
               mediaType={mediaType}
               ratingSource={ratingSource}
-              onOpenUrl={(url) => openInAppBrowser(url, title)}
+              onOpenUrl={(url) =>
+                url.includes("simkl.com") ? openInAppBrowser(url, title) : openUrl(url)
+              }
             />
-            {awardSummaryItems.length > 0 && (
-              <HeroAwardsCorner
-                summary={awardSummaryItems}
-                onDark
-                interactive={false}
-                className="ms-auto self-start max-w-[52%] text-end"
-              />
-            )}
-          </div>
           {genrePills.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {genrePills.slice(0, 5).map((g) => (
@@ -201,6 +230,7 @@ export function TitlePanel({
               {isSeries ? t("All episodes & details") : t("Full details")}
               <ArrowRight size={17} strokeWidth={2.4} />
             </button>
+            {showQueue && (
             <button
               type="button"
               onClick={() => queueToggle(meta)}
@@ -213,6 +243,17 @@ export function TitlePanel({
               {queued ? <Check size={17} strokeWidth={2.6} /> : <Plus size={17} strokeWidth={2.4} />}
               {queued ? t("Queued") : t("Queue")}
             </button>
+            )}
+          </div>
+            </div>
+            {awardSummaryItems.length > 0 && (
+              <HeroAwardsCorner
+                summary={awardSummaryItems}
+                onDark
+                interactive={false}
+                className="shrink-0 max-w-[38%] text-end"
+              />
+            )}
           </div>
         </div>
       </div>

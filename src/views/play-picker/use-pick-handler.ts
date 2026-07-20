@@ -32,6 +32,7 @@ export function usePickHandler({
   isCached,
   seasonLock,
   p2pAutoConsent,
+  streamMode,
   inSession,
   canInvite,
   inviteSentRef,
@@ -60,6 +61,7 @@ export function usePickHandler({
   isCached: (s: ScoredStream) => boolean;
   seasonLock: boolean;
   p2pAutoConsent: boolean;
+  streamMode: "both" | "addons" | "p2p";
   inSession: boolean;
   canInvite: boolean;
   inviteSentRef: React.MutableRefObject<string | null>;
@@ -122,7 +124,8 @@ export function usePickHandler({
     let opened = false;
     try {
       const hint = episode ? { season: episode.season ?? null, episode: episode.episode ?? null } : undefined;
-      const r = await resolveStream(stream, debrids, ac.signal, userCommitted, forceP2p, hint);
+      const allowP2pFallback = streamMode !== "addons";
+      const r = await resolveStream(stream, debrids, ac.signal, userCommitted, forceP2p, hint, allowP2pFallback);
       if (ac.signal.aborted) return;
       if (!r.ok) {
         if (r.code === "web-page" && r.webUrl) {
@@ -180,7 +183,7 @@ export function usePickHandler({
           setP2pConfirm({ stream, forceP2p: true });
           return;
         }
-        if (scheduleSameSourceRetry(stream, userCommitted, forceP2p)) return;
+        if (!autoActive && scheduleSameSourceRetry(stream, userCommitted, forceP2p)) return;
         recordStubEvent(reasonStr);
         const willRetry = autoActive && autoAttemptIdx + 1 < autoCandidatesLength;
         advanceAuto();
@@ -259,8 +262,9 @@ export function usePickHandler({
             .map(([k]) => k),
         };
         savePlayback(meta.id, entry, episode?.season, episode?.episode);
-        if (seasonLock && episode && meta.type === "series") {
-          saveSeasonLock(meta.id, entry, episode.season ?? null);
+        if (seasonLock && episode) {
+          const animeId = /^(kitsu|mal|anilist|anidb):/.test(meta.id);
+          saveSeasonLock(meta.id, entry, animeId ? null : episode.season ?? null, animeId);
         }
       }
     } finally {
@@ -292,7 +296,12 @@ export function usePickHandler({
       openUrl(`https://www.youtube.com/watch?v=${stream.ytId}`);
       return;
     }
+    if (streamMode === "p2p" && committed && stream.infoHash && engineP2pEligible(stream)) {
+      startResolve(stream, committed, true);
+      return;
+    }
     if (
+      streamMode !== "addons" &&
       intent !== "download" &&
       committed &&
       !skipP2pConfirm &&

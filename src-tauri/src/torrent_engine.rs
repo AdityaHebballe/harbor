@@ -132,7 +132,7 @@ fn spawn_cache_sweeper(app: AppHandle) -> CacheSweeper {
     CacheSweeper { task, cancelled }
 }
 
-fn current_session() -> Option<Arc<Session>> {
+pub(crate) fn current_session() -> Option<Arc<Session>> {
     engine().lock().unwrap().session.clone()
 }
 
@@ -246,7 +246,7 @@ fn engine_dir(app: &AppHandle, cfg: &EngineConfig) -> Result<std::path::PathBuf,
 }
 
 async fn init(app: AppHandle) -> Result<(), String> {
-    std::env::set_var("DHT_QUERIES_PER_SECOND", "20");
+    std::env::set_var("DHT_QUERIES_PER_SECOND", "400");
     let cfg = read_config(&app);
     let dir = engine_dir(&app, &cfg)?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -315,7 +315,7 @@ async fn ensure_session(app: &AppHandle) -> Result<Arc<Session>, String> {
 
 pub fn ensure_started_on_setup(app: &AppHandle) {
     if crate::settings_store::read_torrents_disabled(app) {
-        eprintln!("[torrent-engine] torrents disabled in settings — skipping engine init");
+        eprintln!("[torrent-engine] torrents disabled in settings: skipping engine init");
         let mut st = engine().lock().unwrap();
         st.ready = false;
         st.last_error = Some("torrents disabled in settings".to_string());
@@ -385,6 +385,9 @@ pub async fn torrent_engine_add(
         Some(d) => dht_boot::seed_peers(&d, magnet.as_str(), 40, Duration::from_secs(3)).await,
         None => Vec::new(),
     };
+    // librqbit ignores AddTorrentOptions.trackers for magnets, so splice the
+    // per-stream trackers directly into the magnet URI to guarantee they announce.
+    let magnet = trackers::embed_into_magnet(&magnet, &trackers);
     let opts = AddTorrentOptions {
         overwrite: true,
         paused: true,
@@ -392,7 +395,7 @@ pub async fn torrent_engine_add(
         trackers: Some(merge_trackers(trackers)),
         initial_peers: (!seed.is_empty()).then_some(seed),
         peer_opts: Some(PeerConnectionOptions {
-            connect_timeout: Some(Duration::from_secs(7)),
+            connect_timeout: Some(Duration::from_secs(4)),
             read_write_timeout: Some(Duration::from_secs(10)),
             keep_alive_interval: None,
         }),
@@ -462,7 +465,10 @@ pub(crate) async fn ensure_added(
     let handle = match session.get(id) {
         Some(h) => h,
         None => {
-            let magnet = build_magnet(hash);
+            // build_magnet() yields a bare magnet; splice per-stream trackers into
+            // it so librqbit announces them (it drops AddTorrentOptions.trackers for
+            // magnets - the only peer path when UDP/DHT are blocked).
+            let magnet = trackers::embed_into_magnet(&build_magnet(hash), &trackers);
             let seed = match current_side_dht() {
                 Some(d) => {
                     dht_boot::seed_peers(&d, magnet.as_str(), 40, Duration::from_secs(3)).await
@@ -476,7 +482,7 @@ pub(crate) async fn ensure_added(
                 trackers: Some(merge_trackers(trackers)),
                 initial_peers: (!seed.is_empty()).then_some(seed),
                 peer_opts: Some(PeerConnectionOptions {
-                    connect_timeout: Some(Duration::from_secs(7)),
+                    connect_timeout: Some(Duration::from_secs(4)),
                     read_write_timeout: Some(Duration::from_secs(10)),
                     keep_alive_interval: None,
                 }),
@@ -686,4 +692,79 @@ pub async fn torrent_engine_set_options(
 #[tauri::command]
 pub async fn torrent_engine_selftest(app: AppHandle) -> selftest::SelfTestResult {
     selftest::run(app).await
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TorrentListItem {
+    pub info_hash: String,
+    pub name: String,
+    pub downloaded: u64,
+    pub total: u64,
+    pub download_speed: u64,
+    pub finished: bool,
+    pub paused: bool,
+    pub state: String,
+}
+
+#[tauri::command]
+pub fn torrent_engine_list() -> Vec<TorrentListItem> {
+    let Some(session) = current_session() else {
+        return Vec::new();
+    };
+    session.with_torrents(|torrents| {
+        torrents
+            .map(|(_id, handle)| {
+                let s = handle.stats();
+                let info_hash = format!("{:?}", handle.info_hash());
+                let name = handle
+                    .with_metadata(|m| {
+                        m.file_infos.iter().max_by_key(|fi| fi.len).map(|fi| {
+                            fi.relative_filename
+                                .file_name()
+                                .map(|s| s.to_string_lossy().to_string())
+                                .unwrap_or_else(|| fi.relative_filename.to_string_lossy().to_string())
+                        })
+                    })
+                    .ok()
+                    .flatten()
+                    .unwrap_or_else(|| info_hash.clone());
+                let download_speed = s
+                    .live
+                    .as_ref()
+                    .map(|l| (l.download_speed.mbps * 1024.0 * 1024.0) as u64)
+                    .unwrap_or(0);
+                let state = format!("{:?}", s.state);
+                let paused = state.contains("Paused");
+                TorrentListItem {
+                    info_hash,
+                    name,
+                    downloaded: s.progress_bytes,
+                    total: s.total_bytes,
+                    download_speed,
+                    finished: s.finished,
+                    paused,
+                    state,
+                }
+            })
+            .collect()
+    })
+}
+
+#[tauri::command]
+pub async fn torrent_engine_pause(info_hash: String) -> Result<(), String> {
+    let session = current_session().ok_or_else(|| "engine not ready".to_string())?;
+    let id = TorrentIdOrHash::parse(&info_hash).map_err(|e| e.to_string())?;
+    let handle = session.get(id).ok_or_else(|| "no torrent".to_string())?;
+    session.pause(&handle).await.map_err(|e| format!("{e:#}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn torrent_engine_resume(info_hash: String) -> Result<(), String> {
+    let session = current_session().ok_or_else(|| "engine not ready".to_string())?;
+    let id = TorrentIdOrHash::parse(&info_hash).map_err(|e| e.to_string())?;
+    let handle = session.get(id).ok_or_else(|| "no torrent".to_string())?;
+    session.unpause(&handle).await.map_err(|e| format!("{e:#}"))?;
+    Ok(())
 }

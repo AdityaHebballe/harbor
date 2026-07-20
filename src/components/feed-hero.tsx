@@ -1,4 +1,5 @@
-import { Bookmark, BookmarkCheck, Info, Play, SkipForward, Star, ThumbsDown } from "lucide-react";
+import { Bookmark, BookmarkCheck, Play, SkipForward, Star, ThumbsDown } from "lucide-react";
+import tideInfo from "@/assets/tide-info.png";
 import type { FeedItem } from "@/lib/feed";
 import { useT } from "@/lib/i18n";
 import { useTmdbImdbId } from "@/lib/providers/tmdb";
@@ -54,7 +55,7 @@ export function FeedHero({
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "linear-gradient(to top, oklch(0.10 0.02 260 / 0.96) 0%, oklch(0.10 0.02 260 / 0.55) 36%, oklch(0.10 0.02 260 / 0.0) 64%)",
+              "linear-gradient(to top, oklch(0.10 0.02 260 / 0.97) 0%, oklch(0.10 0.02 260 / 0.86) 12%, oklch(0.10 0.02 260 / 0.6) 26%, oklch(0.10 0.02 260 / 0.33) 40%, oklch(0.10 0.02 260 / 0.12) 54%, oklch(0.10 0.02 260 / 0.0) 70%)",
           }}
         />
         <div
@@ -73,9 +74,23 @@ export function FeedHero({
               type="button"
               onClick={() => openMeta(meta)}
               aria-label={t("See details")}
-              className="flex h-11 w-11 items-center justify-center rounded-full border border-ink/15 bg-canvas/35 text-ink/85 transition-colors duration-200 hover:bg-canvas/65 hover:text-ink"
+              className="grid h-11 w-11 place-items-center text-ink/90 transition-[color,transform] duration-200 hover:-translate-y-0.5 hover:text-ink motion-reduce:hover:translate-y-0"
             >
-              <Info size={18} />
+              <span
+                aria-hidden
+                className="block h-7 w-7 [filter:drop-shadow(0_2px_7px_rgba(0,0,0,0.7))]"
+                style={{
+                  backgroundColor: "currentColor",
+                  maskImage: `url(${tideInfo})`,
+                  WebkitMaskImage: `url(${tideInfo})`,
+                  maskSize: "contain",
+                  WebkitMaskSize: "contain",
+                  maskRepeat: "no-repeat",
+                  WebkitMaskRepeat: "no-repeat",
+                  maskPosition: "center",
+                  WebkitMaskPosition: "center",
+                }}
+              />
             </button>
           </div>
 
@@ -130,7 +145,7 @@ export function FeedHero({
             <button
               type="button"
               onClick={() => openPicker(meta, smartPlayEpisode(meta), { autoPlay: settings.instantPlay })}
-              className="flex h-12 items-center gap-2.5 rounded-full bg-ink px-7 text-[15px] font-semibold text-canvas transition-all duration-200 hover:bg-ink/90"
+              className="flex h-12 items-center gap-2.5 rounded-full bg-ink px-7 text-[15px] font-semibold text-canvas shadow-[0_2px_10px_-4px_rgba(0,0,0,0.4)] transition-[background-color,transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-ink/90 hover:shadow-[0_10px_26px_-10px_rgba(0,0,0,0.55)]"
             >
               <Play size={18} fill="currentColor" />
               <span>{t("Play tonight")}</span>

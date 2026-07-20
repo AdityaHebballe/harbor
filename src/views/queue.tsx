@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { NavChevron } from "@/components/nav-arrow";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeedHero } from "@/components/feed-hero";
 import { Poster } from "@/components/poster";
@@ -7,7 +7,6 @@ import { rankByAffinity } from "@/lib/feed/rank";
 import { blockQueueItem, filterQueuePool, shuffleQueuePool, snoozeQueueItem } from "@/lib/feed/skipped";
 import { getDownvotedIds, getUpvotedIds } from "@/lib/feed/preferences";
 import { useSettings } from "@/lib/settings";
-import { useInWatchlist } from "@/lib/watchlist";
 import { useT } from "@/lib/i18n";
 
 const LOW_WATER_MARK = 6;
@@ -23,6 +22,8 @@ export function QueueView() {
   const [loading, setLoading] = useState(true);
   const [activeId, setActiveId] = useState<string | null>(() => savedActiveId);
   const [leaveAnim, setLeaveAnim] = useState<LeaveAnim>(null);
+  const [enterDir, setEnterDir] = useState<"fromRight" | "fromLeft" | "pop">("pop");
+  const rootRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,16 +65,18 @@ export function QueueView() {
       const next = pool[i];
       if (!next || leaveAnim) return;
       if (direction) {
+        setEnterDir(direction === "back" ? "fromLeft" : "fromRight");
         setLeaveAnim(direction);
         window.setTimeout(() => {
           setActiveId(next.meta.id);
           setLeaveAnim(null);
         }, 200);
       } else {
+        setEnterDir(i > activeIndex ? "fromRight" : "fromLeft");
         setActiveId(next.meta.id);
       }
     },
-    [pool, leaveAnim],
+    [pool, leaveAnim, activeIndex],
   );
 
   const nextIdAfterRemoval = useCallback(
@@ -86,6 +89,7 @@ export function QueueView() {
     const id = item.meta.id;
     const nextId = nextIdAfterRemoval();
     snoozeQueueItem(id);
+    setEnterDir("fromRight");
     setLeaveAnim("skip");
     window.setTimeout(() => {
       setPool((p) => p.filter((it) => it.meta.id !== id));
@@ -99,6 +103,7 @@ export function QueueView() {
     const id = item.meta.id;
     const nextId = nextIdAfterRemoval();
     blockQueueItem(id);
+    setEnterDir("pop");
     setLeaveAnim("block");
     window.setTimeout(() => {
       setPool((p) => p.filter((it) => it.meta.id !== id));
@@ -106,22 +111,6 @@ export function QueueView() {
       setLeaveAnim(null);
     }, 240);
   }, [item, leaveAnim, nextIdAfterRemoval]);
-
-  const itemSaved = useInWatchlist(item?.meta.id);
-  const savedRef = useRef<{ id: string | null; saved: boolean }>({ id: null, saved: false });
-  useEffect(() => {
-    const id = item?.meta.id ?? null;
-    const prev = savedRef.current;
-    if (id && id === prev.id && itemSaved && !prev.saved) {
-      const nextId = nextIdAfterRemoval();
-      snoozeQueueItem(id);
-      window.setTimeout(() => {
-        setPool((p) => p.filter((it) => it.meta.id !== id));
-        setActiveId(nextId);
-      }, 120);
-    }
-    savedRef.current = { id, saved: itemSaved };
-  }, [item, itemSaved, nextIdAfterRemoval]);
 
   const extensionPageRef = useRef(2);
   const extendingRef = useRef(false);
@@ -163,15 +152,34 @@ export function QueueView() {
 
   const leaveClass =
     leaveAnim === "skip"
-      ? "translate-x-8 opacity-0 transition-[transform,opacity] duration-200 ease-out"
+      ? "-translate-x-8 opacity-0 transition-[transform,opacity] duration-200 ease-out"
       : leaveAnim === "back"
-        ? "-translate-x-8 opacity-0 transition-[transform,opacity] duration-200 ease-out"
+        ? "translate-x-8 opacity-0 transition-[transform,opacity] duration-200 ease-out"
         : leaveAnim === "block"
           ? "scale-[0.98] opacity-0 blur-sm transition-[transform,opacity,filter] duration-[240ms] ease-out"
-          : "transition-[transform,opacity] duration-200 ease-out";
+          : "";
+  const enterClass =
+    enterDir === "fromRight" ? "queue-in-right" : enterDir === "fromLeft" ? "queue-in-left" : "queue-in-pop";
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!rootRef.current || rootRef.current.offsetParent === null) return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        onNext();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        onPrev();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onNext, onPrev]);
 
   return (
-    <main className="min-w-0 flex-1 overflow-hidden pb-12 pt-20">
+    <main ref={rootRef} className="min-w-0 flex-1 overflow-hidden pb-12 pt-20">
       <div className="mx-auto flex h-full min-w-0 max-w-[1180px] flex-col gap-5 px-6 sm:px-12">
         <header className="flex shrink-0 items-baseline gap-3">
           <h1 className="font-display text-[20px] font-medium tracking-tight text-ink">
@@ -187,13 +195,15 @@ export function QueueView() {
         {item ? (
           <div className="relative flex-1 min-h-[280px] max-h-[600px]">
             <div className={`${leaveClass} h-full`}>
-              <FeedHero
-                item={item}
-                position={activeIndex}
-                total={pool.length}
-                onSkip={onSkip}
-                onNotInterested={onNotInterested}
-              />
+              <div key={item.meta.id} className={`h-full ${enterClass}`}>
+                <FeedHero
+                  item={item}
+                  position={activeIndex}
+                  total={pool.length}
+                  onSkip={onSkip}
+                  onNotInterested={onNotInterested}
+                />
+              </div>
             </div>
             <NavArrow
               side="left"
@@ -238,23 +248,11 @@ function NavArrow({
       onClick={onClick}
       disabled={disabled}
       aria-label={side === "left" ? t("Previous") : t("Next")}
-      className={`group absolute top-1/2 ${
-        side === "left" ? "-start-3" : "-end-3"
-      } z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-canvas/80 text-ink/75 ring-1 ring-inset ring-ink/12 shadow-[0_10px_28px_-12px_rgba(0,0,0,0.8)] transition-all duration-200 ease-out hover:scale-110 hover:bg-canvas hover:text-ink hover:ring-ink/25 active:scale-95 disabled:pointer-events-none disabled:opacity-25`}
+      className={`absolute top-1/2 ${
+        side === "left" ? "-start-5" : "-end-5"
+      } z-20 grid h-20 w-20 -translate-y-1/2 place-items-center text-white/85 drop-shadow-[0_2px_9px_rgba(0,0,0,0.8)] transition-all duration-200 ease-out hover:scale-110 hover:text-white active:scale-95 disabled:pointer-events-none disabled:opacity-20`}
     >
-      {side === "left" ? (
-        <ChevronLeft
-          size={20}
-          strokeWidth={2.25}
-          className="transition-transform duration-200 ease-out group-hover:-translate-x-0.5"
-        />
-      ) : (
-        <ChevronRight
-          size={20}
-          strokeWidth={2.25}
-          className="transition-transform duration-200 ease-out group-hover:translate-x-0.5"
-        />
-      )}
+      <NavChevron dir={side} size={60} />
     </button>
   );
 }
@@ -276,7 +274,8 @@ function Strip({
     if (!el) return;
     const child = el.querySelector<HTMLButtonElement>(`[data-active="true"]`);
     if (child) {
-      child.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      child.scrollIntoView({ behavior: prefersReduced ? "auto" : "smooth", block: "nearest", inline: "center" });
     }
   }, [active]);
 
@@ -338,11 +337,24 @@ function Strip({
 
 function QueueSkeleton({ loading, hasKey }: { loading: boolean; hasKey: boolean }) {
   const t = useT();
+  if (loading) {
+    return (
+      <div className="harbor-skel relative h-full min-h-[300px] overflow-hidden rounded-[28px] border border-edge-soft bg-elevated/25">
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3.5 p-8 sm:p-10">
+          <div className="h-6 w-20 rounded-full bg-elevated/60" />
+          <div className="h-10 w-2/3 max-w-[420px] rounded-lg bg-elevated/60" />
+          <div className="h-3.5 w-1/2 max-w-[320px] rounded bg-elevated/45" />
+          <div className="mt-2 flex gap-3">
+            <div className="h-12 w-44 rounded-full bg-elevated/60" />
+            <div className="h-12 w-28 rounded-full bg-elevated/45" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="flex h-full min-h-[300px] items-center justify-center rounded-[28px] border border-edge-soft bg-elevated/30 px-12 py-16 text-center">
-      {loading ? (
-        <p className="text-[15px] text-ink-muted">{t("Building tonight's queue…")}</p>
-      ) : !hasKey ? (
+      {!hasKey ? (
         <p className="max-w-[60ch] text-[15px] text-ink-muted">
           {t("Add a TMDB key in Settings to unlock the full discovery feed.")}
         </p>

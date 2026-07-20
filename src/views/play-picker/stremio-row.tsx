@@ -2,7 +2,7 @@ import { ArrowDownToLine, Play } from "lucide-react";
 import { AddonLogo } from "@/components/addon-logo";
 import { CopyLinkButton, resolveStreamLink } from "@/components/player/copy-link-button";
 import { DubSubPill, streamDubSub } from "@/components/dub-sub-pill";
-import { FormatBadge, streamBadges } from "@/components/format-badge";
+import { FormatBadge, RuleBadges, streamBadges } from "@/components/format-badge";
 import { HostMatchChip } from "@/components/host-match-chip";
 import { useSettings } from "@/lib/settings";
 import type { ScoredStream } from "@/lib/streams/types";
@@ -49,11 +49,11 @@ export function StremioRow({
         />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
-        <p className="whitespace-pre-line text-[16px] font-semibold leading-snug text-ink">
+        <p className="whitespace-pre-line text-[16px] font-semibold leading-snug text-ink [overflow-wrap:anywhere]">
           {headline}
         </p>
         {description && (
-          <p className={`whitespace-pre-line text-[14.5px] leading-snug text-ink-muted${full ? "" : " line-clamp-3"}`}>
+          <p className="whitespace-pre-line text-[14px] leading-snug text-ink-muted [overflow-wrap:anywhere]">
             {description}
           </p>
         )}
@@ -64,6 +64,7 @@ export function StremioRow({
             {badges.map((k) => (
               <FormatBadge key={k} kind={k} size="sm" />
             ))}
+            <RuleBadges stream={stream} size="sm" />
             <EditionChip stream={stream} />
           </div>
         )}

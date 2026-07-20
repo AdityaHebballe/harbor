@@ -1,4 +1,4 @@
-import { Pencil, Play, Plus, Star } from "lucide-react";
+import { ChevronDown, Pencil, Play, Plus, Star, ThumbsUp } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { topMovies, type Meta } from "@/lib/cinemeta";
 import {
@@ -13,6 +13,7 @@ import { CustomHoverEditor } from "./custom-hover-editor";
 
 const STYLES: Array<{ id: CardHoverStyle; label: string; sub: string }> = [
   { id: "default", label: "Default", sub: "Info modal" },
+  { id: "marquee", label: "Marquee", sub: "Trailer card" },
   { id: "elegant", label: "ElegantFin", sub: "Blur and actions" },
   { id: "frosted", label: "Frosted glass", sub: "Panel and play" },
   { id: "cinema", label: "Cinema", sub: "Zoom and play" },
@@ -128,11 +129,12 @@ function Tile({
             alt=""
             draggable={false}
             className={`absolute inset-0 h-full w-full rounded-lg object-cover ${
-              style === "default" ? "scale-110 blur-md brightness-[0.45]" : ""
+              style === "default" || style === "marquee" ? "scale-110 blur-md brightness-[0.45]" : ""
             }`}
           />
         )}
         {meta && style === "default" && <DefaultModalPreview meta={meta} />}
+        {meta && style === "marquee" && <MarqueeModalPreview meta={meta} />}
         {meta && inCard && <CardHoverOverlay meta={meta} style={style} onPlay={() => {}} preview />}
       </div>
       <div className="flex items-center justify-between px-0.5">
@@ -188,6 +190,53 @@ function CustomTile({
       </div>
       <div className="flex items-center justify-between px-0.5">
         <span className={`line-clamp-1 text-[12px] font-semibold ${selected ? "text-accent" : "text-ink"}`}>{config.name}</span>
+      </div>
+    </div>
+  );
+}
+
+function MarqueeModalPreview({ meta }: { meta: Meta }) {
+  const genres = (meta.genres ?? []).slice(0, 2);
+  return (
+    <div className="absolute inset-x-2 top-1/2 z-10 -translate-y-1/2 overflow-hidden rounded-md bg-canvas/95 shadow-[0_16px_36px_-12px_rgba(0,0,0,0.8)] ring-1 ring-edge-soft/60 backdrop-blur-md">
+      <div
+        className="relative h-12 w-full bg-cover bg-center"
+        style={{ backgroundImage: `url(${meta.background ?? meta.poster ?? ""})` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-t from-canvas/85 to-transparent" />
+        <span className="absolute bottom-1 start-1.5 line-clamp-1 max-w-[68%] text-[9px] font-bold text-ink">
+          {meta.name}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1 p-1.5">
+        <div className="flex items-center gap-1">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-ink text-canvas">
+            <Play size={7} fill="currentColor" strokeWidth={0} />
+          </span>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-ink-muted">
+            <Plus size={8} />
+          </span>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-edge text-ink-muted">
+            <ThumbsUp size={7} />
+          </span>
+          <span className="ms-auto flex h-4 w-4 items-center justify-center rounded-full border border-edge text-ink-muted">
+            <ChevronDown size={8} />
+          </span>
+        </div>
+        <div className="flex items-center gap-1 text-[7px] text-ink-subtle">
+          {meta.imdbRating && (
+            <span className="flex items-center gap-0.5 text-ink">
+              <Star size={6} className="fill-amber-400 text-amber-400" />
+              {meta.imdbRating}
+            </span>
+          )}
+          {genres.map((g, i) => (
+            <span key={g}>
+              {i > 0 && <span className="text-accent/70">{" ● "}</span>}
+              {g}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

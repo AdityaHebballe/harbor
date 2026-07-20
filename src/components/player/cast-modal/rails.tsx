@@ -1,7 +1,9 @@
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check } from "lucide-react";
+import { NavArrow } from "@/components/nav-arrow";
 import { useEffect, useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import { IMG } from "@/lib/providers/tmdb/tmdb-client";
+import { useTmdbImdbId } from "@/lib/providers/tmdb/tmdb-imdb-resolve";
 import { useMetaWatched } from "@/lib/watched-flag";
 import { ImdbIcon } from "@/components/icons/imdb-icon";
 import { useCardImdb } from "./use-card-imdb";
@@ -67,16 +69,14 @@ function ScrollRail({ children }: { children: React.ReactNode }) {
 }
 
 function RailArrow({ dir, onClick }: { dir: "left" | "right"; onClick: () => void }) {
-  const Icon = dir === "left" ? ChevronLeft : ChevronRight;
   return (
-    <button
-      type="button"
+    <NavArrow
+      dir={dir}
       onClick={onClick}
-      aria-label={dir === "left" ? "Scroll left" : "Scroll right"}
-      className={`absolute top-[42%] z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/75 text-white opacity-0 ring-1 ring-white/15 backdrop-blur-sm transition-opacity duration-150 hover:bg-black/95 group-hover/rail:opacity-100 ${dir === "left" ? "left-0" : "right-0"}`}
-    >
-      <Icon size={20} strokeWidth={2.5} />
-    </button>
+      label={dir === "left" ? "Scroll left" : "Scroll right"}
+      size={24}
+      className={`absolute top-[42%] z-10 h-9 w-9 -translate-y-1/2 opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 ${dir === "left" ? "left-0" : "right-0"}`}
+    />
   );
 }
 
@@ -157,8 +157,8 @@ function PosterCard({
   onOpen: (m: Meta) => void;
   grid?: boolean;
 }) {
-  const watched = useMetaWatched(meta.id, meta.type);
   const { imdb } = useCardImdb(meta);
+  const watched = useMetaWatched(meta.id, meta.type, useTmdbImdbId(meta.id));
   const { src, onError } = useCardPoster(meta);
   return (
     <button

@@ -94,8 +94,18 @@ export function SyncedAddonsCard() {
 function AddonStackPeek({ addons, max }: { addons: Addon[]; max: number }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState<"up" | "down">("down");
   const wrap = useRef<HTMLDivElement>(null);
   const overflow = addons.length - max;
+
+  const toggle = () => {
+    if (!open && wrap.current) {
+      const r = wrap.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - r.bottom;
+      setPlacement(spaceBelow < 380 && r.top > spaceBelow ? "up" : "down");
+    }
+    setOpen((v) => !v);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -127,7 +137,7 @@ function AddonStackPeek({ addons, max }: { addons: Addon[]; max: number }) {
       {overflow > 0 && (
         <button
           type="button"
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggle}
           aria-label={t("Show {n} more addons", { n: overflow })}
           className={`flex h-9 min-w-[44px] items-center justify-center rounded-full border px-2.5 text-[12.5px] font-semibold transition-colors ${
             open
@@ -138,15 +148,29 @@ function AddonStackPeek({ addons, max }: { addons: Addon[]; max: number }) {
           +{overflow}
         </button>
       )}
-      {open && <AddonListTooltip addons={addons} onClose={() => setOpen(false)} />}
+      {open && <AddonListTooltip addons={addons} placement={placement} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function AddonListTooltip({ addons, onClose }: { addons: Addon[]; onClose: () => void }) {
+function AddonListTooltip({
+  addons,
+  placement,
+  onClose,
+}: {
+  addons: Addon[];
+  placement: "up" | "down";
+  onClose: () => void;
+}) {
   const t = useT();
   return (
-    <div className="absolute start-0 top-[calc(100%+10px)] z-30 flex w-[320px] flex-col overflow-hidden rounded-2xl border border-edge-soft bg-elevated/95 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65)] backdrop-blur-md animate-in fade-in slide-in-from-top-1 duration-150">
+    <div
+      className={`absolute start-0 z-30 flex w-[320px] flex-col overflow-hidden rounded-2xl border border-edge-soft bg-elevated/95 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.65)] backdrop-blur-md animate-in fade-in duration-150 ${
+        placement === "up"
+          ? "bottom-[calc(100%+10px)] slide-in-from-bottom-1"
+          : "top-[calc(100%+10px)] slide-in-from-top-1"
+      }`}
+    >
       <div className="flex items-center justify-between border-b border-edge-soft/70 px-4 py-2.5">
         <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-subtle">
           {t("All addons ({n})", { n: addons.length })}

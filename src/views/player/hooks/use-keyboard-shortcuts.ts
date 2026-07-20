@@ -5,10 +5,12 @@ import { writePlayerVolume } from "@/lib/player-volume";
 import { effectiveBinding, eventToBinding, isTypingTarget, type HotkeyId } from "@/lib/hotkeys";
 import { isWindowsDesktop } from "@/lib/platform";
 import { isRtxHdrBlocked } from "@/lib/player/rtx-hdr-policy";
+import { mediaKeyGate } from "@/lib/media-session";
 import { useSettings } from "@/lib/settings";
+import { isAnyFullscreen, exitAnyFullscreen } from "@/lib/fullscreen-state";
+import { getLeaveConfirm, openLeaveConfirm } from "@/lib/player/leave-confirm";
 import { round2 } from "../player-utils";
 import { SFX } from "@/lib/sfx";
-import { requestPlayerClose } from "../request-player-close";
 
 export function useKeyboardShortcuts(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
@@ -89,6 +91,8 @@ export function useKeyboardShortcuts(params: {
   const overrides = settings.hotkeys ?? {};
   const seekBackStepSec = settings.seekBackStepSec;
   const seekForwardStepSec = settings.seekForwardStepSec;
+  const seekBackStepShortSec = settings.seekBackStepShortSec;
+  const seekForwardStepShortSec = settings.seekForwardStepShortSec;
   const holdRef = useRef<{
     key: string | null;
     timer: number | null;
@@ -96,6 +100,22 @@ export function useKeyboardShortcuts(params: {
     baseRate: number;
   }>({ key: null, timer: null, engaged: false, baseRate: 1 });
   const [holdSpeedActive, setHoldSpeedActive] = useState(false);
+  const mediaRef = useRef({
+    status: snap.status,
+    playPauseToggle,
+    onNextEp,
+    onPrevEp,
+    hasNextEp,
+    hasPrevEp,
+  });
+  mediaRef.current = {
+    status: snap.status,
+    playPauseToggle,
+    onNextEp,
+    onPrevEp,
+    hasNextEp,
+    hasPrevEp,
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -106,31 +126,50 @@ export function useKeyboardShortcuts(params: {
 
       if (e.key === "MediaPlayPause") {
         e.preventDefault();
-        playPauseToggle();
+        if (mediaKeyGate()) playPauseToggle();
+        return;
+      }
+      if (e.key === "MediaPlay") {
+        e.preventDefault();
+        if (mediaRef.current.status !== "playing" && mediaKeyGate()) playPauseToggle();
+        return;
+      }
+      if (e.key === "MediaPause" || e.key === "MediaStop") {
+        e.preventDefault();
+        if (mediaRef.current.status === "playing" && mediaKeyGate()) playPauseToggle();
         return;
       }
       if (e.key === "MediaTrackNext" && hasNextEp && onNextEp) {
         e.preventDefault();
-        onNextEp();
+        if (mediaKeyGate()) onNextEp();
         return;
       }
       if (e.key === "MediaTrackPrevious" && hasPrevEp && onPrevEp) {
         e.preventDefault();
-        onPrevEp();
+        if (mediaKeyGate()) onPrevEp();
         return;
       }
 
       if (match("playerClose")) {
-        e.preventDefault();
-        e.stopPropagation();
-        void requestPlayerClose({
-          drawMode,
-          setDrawMode,
-          closePlayer,
-          playerEscExitsFullscreen: settings.playerEscExitsFullscreen,
-          playerConfirmLeave: settings.playerConfirmLeave,
-          onRememberConfirmLeave: () => update({ playerConfirmLeave: false }),
-        });
+        if (getLeaveConfirm().open) return;
+        if (drawMode) {
+          setDrawMode(false);
+          return;
+        }
+        void (async () => {
+          if (settings.playerEscExitsFullscreen && (await isAnyFullscreen())) {
+            await exitAnyFullscreen();
+            return;
+          }
+          if (settings.playerConfirmLeave) {
+            openLeaveConfirm((remember) => {
+              if (remember) update({ playerConfirmLeave: false });
+              closePlayer();
+            });
+            return;
+          }
+          closePlayer();
+        })();
         return;
       }
       if (match("playerPip")) {
@@ -160,6 +199,16 @@ export function useKeyboardShortcuts(params: {
       if (match("playerSeekForward10")) {
         e.preventDefault();
         seekStep(seekForwardStepSec);
+        return;
+      }
+      if (match("playerSeekBackShort")) {
+        e.preventDefault();
+        seekStep(-seekBackStepShortSec);
+        return;
+      }
+      if (match("playerSeekForwardShort")) {
+        e.preventDefault();
+        seekStep(seekForwardStepShortSec);
         return;
       }
       if (match("playerSeekBack30")) {
@@ -312,7 +361,6 @@ export function useKeyboardShortcuts(params: {
         const step = e.shiftKey ? 0.05 : 0.1;
         const delay = round2(snap.subDelaySec - step);
         bridgeRef.current?.setSubDelay(delay);
-        writePlayerPrefs(metaId, { subDelaySec: delay });
         return;
       }
       if (match("playerSubDelayUp")) {
@@ -320,7 +368,6 @@ export function useKeyboardShortcuts(params: {
         const step = e.shiftKey ? 0.05 : 0.1;
         const delay = round2(snap.subDelaySec + step);
         bridgeRef.current?.setSubDelay(delay);
-        writePlayerPrefs(metaId, { subDelaySec: delay });
         return;
       }
       if (match("playerStreamSwitcher") && toggleSwitcher) {
@@ -414,44 +461,44 @@ export function useKeyboardShortcuts(params: {
       window.removeEventListener("blur", onBlur);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    closePlayer,
-    togglePip,
-    drawMode,
-    snap.muted,
-    snap.volume,
-    snap.rate,
-    snap.durationSec,
-    snap.subDelaySec,
-    overrides,
-    seekBackStepSec,
-    seekForwardStepSec,
-    seekTo,
-    toggleSwitcher,
-    toggleEpisodePanel,
-    toggleGuide,
-    toggleDvr,
-    toggleSleep,
-    onScreenshot,
-    onGifRecord,
-    onClipRecord,
-    onToggleCrop,
-    onPanscanUp,
-    onPanscanDown,
-    onPrevChannel,
-    onToggleAnime4k,
-    onAnime4kOn,
-    onAnime4kOff,
-    onFrameStep,
-    onVolumeFeedback,
-    settings.playerEscExitsFullscreen,
-    settings.playerConfirmLeave,
-    settings.playerVolumeSfx,
-    settings.playerHdrToSdr,
-    settings.playerRtxHdr,
-    svpActive,
-    update,
-  ]);
+  }, [closePlayer, togglePip, drawMode, snap.muted, snap.volume, snap.rate, snap.durationSec, snap.subDelaySec, overrides, seekBackStepSec, seekForwardStepSec, seekBackStepShortSec, seekForwardStepShortSec, seekTo, toggleSwitcher, toggleEpisodePanel, toggleGuide, toggleDvr, toggleSleep, onScreenshot, onGifRecord, onClipRecord, onToggleCrop, onPanscanUp, onPanscanDown, onPrevChannel, onToggleAnime4k, onAnime4kOn, onAnime4kOff, onFrameStep, onVolumeFeedback, settings.playerEscExitsFullscreen, settings.playerConfirmLeave, settings.playerVolumeSfx, settings.playerHdrToSdr, settings.playerRtxHdr, svpActive, update]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+    let dead = false;
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) =>
+      listen<string>("harbor://media-key", (e) => {
+        const m = mediaRef.current;
+        const playing = m.status === "playing";
+        switch (e.payload) {
+          case "playpause":
+            if (mediaKeyGate()) m.playPauseToggle();
+            break;
+          case "play":
+            if (!playing && mediaKeyGate()) m.playPauseToggle();
+            break;
+          case "pause":
+          case "stop":
+            if (playing && mediaKeyGate()) m.playPauseToggle();
+            break;
+          case "next":
+            if (m.hasNextEp && m.onNextEp && mediaKeyGate()) m.onNextEp();
+            break;
+          case "previous":
+            if (m.hasPrevEp && m.onPrevEp && mediaKeyGate()) m.onPrevEp();
+            break;
+        }
+      }).then((u) => {
+        if (dead) u();
+        else unlisten = u;
+      }),
+    );
+    return () => {
+      dead = true;
+      unlisten?.();
+    };
+  }, []);
 
   return { holdSpeedActive };
 }

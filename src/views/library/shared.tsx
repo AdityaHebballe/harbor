@@ -1,4 +1,4 @@
-import { Bookmark } from "lucide-react";
+import { Bookmark, RefreshCw } from "lucide-react";
 import { type Meta } from "@/lib/cinemeta";
 import { useSettings } from "@/lib/settings";
 import { useT } from "@/lib/i18n";
@@ -7,7 +7,7 @@ import { WatchlistCard } from "./watchlist-card";
 export { WatchlistCard } from "./watchlist-card";
 export { hydrateLibraryMeta, loadLocalIds } from "./hydrate-meta";
 
-export type Tab = "watchlist" | "history" | "local" | "lists" | "trakt" | "anilist" | "simkl" | "letterboxd" | "mal";
+export type Tab = "library" | "watchlist" | "history" | "local" | "lists" | "favorites" | "trakt" | "anilist" | "simkl" | "letterboxd" | "mal";
 
 export type TypeKey = "all" | "movie" | "series";
 
@@ -203,6 +203,22 @@ export function SortControl() {
         </button>
       ))}
     </div>
+  );
+}
+
+export function RefreshButton({ onClick, spinning }: { onClick: () => void; spinning?: boolean }) {
+  const t = useT();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={spinning}
+      aria-label={t("Refresh")}
+      title={t("Refresh")}
+      className="flex h-8 w-8 items-center justify-center rounded-full bg-elevated/40 text-ink-muted ring-1 ring-edge-soft/60 transition-colors hover:bg-raised hover:text-ink disabled:opacity-60"
+    >
+      <RefreshCw size={15} strokeWidth={2.2} className={spinning ? "animate-spin" : ""} />
+    </button>
   );
 }
 

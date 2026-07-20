@@ -91,10 +91,6 @@ export function LiquidGlassSurface({
   );
 }
 
-/**
- * Keeps the established renderer as the default. The newer treatment is
- * deliberately opt-in while its visual and performance characteristics mature.
- */
 export function ThreeLiquidGlassSurface(props: LiquidGlassSurfaceProps) {
   const { settings } = useSettings();
 

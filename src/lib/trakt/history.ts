@@ -76,19 +76,20 @@ export async function pushWatched(target: TraktTarget): Promise<boolean> {
       return true;
     }
     if (target.kind === "episode") {
-      await traktRequest("/sync/history", {
-        method: "POST",
-        body: {
-          shows: [
-            {
-              ids: target.show.ids,
-              seasons: [
-                { number: target.season, episodes: [{ number: target.number }] },
+      const body =
+        target.episodeIds && Object.keys(target.episodeIds).length > 0
+          ? { episodes: [{ ids: target.episodeIds }] }
+          : {
+              shows: [
+                {
+                  ids: target.show.ids,
+                  seasons: [
+                    { number: target.season, episodes: [{ number: target.number }] },
+                  ],
+                },
               ],
-            },
-          ],
-        },
-      });
+            };
+      await traktRequest("/sync/history", { method: "POST", body });
       return true;
     }
   } catch {

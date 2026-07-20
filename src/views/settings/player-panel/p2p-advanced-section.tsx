@@ -241,17 +241,10 @@ export function P2PAdvancedSection() {
           value={settings.torrentsDisabled}
           onChange={(v) => {
             update({ torrentsDisabled: v });
-            if (isTauri) {
-              // Lazy re-read on the Rust side will pick this up the next
-              // time the engine is asked to start.
-              void import("@tauri-apps/api/core").then(({ invoke }) => {
-                if (v) {
-                  // Best effort: stop any in-flight engine so DHT/trackers
-                  // go quiet immediately. The next call into the engine
-                  // (if the user re-enables) will lazy-init from scratch.
-                  invoke("torrent_engine_hard_reset").catch(() => {});
-                }
-              });
+            if (isTauri && v) {
+              void import("@tauri-apps/api/core").then(({ invoke }) =>
+                invoke("torrent_engine_hard_reset").catch(() => {}),
+              );
             }
           }}
         />

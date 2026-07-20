@@ -36,6 +36,7 @@ export async function fetchAddonStreams(
   req: StreamRequest,
   signal: AbortSignal,
   onPartial?: (current: Stream[]) => void,
+  onProgress?: (settled: number, total: number) => void,
 ): Promise<Stream[]> {
   const namedTasks: Array<{ name: string; p: Promise<Stream[]> }> = [];
   const skipped: string[] = [];
@@ -64,6 +65,9 @@ export async function fetchAddonStreams(
   if (skipped.length > 0) console.info(`[addons] skipped: ${skipped.join(", ")}`);
   console.info(`[addons] querying ${namedTasks.length}: ${namedTasks.map((t) => t.name).join(", ")}`);
 
+  const total = namedTasks.length;
+  onProgress?.(0, total);
+  let settled = 0;
   const accumulated: Stream[] = [];
   const wrapped = namedTasks.map(({ name, p }) =>
     p
@@ -74,7 +78,8 @@ export async function fetchAddonStreams(
       })
       .catch((e) => {
         if (!signal.aborted) dwarn(`[addons] ${name} failed`, e);
-      }),
+      })
+      .finally(() => onProgress?.(++settled, total)),
   );
 
   await Promise.allSettled(wrapped);

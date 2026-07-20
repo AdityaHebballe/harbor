@@ -1,0 +1,152 @@
+import type { FeaturedList } from "@/lib/social/featured-lists";
+import type { SocialKey } from "@/lib/social/socials";
+
+export type SocialEntry = { service: SocialKey; value: string };
+
+export type ResolvedSocial = SocialEntry & {
+  label: string;
+  brand: string;
+  url: string | null;
+  iconPath: string;
+};
+
+export type BadgeTier = "bronze" | "silver" | "gold" | "prismatic";
+
+export type ShowcaseItem = {
+  kind: "favorite" | "top-genre" | "pinned" | "theme";
+  title: string;
+  posterUrl?: string;
+  caption?: string;
+  metaId?: string;
+  themeId?: string;
+  swatch?: string[];
+  downloads?: number;
+  ratingAvg?: number;
+  ratingCount?: number;
+};
+
+export type ProfileCounts = {
+  watched: number;
+  friends: number;
+  badges: number;
+  hoursWatched: number;
+  mangaRead?: number;
+};
+
+export type ProfileWatching = {
+  kind: "watching" | "party";
+  title?: string;
+  sub?: string;
+  posterUrl?: string;
+  partySize?: number;
+  paused?: boolean;
+  startedAt?: number;
+};
+
+export type ProfileSummary = {
+  handle: string;
+  alias: string;
+  avatarUrl?: string;
+  bannerUrl?: string;
+  verified: boolean;
+  featured: boolean;
+  level: number;
+  xp: number;
+  xpToNext: number;
+  slogan?: string;
+  description?: string;
+  location?: string;
+  customUrl?: string;
+  online: boolean;
+  watching?: ProfileWatching;
+  memberSince: string;
+  counts: ProfileCounts;
+  showcase?: ShowcaseItem;
+  featuredLists?: FeaturedList[];
+  socials?: ResolvedSocial[];
+  isOwner: boolean;
+  friendStatus?: "none" | "friends" | "outgoing" | "incoming" | "blocked";
+  friendEdgeId?: string;
+  activityPublic?: boolean;
+  shareActivity?: boolean;
+  private?: boolean;
+  customEnabled?: boolean;
+  profileFont?: string;
+  profileFavicon?: string;
+  pageBgColor?: string;
+  pageBgImage?: string;
+  customHtml?: string;
+  customCss?: string;
+  canvasHeight?: number;
+};
+
+export type Friend = {
+  handle: string;
+  alias: string;
+  avatarUrl?: string;
+  slogan?: string;
+  online: boolean;
+  status?: string;
+};
+
+export type Badge = {
+  id: string;
+  name: string;
+  description: string;
+  iconUrl?: string;
+  tier: BadgeTier;
+  rarityPct?: number;
+  unlockedAt?: string;
+};
+
+export type ActivityKind = "watched" | "finished" | "rated" | "favorited";
+
+export type ActivityItem = {
+  id: string;
+  kind: ActivityKind;
+  title: string;
+  posterUrl?: string;
+  subtitle?: string;
+  rating?: number;
+  at: string;
+  metaId?: string;
+};
+
+export type Comment = {
+  id: string;
+  authorHandle: string;
+  authorAlias: string;
+  authorAvatarUrl?: string;
+  body: string;
+  at: string;
+  flagged?: boolean;
+  edited?: boolean;
+};
+
+export type CommentPage = {
+  comments: Comment[];
+  nextCursor?: string;
+};
+
+export type ProfileSettingsInput = {
+  alias: string;
+  description: string;
+  location: string;
+  customUrl: string;
+  slogan: string;
+  shareActivity: boolean;
+  private: boolean;
+};
+
+export type CustomizationInput = {
+  profileFont: string;
+  profileFavicon: string;
+  pageBgColor: string;
+  pageBgImage: string;
+  customHtml: string;
+  customCss: string;
+  canvasHeight: number;
+  customEnabled: boolean;
+};
+
+export type LoadState = "loading" | "ready" | "error" | "empty";

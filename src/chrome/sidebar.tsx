@@ -1,11 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Lock } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HarborMark } from "@/components/icons/harbor-mark";
 import { ProfileChip } from "@/chrome/sidebar/profile-chip";
 import { useT } from "@/lib/i18n";
-import { useAuth } from "@/lib/auth";
-import { preloadNavPage } from "@/lib/query";
 import { useSettings } from "@/lib/settings";
 import { useHarborLogo } from "@/lib/harbor-logo";
 import { ParentalPinModal } from "@/components/parental-pin-modal";
@@ -16,17 +13,7 @@ import { KidsSidebarDoodles } from "./kids-sidebar-doodles";
 import { CollapseToggle } from "@/chrome/sidebar/collapse-toggle";
 import { NAV_ITEMS, applyNavCustomization, type NavItem } from "@/chrome/nav-items";
 
-const PRIMARY_IDS = new Set([
-  "home",
-  "discover",
-  "catalogs",
-  "movies",
-  "shows",
-  "kids",
-  "anime",
-  "live",
-  "vod",
-]);
+const PRIMARY_IDS = new Set(["home", "discover", "catalogs", "movies", "shows", "kids", "anime", "live", "vod"]);
 
 export function Sidebar() {
   const { view, setView, chromeHidden } = useView();
@@ -38,14 +25,18 @@ export function Sidebar() {
 
   const { mark: customMark, wordmark: customWordmark } = useHarborLogo();
   const collapsed = settings.sidebarCollapsed;
+  const hybridBar =
+    typeof window !== "undefined" &&
+    "__TAURI_INTERNALS__" in window &&
+    !settings.useNativeTitleBar &&
+    settings.hybridTitleBar;
 
   return (
     <>
       <aside
         aria-hidden={chromeHidden}
         data-harbor-sidebar
-        data-tv-nav-zone
-        className={`relative z-[60] flex w-[72px] shrink-0 flex-col border-e border-edge-soft bg-canvas transition-[opacity,transform,width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[width] ${
+        className={`relative z-[60] flex w-[72px] shrink-0 flex-col border-e border-edge-soft bg-canvas transition-[opacity,transform,width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           collapsed ? "" : "lg:w-60"
         } ${
           chromeHidden
@@ -56,21 +47,22 @@ export function Sidebar() {
         {kid && <KidsSidebarDoodles />}
         <div
           data-tauri-drag-region
-          className={`flex h-20 shrink-0 items-center justify-center gap-0.5 px-3 text-ink ${
+          className={`flex shrink-0 items-center justify-center gap-0.5 px-3 text-ink ${
             collapsed ? "" : "lg:justify-start lg:px-7"
-          }`}
+          } ${hybridBar ? "h-12" : "h-20"}`}
         >
-          {customMark ? (
-            <img
-              src={customMark}
-              alt=""
-              draggable={false}
-              className={`h-9 w-9 shrink-0 object-contain ${collapsed ? "" : "lg:h-10 lg:w-10"}`}
-            />
-          ) : (
-            <HarborMark className={`h-9 w-9 shrink-0 ${collapsed ? "" : "lg:h-10 lg:w-10"}`} />
-          )}
-          {!collapsed &&
+          {!hybridBar &&
+            (customMark ? (
+              <img
+                src={customMark}
+                alt=""
+                draggable={false}
+                className={`h-9 w-9 shrink-0 object-contain ${collapsed ? "" : "lg:h-10 lg:w-10"}`}
+              />
+            ) : (
+              <HarborMark className={`h-9 w-9 shrink-0 ${collapsed ? "" : "lg:h-10 lg:w-10"}`} />
+            ))}
+          {!hybridBar && !collapsed &&
             (customWordmark ? (
               <img
                 src={customWordmark}
@@ -92,11 +84,7 @@ export function Sidebar() {
                   alt="o"
                   draggable={false}
                   className="inline-block h-[0.92em] w-auto"
-                  style={{
-                    transform: "translateY(0.08em)",
-                    marginLeft: "-5px",
-                    marginRight: "-5px",
-                  }}
+                  style={{ transform: "translateY(0.08em)", marginLeft: "-5px", marginRight: "-5px" }}
                 />
                 r
               </span>
@@ -148,12 +136,8 @@ export function Sidebar() {
               </div>
               {!collapsed && (
                 <div className="hidden min-w-0 flex-1 lg:block">
-                  <div className="truncate text-[13.5px] font-medium text-ink-muted">
-                    {t("chrome.locked")}
-                  </div>
-                  <div className="truncate text-[12px] text-ink-subtle">
-                    {t("chrome.parentalOn")}
-                  </div>
+                  <div className="truncate text-[13.5px] font-medium text-ink-muted">{t("chrome.locked")}</div>
+                  <div className="truncate text-[12px] text-ink-subtle">{t("chrome.parentalOn")}</div>
                 </div>
               )}
             </div>
@@ -196,14 +180,9 @@ function ScrollableNav({
   onPinNav: (v: View) => void;
 }) {
   const { settings } = useSettings();
-  const { authKey } = useAuth();
-  const queryClient = useQueryClient();
   const kid = useActiveKid();
   const t = useT();
   const items = applyNavCustomization(NAV_ITEMS, settings.navCustomization);
-  const warm = (view: View) => {
-    preloadNavPage(queryClient, view, settings.tmdbKey, settings.region, authKey, settings);
-  };
   const isItemVisible = (item: NavItem) => {
     if (kid) return item.view === "kids";
     if (item.view === "kids") return false;
@@ -262,9 +241,21 @@ function ScrollableNav({
               big={!!kid}
               active={view === item.view}
               onClick={() => setView(item.view)}
-              onIntent={() => warm(item.view)}
             />
           ))}
+          {kid && (
+            <NavItem
+              render={(active) => <KidsPlayIcon active={active} />}
+              label="Play"
+              big
+              collapsed={collapsed}
+              active={false}
+              onClick={() => {
+                setView("kids");
+                window.dispatchEvent(new CustomEvent("harbor:kids-play"));
+              }}
+            />
+          )}
         </div>
         <div data-tauri-drag-region className="py-2.5">
           <div className="mx-3 h-px bg-gradient-to-r from-transparent via-edge-soft/55 to-transparent" />
@@ -296,6 +287,7 @@ function ScrollableNav({
             type="button"
             onClick={scrollDown}
             aria-label={t("chrome.scrollForMore")}
+            data-tv-skip=""
             className="absolute bottom-1 left-1/2 flex h-4 w-7 -translate-x-1/2 items-center justify-center text-ink-subtle/55 transition-colors hover:text-ink-muted"
           >
             <ChevronDown size={11} strokeWidth={2} />
@@ -306,12 +298,33 @@ function ScrollableNav({
   );
 }
 
+function KidsPlayIcon({ active }: { active: boolean }) {
+  return (
+    <svg
+      width="26"
+      height="26"
+      viewBox="0 0 26 26"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={active ? "" : "opacity-70"}
+    >
+      <circle cx="12" cy="14" r="9" />
+      <path d="M10 10.5 L16.5 14 L10 17.5 Z" fill="currentColor" stroke="none" />
+      <circle cx="21.5" cy="6" r="1.7" />
+      <circle cx="24" cy="10.5" r="1" />
+    </svg>
+  );
+}
+
 function NavItem({
   render,
   label,
   active,
   onClick,
-  onIntent,
   gated,
   collapsed,
   big,
@@ -321,8 +334,6 @@ function NavItem({
   label: string;
   active?: boolean;
   onClick?: () => void;
-  /** TanStack Query preload on hover/focus. */
-  onIntent?: () => void;
   gated?: boolean;
   collapsed?: boolean;
   big?: boolean;
@@ -334,11 +345,7 @@ function NavItem({
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => {
-        setHovered(true);
-        onIntent?.();
-      }}
-      onFocus={() => onIntent?.()}
+      onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       data-harbor-nav={view}
       data-active={active ? "" : undefined}
@@ -368,3 +375,4 @@ function NavItem({
     </button>
   );
 }
+

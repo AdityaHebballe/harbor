@@ -1,4 +1,8 @@
-import { safeFetch as fetch } from "@/lib/safe-fetch";
+import { fetch as tauriHttpFetch } from "@tauri-apps/plugin-http";
+import { safeFetch } from "@/lib/safe-fetch";
+
+const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+const probeFetch: typeof fetch = isTauri ? (tauriHttpFetch as unknown as typeof fetch) : safeFetch;
 
 const MIN_REAL_SIZE_BYTES = 5 * 1024 * 1024;
 const PREFLIGHT_TIMEOUT_MS = 2500;
@@ -38,11 +42,15 @@ const PROBE_RETRY_MS = 1000;
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const t = window.setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    const onAbort = () => {
       window.clearTimeout(t);
       resolve();
-    });
+    };
+    const t = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
@@ -65,8 +73,9 @@ async function probe(url: string, signal?: AbortSignal): Promise<PreflightResult
   const onAbort = () => ctrl.abort();
   signal?.addEventListener("abort", onAbort);
   const timer = window.setTimeout(() => ctrl.abort(), PREFLIGHT_TIMEOUT_MS);
+  let rangeRes: Response | null = null;
   try {
-    const rangeRes = await fetch(url, {
+    rangeRes = await probeFetch(url, {
       method: "GET",
       headers: { Range: "bytes=0-1" },
       redirect: "follow",
@@ -99,6 +108,11 @@ async function probe(url: string, signal?: AbortSignal): Promise<PreflightResult
   } finally {
     window.clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
+    try {
+      void rangeRes?.body?.cancel();
+    } catch {
+      /* noop */
+    }
   }
 }
 

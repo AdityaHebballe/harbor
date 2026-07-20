@@ -1,6 +1,7 @@
-import { Check, ChevronDown, Play } from "lucide-react";
+import { Check, ChevronDown, ListPlus, Play } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
+import { queueToggle, useQueue } from "@/lib/queue";
 import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import { getEpisodeProgress, resumeDefaultSeason } from "@/lib/episode-progress";
@@ -83,6 +84,7 @@ export function EpisodePicker({
 }) {
   const t = useT();
   const { settings, update } = useSettings();
+  const queue = useQueue();
   const { isConnected: traktConnected } = useTrakt();
   const { isConnected: simklConnected } = useSimkl();
   const { traktWatched, simklWatched } = useWatchedSets({
@@ -133,7 +135,9 @@ export function EpisodePicker({
   const ordering = useEpisodeOrder(imdbId, meta.id, orderProvider, settings.tvdbSeasonType, settings.tvdbKey);
   const orderTypes = useTvdbSeasonTypes(imdbId, meta.id, settings.tvdbKey, orderProvider === "tvdb");
 
-  const arcActive = settings.episodeArcGroups && arc.hasArcs;
+  const [arcMode, setArcMode] = useState<"seasons" | "arcs">("seasons");
+  const arcAvailable = settings.episodeArcGroups && arc.hasArcs;
+  const arcActive = arcAvailable && arcMode === "arcs";
   const orderActive = !arcActive && ordering != null;
   const mode: "arcs" | "order" | "flat" = arcActive ? "arcs" : orderActive ? "order" : "flat";
 
@@ -227,11 +231,31 @@ export function EpisodePicker({
     ep.still ?? tvdbStills[`s${ep.season}e${ep.episode}`] ?? tvdbStills[`abs${ep.episode}`];
   const progressFor = (ep: PlayEpisode) =>
     getEpisodeProgress(meta.id, ep.season, ep.episode, ep.runtime ?? null, imdbId ?? null, traktWatched, undefined, undefined, simklWatched);
+  const queuedKeys = useMemo(
+    () => new Set(queue.map((i) => `${i.meta.id}:${i.episode?.season ?? ""}:${i.episode?.episode ?? ""}`)),
+    [queue],
+  );
 
   const loadingNow = mode === "arcs" ? arc.loading : mode === "flat" ? loading : false;
 
   return (
     <div className="flex flex-col gap-5 px-6 pb-8 pt-1 sm:px-8">
+      {arcAvailable && (
+        <div className="flex w-fit gap-1 rounded-full bg-white/[0.06] p-1 ring-1 ring-white/10">
+          {(["seasons", "arcs"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setArcMode(m)}
+              className={`rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                arcMode === m ? "bg-white/15 text-white" : "text-white/55 hover:text-white/80"
+              }`}
+            >
+              {m === "seasons" ? t("Seasons") : t("Arcs")}
+            </button>
+          ))}
+        </div>
+      )}
       {mode === "order" && ordering && orderItems.length > 0 ? (
         <div className="w-fit">
           <TvdbOrderPanel
@@ -240,7 +264,7 @@ export function EpisodePicker({
             onSelect={(k) => setOrderSeason(Number(k))}
             orderTypes={orderTypes}
             activeType={settings.tvdbSeasonType}
-            onSelectType={(v) => update({ tvdbSeasonType: v })}
+            onSelectType={(v) => update({ tvdbSeasonType: v as typeof settings.tvdbSeasonType })}
           />
         </div>
       ) : options.length > 1 ? (
@@ -260,55 +284,70 @@ export function EpisodePicker({
           {activeEpisodes.map((ep) => {
             const thumb = thumbFor(ep);
             const prog = progressFor(ep);
+            const queued = queuedKeys.has(`${meta.id}:${ep.season}:${ep.episode}`);
             const sub = [ep.airDate?.slice(0, 10), ep.runtime ? `${ep.runtime}m` : null]
               .filter(Boolean)
               .join(" · ");
             return (
-              <button
-                key={`${ep.season}-${ep.episode}`}
-                type="button"
-                onClick={() => onPlayEpisode(ep)}
-                className="group flex flex-col gap-2 text-start"
-              >
-                <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10 transition duration-200 group-hover:ring-white/25">
-                  {thumb ? (
-                    <img
-                      src={thumb}
-                      alt=""
-                      loading="lazy"
-                      className={`h-full w-full object-cover ${prog.watched ? "opacity-55" : ""}`}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-[13px] text-white/40">
-                      {t("Episode {n}", { n: ep.episode })}
+              <div key={`${ep.season}-${ep.episode}`} className="group relative flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => onPlayEpisode(ep)}
+                  className="flex w-full flex-col gap-2 text-start"
+                >
+                  <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-white/[0.06] ring-1 ring-white/10 transition duration-200 group-hover:ring-white/25">
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt=""
+                        loading="lazy"
+                        className={`h-full w-full object-cover ${prog.watched ? "opacity-55" : ""}`}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[13px] text-white/40">
+                        {t("Episode {n}", { n: ep.episode })}
+                      </div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black">
+                        <Play size={20} fill="currentColor" className="ml-0.5" />
+                      </span>
                     </div>
-                  )}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-                    <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-black">
-                      <Play size={20} fill="currentColor" className="ml-0.5" />
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white">
+                      {ep.episode}
                     </span>
+                    {prog.watched && (
+                      <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/90 text-black ring-1 ring-black/20 transition-opacity duration-200 group-hover:opacity-0">
+                        <Check size={12} strokeWidth={3.2} />
+                      </span>
+                    )}
+                    {!prog.watched && prog.ratio > 0.02 && (
+                      <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
+                        <div className="h-full bg-accent" style={{ width: `${Math.min(100, prog.ratio * 100)}%` }} />
+                      </div>
+                    )}
                   </div>
-                  <span className="absolute left-1.5 top-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-bold text-white">
-                    {ep.episode}
-                  </span>
-                  {prog.watched && (
-                    <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-400/90 text-black ring-1 ring-black/20">
-                      <Check size={12} strokeWidth={3.2} />
+                  <div className="flex flex-col gap-0.5 px-0.5">
+                    <span className={`line-clamp-1 text-[13px] font-semibold ${prog.watched ? "text-white/55" : "text-white/90"}`}>
+                      {ep.name || t("Episode {n}", { n: ep.episode })}
                     </span>
-                  )}
-                  {!prog.watched && prog.ratio > 0.02 && (
-                    <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
-                      <div className="h-full bg-accent" style={{ width: `${Math.min(100, prog.ratio * 100)}%` }} />
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col gap-0.5 px-0.5">
-                  <span className={`line-clamp-1 text-[13px] font-semibold ${prog.watched ? "text-white/55" : "text-white/90"}`}>
-                    {ep.name || t("Episode {n}", { n: ep.episode })}
-                  </span>
-                  {sub && <span className="text-[11.5px] text-white/45">{sub}</span>}
-                </div>
-              </button>
+                    {sub && <span className="text-[11.5px] text-white/45">{sub}</span>}
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => queueToggle(meta, ep)}
+                  aria-label={queued ? t("Remove from queue") : t("Add to queue")}
+                  title={queued ? t("In your queue") : t("Add to queue")}
+                  className={`absolute right-1.5 top-1.5 flex h-8 w-8 items-center justify-center rounded-full ring-1 backdrop-blur-md transition-all duration-200 ${
+                    queued
+                      ? "bg-accent text-black ring-black/10"
+                      : "bg-black/55 text-white opacity-0 ring-white/25 hover:bg-black/80 group-hover:opacity-100"
+                  }`}
+                >
+                  {queued ? <Check size={16} strokeWidth={3} /> : <ListPlus size={16} strokeWidth={2.4} />}
+                </button>
+              </div>
             );
           })}
         </div>

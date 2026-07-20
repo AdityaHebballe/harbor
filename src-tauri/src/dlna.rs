@@ -199,6 +199,17 @@ fn samsung_dlna_fallback_urls(host_ip: &str) -> Vec<String> {
     ]
 }
 
+fn bind_reuse_udp(addr: SocketAddr) -> std::io::Result<UdpSocket> {
+    let sock = socket2::Socket::new(
+        socket2::Domain::IPV4,
+        socket2::Type::DGRAM,
+        Some(socket2::Protocol::UDP),
+    )?;
+    sock.set_reuse_address(true)?;
+    sock.bind(&addr.into())?;
+    Ok(sock.into())
+}
+
 fn ssdp_search(timeout_ms: u64) -> Vec<(String, String)> {
     let mut found: HashMap<String, Vec<String>> = HashMap::new();
     let mut sockets: Vec<UdpSocket> = Vec::new();
@@ -228,7 +239,7 @@ fn ssdp_search(timeout_ms: u64) -> Vec<(String, String)> {
     // catch NOTIFY broadcasts that devices emit periodically. Samsung TVs in
     // particular sometimes ignore M-SEARCH but reliably NOTIFY every ~30s.
     let mut notify_socket: Option<UdpSocket> = None;
-    match UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 1900)) {
+    match bind_reuse_udp(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 1900)) {
         Ok(s) => {
             let _ = s.set_read_timeout(Some(Duration::from_millis(200)));
             for iface in local_ipv4_interfaces() {

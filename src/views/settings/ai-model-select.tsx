@@ -26,7 +26,9 @@ export function AiModelSelect({
     window.addEventListener("mousedown", onDown);
     return () => window.removeEventListener("mousedown", onDown);
   }, [open]);
-  const current = models.find((m) => m.id === value) ?? models.find((m) => m.id === defaultModel);
+  const current =
+    models.find((m) => m.id === value) ??
+    (value ? undefined : models.find((m) => m.id === defaultModel));
   return (
     <div className="flex items-center gap-2.5 px-1">
       <span className="shrink-0 text-[12px] text-ink-subtle">{t("Model")}</span>

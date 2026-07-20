@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { observe, usePageVisible } from "@/lib/visibility";
 import { isRtl, useT, useUiLanguage } from "@/lib/i18n";
+import { useSettings } from "@/lib/settings";
 import { Hero } from "./hero";
+import { NavChevron } from "@/components/nav-arrow";
 import type { Meta } from "@/lib/cinemeta";
 
-export type Slide = { meta: Meta; rank: { label: string; position: number } };
+export type Slide = {
+  meta: Meta;
+  rank: { label: string; position: number; sources?: Array<{ label: string; rank: number }> };
+};
 
 const EASE_OUT = "cubic-bezier(0.32, 0.72, 0.24, 1)";
 const DRAG_BUDGE = 6;
@@ -12,13 +17,24 @@ const SNAP_RATIO = 0.18;
 const FLICK_VELOCITY = 0.45;
 const SLIDE_GAP_PX = 22;
 
-export function HeroCarousel({ slides, full = false, fullQuality = false }: { slides: Slide[]; full?: boolean; fullQuality?: boolean }) {
+export function HeroCarousel({
+  slides,
+  full = false,
+  fullQuality = false,
+  playTrailers = false,
+}: {
+  slides: Slide[];
+  full?: boolean;
+  fullQuality?: boolean;
+  playTrailers?: boolean;
+}) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [offset, setOffset] = useState(0);
   const [inViewport, setInViewport] = useState(true);
   const pageVisible = usePageVisible();
+  const { settings } = useSettings();
   const t = useT();
   const rtl = isRtl(useUiLanguage());
 
@@ -29,18 +45,30 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
     if (!el) return;
     return observe(el, setInViewport);
   }, []);
+
+  useEffect(() => {
+    for (const s of slides) {
+      const logo = s.meta.logo;
+      if (logo) {
+        const img = new Image();
+        img.src = logo;
+      }
+    }
+  }, [slides]);
   const startX = useRef(0);
   const lastX = useRef(0);
   const lastT = useRef(0);
   const velocity = useRef(0);
   const moved = useRef(false);
   const widthRef = useRef(0);
+  const downRef = useRef(false);
 
   useEffect(() => {
     if (paused || dragging || !inViewport || !pageVisible || slides.length < 2) return;
+    if (settings.heroTrailerAudio) return;
     const id = setInterval(() => setActive((a) => (a + 1) % slides.length), 13000);
     return () => clearInterval(id);
-  }, [paused, dragging, inViewport, pageVisible, slides.length]);
+  }, [paused, dragging, inViewport, pageVisible, slides.length, settings.heroTrailerAudio]);
 
   useEffect(() => {
     if (active >= slides.length) setActive(0);
@@ -48,7 +76,7 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
 
   if (slides.length === 0) {
     return (
-      <div className={`animate-pulse border border-edge-soft bg-elevated/30 ${full ? "min-h-[clamp(560px,82vh,920px)] rounded-none" : "min-h-[560px] rounded-[28px]"}`} />
+      <div className={`animate-pulse border border-edge-soft bg-elevated/30 ${full ? "min-h-[max(78vh,640px)] rounded-none" : "min-h-[560px] rounded-[28px]"}`} />
     );
   }
 
@@ -56,7 +84,7 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
     if (e.button !== 0) return;
     if (slides.length < 2) return;
     widthRef.current = viewportRef.current?.clientWidth ?? 1000;
-    setDragging(true);
+    downRef.current = true;
     moved.current = false;
     startX.current = e.clientX;
     lastX.current = e.clientX;
@@ -65,15 +93,14 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging) return;
+    if (!downRef.current) return;
     const dx = e.clientX - startX.current;
-    if (Math.abs(dx) > DRAG_BUDGE) {
-      if (!moved.current) {
-        try {
-          viewportRef.current?.setPointerCapture(e.pointerId);
-        } catch {}
-      }
+    if (Math.abs(dx) > DRAG_BUDGE && !moved.current) {
       moved.current = true;
+      setDragging(true);
+      try {
+        viewportRef.current?.setPointerCapture(e.pointerId);
+      } catch {}
     }
     const now = performance.now();
     const dt = now - lastT.current;
@@ -83,6 +110,7 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
     }
     lastX.current = e.clientX;
     lastT.current = now;
+    if (!moved.current) return;
 
     const W = widthRef.current || 1000;
     let next = dx;
@@ -92,12 +120,17 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
   };
 
   const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragging) return;
+    if (!downRef.current) return;
+    downRef.current = false;
     try {
       if (viewportRef.current?.hasPointerCapture?.(e.pointerId)) {
         viewportRef.current.releasePointerCapture(e.pointerId);
       }
     } catch {}
+    if (!moved.current) {
+      setDragging(false);
+      return;
+    }
     setDragging(false);
     const W = widthRef.current || 1000;
     const distance = offset;
@@ -133,7 +166,7 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onClickCapture={onClickCapture}
-        className={`relative overflow-hidden ${full ? "rounded-none" : "rounded-[28px]"} ${
+        className={`group relative overflow-hidden ${full ? "rounded-none" : "rounded-[28px]"} ${
           dragging ? "cursor-grabbing" : "cursor-grab"
         } select-none`}
         style={{ touchAction: "pan-y" }}
@@ -145,7 +178,7 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
             gap: `${SLIDE_GAP_PX}px`,
             transform: trackTransform,
             transition: dragging ? "none" : `transform 720ms ${EASE_OUT}`,
-            willChange: "transform",
+            willChange: dragging ? "transform" : "auto",
           }}
         >
           {slides.map((s, i) => {
@@ -170,17 +203,46 @@ export function HeroCarousel({ slides, full = false, fullQuality = false }: { sl
                     meta={s.meta}
                     rank={s.rank}
                     active={isActive}
-                    loadBackdrop={distance === 0}
+                    loadBackdrop={distance <= 1}
                     full={full}
                     fullQuality={fullQuality}
+                    playTrailer={playTrailers && isActive && !dragging}
                   />
                 ) : (
-                  <div className={`w-full bg-elevated/30 ${full ? "h-[clamp(560px,82vh,920px)] rounded-none" : "h-[560px] rounded-[28px]"}`} />
+                  <div className={`w-full bg-elevated/30 ${full ? "h-[78vh] min-h-[640px] rounded-none" : "h-[560px] rounded-[28px]"}`} />
                 )}
               </div>
             );
           })}
         </div>
+        {slides.length > 1 && (
+          <>
+            <button
+              type="button"
+              onClick={() => setActive((a) => (a - 1 + slides.length) % slides.length)}
+              aria-label={t("Previous")}
+              className="group/hl absolute inset-y-0 start-0 z-30 flex w-[14%] max-w-[120px] items-center justify-start ps-4"
+            >
+              <NavChevron
+                dir="left"
+                size={40}
+                className="text-white/90 opacity-0 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] transition-all duration-200 group-hover/hl:opacity-100 group-active/hl:scale-90"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={() => setActive((a) => (a + 1) % slides.length)}
+              aria-label={t("Next")}
+              className="group/hr absolute inset-y-0 end-0 z-30 flex w-[14%] max-w-[120px] items-center justify-end pe-4"
+            >
+              <NavChevron
+                dir="right"
+                size={40}
+                className="text-white/90 opacity-0 drop-shadow-[0_2px_10px_rgba(0,0,0,0.8)] transition-all duration-200 group-hover/hr:opacity-100 group-active/hr:scale-90"
+              />
+            </button>
+          </>
+        )}
       </div>
       {slides.length > 1 && (
         <div

@@ -1,0 +1,36 @@
+import { authToken } from "@/lib/theme-auth";
+
+const API = "https://harbor.site/themes/api";
+
+function headers(hasBody: boolean): Record<string, string> {
+  const h: Record<string, string> = {};
+  if (hasBody) h["Content-Type"] = "application/json";
+  const token = authToken();
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
+
+async function unwrap<T>(r: Response): Promise<T> {
+  const d = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!r.ok) {
+    const message = typeof d.error === "string" ? d.error : `Request failed (${r.status}).`;
+    const err = new Error(message) as Error & { status?: number };
+    err.status = r.status;
+    throw err;
+  }
+  return d as T;
+}
+
+export async function socialGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const r = await fetch(`${API}${path}`, { headers: headers(false), signal });
+  return unwrap<T>(r);
+}
+
+export async function socialPost<T>(path: string, body?: Record<string, unknown>): Promise<T> {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: headers(!!body),
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return unwrap<T>(r);
+}

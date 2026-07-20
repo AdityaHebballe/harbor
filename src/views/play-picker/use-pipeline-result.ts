@@ -21,6 +21,7 @@ export function usePipelineResult({
   settings,
   strictMode,
   filterDisabled,
+  animeTitles,
 }: {
   meta: Meta;
   episode: PlayEpisode | undefined;
@@ -31,6 +32,7 @@ export function usePipelineResult({
   settings: Settings;
   strictMode: boolean;
   filterDisabled: boolean;
+  animeTitles: string[] | null;
 }) {
   const [result, setResult] = useState<PipelineResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,8 @@ export function usePipelineResult({
   const [autoSettleReady, setAutoSettleReady] = useState(false);
   const [resolveError, setResolveError] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [addonQuorum, setAddonQuorum] = useState<{ settled: number; total: number }>({ settled: 0, total: 0 });
+  const [pipelineStartedAt, setPipelineStartedAt] = useState<number | null>(null);
 
   const configHash = useMemo(
     () =>
@@ -62,6 +66,8 @@ export function usePipelineResult({
       setFirstResultAt(performance.now());
       setAutoSettleReady(true);
       setResolveError(null);
+      setAddonQuorum({ settled: 1, total: 1 });
+      setPipelineStartedAt(performance.now());
       return () => ac.abort();
     }
     setLoading(true);
@@ -70,6 +76,8 @@ export function usePipelineResult({
     setPipelineDone(false);
     setFirstResultAt(null);
     setAutoSettleReady(false);
+    setAddonQuorum({ settled: 0, total: 0 });
+    setPipelineStartedAt(performance.now());
     runPipeline(
       buildEpisodePipelineInput({
         meta,
@@ -81,6 +89,7 @@ export function usePipelineResult({
         settings,
         strictMode,
         filterDisabled,
+        animeTitles,
       }),
       ac.signal,
       (partial) => {
@@ -91,6 +100,10 @@ export function usePipelineResult({
         setLoading(false);
         setFirstResultAt((prev) => prev ?? performance.now());
         setPickerCache(meta, episode, partial, configHash, false);
+      },
+      (settled, total) => {
+        if (ac.signal.aborted) return;
+        setAddonQuorum({ settled, total });
       },
     )
       .then((r) => {
@@ -126,6 +139,7 @@ export function usePipelineResult({
     settings.requirePreferredLanguage,
     strictMode,
     filterDisabled,
+    (animeTitles ?? []).join("|"),
     refreshNonce,
   ]);
 
@@ -140,6 +154,8 @@ export function usePipelineResult({
     pipelineDone,
     firstResultAt,
     autoSettleReady,
+    addonQuorum,
+    pipelineStartedAt,
     resolveError,
     refresh,
     setResult,

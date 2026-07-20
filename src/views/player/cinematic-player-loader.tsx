@@ -7,11 +7,13 @@ import type { PlayerSrc } from "@/lib/view";
 import { Topbar } from "@/chrome/topbar";
 import { useT } from "@/lib/i18n";
 import { useActiveKid } from "@/lib/profiles";
+import { useTitleLogo } from "@/lib/title-logo";
 import { LoaderLogoOrText } from "./loader-logo-or-text";
 import { readinessScore, type EngineStats } from "@/lib/torrent/engine-stats";
 import { isBundledEngineUrl, isLocalEngineUrl } from "@/lib/stremio-server";
 import { StreamLoadingBar } from "./stream-loading-bar";
-import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
+import { useP2pPreparingStatus } from "./use-p2p-preparing-status";
+import { useMedia } from "@/components/hover-preview/scene";
 
 const LOADER_BUBBLES = [8, 20, 33, 47, 60, 72, 85, 94];
 
@@ -38,14 +40,12 @@ export function CinematicPlayerLoader({
 }) {
   const t = useT();
   const kid = useActiveKid();
+  const pinnedLogo = useTitleLogo(src.meta.id);
   const isLocal = isLocalUrl(src.url);
   const isInfoHash =
     (isBundledEngineUrl(src.url) || isLocalEngineUrl(src.url)) && !src.url.includes("/hlsv2/");
-  const enginePeers = engineStats
-    ? engineStats.unchoked > 0
-      ? engineStats.unchoked
-      : engineStats.peers
-    : 0;
+  const isLocalEngine = isLocalEngineUrl(src.url) && !!src.streamRef?.infoHash;
+  const enginePeers = engineStats ? (engineStats.unchoked > 0 ? engineStats.unchoked : engineStats.peers) : 0;
   const engineSpeed = engineStats?.downloadSpeed ?? 0;
   const showEngineActivity = isInfoHash && !!engineStats && (enginePeers > 0 || engineSpeed > 0);
   const streamBytes = src.streamRef?.size ?? engineStats?.streamLen ?? null;
@@ -63,7 +63,8 @@ export function CinematicPlayerLoader({
     everPlayedRef.current = false;
   }
   const showing =
-    forceShow || (!everPlayedRef.current && snap.errorCode == null && snap.status !== "ended");
+    forceShow ||
+    (!everPlayedRef.current && snap.errorCode == null && snap.status !== "ended");
   const done = !showing && snap.errorCode == null;
   const [mounted, setMounted] = useState(showing);
   useEffect(() => {
@@ -78,6 +79,13 @@ export function CinematicPlayerLoader({
     const timer = window.setTimeout(() => setMounted(false), 320);
     return () => window.clearTimeout(timer);
   }, [showing]);
+  const reducedMotion = useMedia("(prefers-reduced-motion: reduce)");
+  const prep = useP2pPreparingStatus({
+    url: src.url,
+    infoHash: src.streamRef?.infoHash ?? null,
+    fileIdx: src.streamRef?.fileIdx ?? null,
+    active: showing && isLocalEngine,
+  });
   if (!mounted) return null;
   const backdrop = src.episode?.still || src.meta.background || src.meta.poster;
   return (
@@ -146,7 +154,10 @@ export function CinematicPlayerLoader({
         data-tauri-drag-region
         className="relative flex h-full flex-col items-center justify-center gap-7 px-8 text-center"
       >
-        <LoaderLogoOrText logo={src.meta.logo ?? null} fallbackText={src.meta.name ?? src.title} />
+        <LoaderLogoOrText
+          logo={pinnedLogo ?? src.meta.logo ?? null}
+          fallbackText={src.meta.name ?? src.title}
+        />
         {src.episode && (
           <p className="text-[12.5px] font-semibold uppercase tracking-[0.32em] text-white/70">
             S{src.episode.imdbSeason ?? src.episode.season} · E
@@ -155,39 +166,72 @@ export function CinematicPlayerLoader({
           </p>
         )}
         {isInfoHash ? (
-          <div className="flex w-full max-w-sm flex-col items-center gap-3">
-            <StreamLoadingBar key={src.url} ready={ready} done={done} />
-            <p className="text-[12.5px] font-medium uppercase tracking-[0.18em] text-white/70">
-              {t("Loading video")}
-            </p>
-          </div>
+          isLocalEngine && prep.phase === "no-peers" ? (
+            <div className="flex w-full max-w-md flex-col items-center gap-4">
+              <p className="text-[12.5px] font-medium uppercase tracking-[0.18em] text-white/70">
+                {t("No peers found")}
+              </p>
+              <p className="max-w-md text-[13.5px] leading-relaxed text-white/70">
+                {t(
+                  "Couldn't connect to any peers for this torrent. It may be unreachable on your network (some ISPs and VPNs block torrent traffic).",
+                )}
+              </p>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={onCancel}
+                  className="flex h-11 cursor-pointer items-center rounded-full border border-white/20 bg-white/10 px-6 text-[13.5px] font-medium text-white/90 transition-colors hover:border-white/35 hover:bg-white/15"
+                >
+                  {t("Go back")}
+                </button>
+                <button
+                  onClick={prep.retry}
+                  className="flex h-11 cursor-pointer items-center rounded-full border border-white/12 bg-transparent px-6 text-[13.5px] font-medium text-white/70 transition-colors hover:border-white/25 hover:text-white"
+                >
+                  {t("Try again")}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex w-full max-w-sm flex-col items-center gap-3">
+              <StreamLoadingBar key={src.url} ready={ready} done={done} />
+              <p className="text-[12.5px] font-medium uppercase tracking-[0.18em] text-white/70">
+                {snap.buffering ? t("Buffering") : t("Preparing stream")}
+              </p>
+              {isLocalEngine && (
+                <p className="flex items-center gap-2 text-[12.5px] font-medium tracking-wide text-white/55 tabular-nums">
+                  {prep.phase === "searching" && (
+                    <span
+                      aria-hidden
+                      className={`h-1.5 w-1.5 rounded-full bg-white/40 ${reducedMotion ? "" : "animate-pulse"}`}
+                    />
+                  )}
+                  {prep.peers > 0
+                    ? `${prep.peers} ${prep.peers === 1 ? t("peer") : t("peers")} · ${fmtSpeed(prep.downloadSpeed)}`
+                    : t("Looking for peers…")}
+                </p>
+              )}
+              {isLocalEngine && prep.phase === "slow" && (
+                <p className="max-w-xs text-[12px] leading-relaxed text-amber-300/85">
+                  {t("Found peers but no data yet. The torrent may be slow.")}
+                </p>
+              )}
+            </div>
+          )
         ) : (
-          <HarborLoader size="md" caption={isLocal ? t("Loading") : t("Loading video")} />
+          <HarborLoader size="md" caption={isLocal ? t("Loading") : t("Connecting")} />
         )}
-        {!kid && showEngineActivity && (
+        {!kid && showEngineActivity && !isLocalEngine && (
           <p className="text-[12.5px] font-medium tracking-wide text-white/50 tabular-nums">
             {enginePeers} {enginePeers === 1 ? t("peer") : t("peers")} · {fmtSpeed(engineSpeed)}
           </p>
         )}
         {!kid && heavyForP2p && (
           <p className="max-w-md text-[12.5px] leading-relaxed text-amber-300/85">
-            {t(
-              "Heads up: this is a large file for peer-to-peer streaming, so it can take a while to start. A 1080p source or a debrid service will load faster.",
-            )}
+            {t("Heads up: this is a large file for peer-to-peer streaming, so it can take a while to start. A 1080p source or a debrid service will load faster.")}
           </p>
         )}
       </div>
-      <ThreeLiquidGlassSurface
-        radius="9999px"
-        shaderRadius={1}
-        intensity={1.05}
-        refractionStrength={1.18}
-        contentClassName="h-full w-full"
-        style={{
-          background: "transparent",
-          boxShadow: "none",
-        }}
-      >
+      {!(isLocalEngine && prep.phase === "no-peers") && (
         <button
           onClick={onCancel}
           className="absolute bottom-10 left-1/2 z-10 flex h-11 -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full border border-white/15 bg-black/45 px-6 text-[13.5px] font-medium text-white/75 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/60 hover:text-white"
@@ -202,7 +246,7 @@ export function CinematicPlayerLoader({
           </svg>
           {t("Cancel")}
         </button>
-      </ThreeLiquidGlassSurface>
+      )}
     </div>
   );
 }

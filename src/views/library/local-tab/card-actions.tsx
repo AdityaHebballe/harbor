@@ -3,7 +3,7 @@ import type { LocalEntry } from "@/lib/local-library";
 export type LocalCardProps = {
   selectMode: boolean;
   selected: Set<string>;
-  onToggleSelect: (ids: string[]) => void;
+  onToggleSelect: (ids: string[], range?: boolean) => void;
   onFixMatch: (entries: LocalEntry | LocalEntry[]) => void;
   onExport: (entries: LocalEntry | LocalEntry[]) => void;
   onOpenDetail: (entry: LocalEntry) => void;

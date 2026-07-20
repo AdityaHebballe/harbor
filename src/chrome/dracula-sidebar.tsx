@@ -9,18 +9,8 @@ import { useT } from "@/lib/i18n";
 import { useParental } from "@/lib/parental";
 import { useSettings } from "@/lib/settings";
 import { useView, type View } from "@/lib/view";
-import { HoverNavIcon } from "@/chrome/hover-nav-icon";
 
-const PRIMARY_IDS = new Set([
-  "home",
-  "discover",
-  "movies",
-  "shows",
-  "kids",
-  "anime",
-  "live",
-  "vod",
-]);
+const PRIMARY_IDS = new Set(["home", "discover", "movies", "shows", "kids", "anime", "live", "vod"]);
 
 export function DraculaSidebar() {
   const { view, setView, chromeHidden } = useView();
@@ -54,31 +44,20 @@ export function DraculaSidebar() {
     <>
       <aside
         aria-hidden={chromeHidden}
-        data-tv-nav-zone
-        className={`relative z-[60] flex w-[78px] shrink-0 flex-col transition-[opacity,transform,width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[width] ${
+        className={`relative z-[60] flex w-[78px] shrink-0 flex-col transition-[opacity,transform,width] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           collapsed ? "" : "lg:w-64"
         } ${
-          chromeHidden
-            ? "pointer-events-none -translate-x-2 rtl:translate-x-2 opacity-0"
-            : "translate-x-0 opacity-100"
+          chromeHidden ? "pointer-events-none -translate-x-2 rtl:translate-x-2 opacity-0" : "translate-x-0 opacity-100"
         }`}
       >
         <div
           className="relative flex min-h-0 flex-1 flex-col rounded-e-[30px] shadow-[8px_0_34px_-18px_rgba(0,0,0,0.65)] rtl:shadow-[-8px_0_34px_-18px_rgba(0,0,0,0.65)] ring-1 ring-inset ring-edge-soft/70"
-          style={{
-            background: "linear-gradient(180deg, var(--color-surface), var(--color-canvas) 60%)",
-          }}
+          style={{ background: "linear-gradient(180deg, var(--color-surface), var(--color-canvas) 60%)" }}
         >
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 overflow-hidden rounded-e-[30px]"
-          >
+          <span aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-e-[30px]">
             <span
               className="absolute inset-x-0 top-0 h-44"
-              style={{
-                background:
-                  "radial-gradient(125% 80% at 50% -8%, var(--color-accent-soft), transparent 72%)",
-              }}
+              style={{ background: "radial-gradient(125% 80% at 50% -8%, var(--color-accent-soft), transparent 72%)" }}
             />
           </span>
 
@@ -101,10 +80,7 @@ export function DraculaSidebar() {
                   style={{ fontFamily: "var(--font-display)", transform: "translateY(1px)" }}
                 >
                   Harb
-                  <span
-                    className="inline-block"
-                    style={{ transform: "rotate(8deg)", transformOrigin: "50% 65%" }}
-                  >
+                  <span className="inline-block" style={{ transform: "rotate(8deg)", transformOrigin: "50% 65%" }}>
                     o
                   </span>
                   r
@@ -155,12 +131,8 @@ export function DraculaSidebar() {
                 </div>
                 {!collapsed && (
                   <div className="hidden min-w-0 lg:block">
-                    <div className="truncate text-[13px] font-medium text-ink-muted">
-                      {t("chrome.locked")}
-                    </div>
-                    <div className="truncate text-[11.5px] text-ink-subtle">
-                      {t("chrome.parentalOn")}
-                    </div>
+                    <div className="truncate text-[13px] font-medium text-ink-muted">{t("chrome.locked")}</div>
+                    <div className="truncate text-[11.5px] text-ink-subtle">{t("chrome.parentalOn")}</div>
                   </div>
                 )}
               </div>
@@ -211,7 +183,9 @@ function NavPill({
       title={gated ? t("chrome.lockedShort", { label }) : label}
       className={`group relative flex h-12 items-center justify-center gap-3.5 rounded-[18px] transition-colors duration-200 ${
         collapsed ? "" : "lg:justify-start lg:px-4"
-      } ${active ? "text-accent" : "text-ink-muted hover:text-ink"}`}
+      } ${
+        active ? "text-accent" : "text-ink-muted hover:text-ink"
+      }`}
     >
       {active ? (
         <span
@@ -219,8 +193,7 @@ function NavPill({
           className="absolute inset-0 rounded-[18px]"
           style={{
             background: "var(--color-accent-soft)",
-            boxShadow:
-              "inset 0 0 0 1px var(--color-accent-soft), 0 6px 20px -14px var(--color-accent)",
+            boxShadow: "inset 0 0 0 1px var(--color-accent-soft), 0 6px 20px -14px var(--color-accent)",
           }}
         />
       ) : (
@@ -230,7 +203,7 @@ function NavPill({
         />
       )}
       <span className={`relative ${gated ? "opacity-70" : ""}`}>
-        <HoverNavIcon render={item.render} />
+        {item.render(false)}
         {gated && (
           <span className="absolute -bottom-1 -end-1 flex h-4 w-4 items-center justify-center rounded-full bg-canvas text-ink-subtle ring-1 ring-edge">
             <Lock size={9} strokeWidth={2.4} />
@@ -245,3 +218,5 @@ function NavPill({
     </button>
   );
 }
+
+

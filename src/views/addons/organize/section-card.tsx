@@ -20,24 +20,29 @@ export function SectionCard({
   title,
   sub,
   count,
+  action,
   children,
 }: {
   title: string;
   sub: string;
   count: number;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
   return (
     <section className="rounded-2xl border border-edge-soft bg-elevated/40 p-5 sm:p-6">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h2 className="font-display text-[21px] font-medium tracking-tight text-ink">{title}</h2>
           <p className="text-[12.5px] text-ink-muted">{sub}</p>
         </div>
-        <span className="shrink-0 rounded-full bg-raised px-3 py-1 text-[12px] font-semibold text-ink-muted">
-          {count === 1 ? t("{n} addon", { n: count }) : t("{n} addons", { n: count })}
-        </span>
+        <div className="flex shrink-0 items-center gap-2.5">
+          {action}
+          <span className="rounded-full bg-raised px-3 py-1 text-[12px] font-semibold text-ink-muted">
+            {count === 1 ? t("{n} addon", { n: count }) : t("{n} addons", { n: count })}
+          </span>
+        </div>
       </div>
       {children}
     </section>

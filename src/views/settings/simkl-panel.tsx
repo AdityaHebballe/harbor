@@ -37,7 +37,6 @@ export function SimklPanel() {
   }, [isConnected]);
 
   const pushAvatar = (url: string | null) => {
-    update({ harborAvatar: url });
     if (activeProfile) updateProfile(activeProfile.id, { avatar: url });
   };
 

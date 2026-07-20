@@ -430,9 +430,15 @@ export class TogetherClient {
         return;
       }
       case "participant-left": {
-        const leftName =
-          msg.name ?? this.snapshot.participants.find((p) => p.id === msg.clientId)?.name ?? "Someone";
-        this.emit({ kind: "participant-left", clientId: msg.clientId, name: leftName });
+        const left = this.snapshot.participants.find((p) => p.id === msg.clientId);
+        const leftName = msg.name ?? left?.name ?? "Someone";
+        this.emit({
+          kind: "participant-left",
+          clientId: msg.clientId,
+          name: leftName,
+          avatar: left?.avatar ?? null,
+          color: left?.color ?? null,
+        });
         this.update({
           participants: this.snapshot.participants.filter((p) => p.id !== msg.clientId),
         });

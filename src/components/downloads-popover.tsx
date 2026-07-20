@@ -54,7 +54,7 @@ export function DownloadsButton() {
       <button
         aria-label={t("Downloads")}
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-11 w-11 items-center justify-center rounded-xl bg-elevated/70 text-ink-muted transition-colors duration-150 hover:bg-elevated hover:text-ink"
+        className="harbor-navbtn relative flex h-11 w-11 items-center justify-center rounded-xl bg-elevated/70 text-ink-muted transition-colors duration-150 hover:bg-elevated hover:text-ink"
       >
         <Download size={17} strokeWidth={1.9} />
         {activeCount > 0 && (

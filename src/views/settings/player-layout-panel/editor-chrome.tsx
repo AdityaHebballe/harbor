@@ -25,22 +25,10 @@ export function TopRow({
     return (
       <div className="absolute inset-x-0 top-0 z-30 flex h-[88px] items-center justify-between bg-gradient-to-b from-black/35 via-black/15 to-transparent px-6">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <SlotZone
-            slot="top-left"
-            config={config}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            renderOne={renderOne}
-          />
+          <SlotZone slot="top-left" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         </div>
         <div className="flex items-center gap-1">
-          <SlotZone
-            slot="top-right"
-            config={config}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            renderOne={renderOne}
-          />
+          <SlotZone slot="top-right" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         </div>
       </div>
     );
@@ -48,22 +36,10 @@ export function TopRow({
   return (
     <div className="absolute inset-x-0 top-0 z-30 flex items-start justify-between bg-gradient-to-b from-black/55 via-black/15 to-transparent px-7 pt-4 pb-8">
       <div className="flex items-start gap-2">
-        <SlotZone
-          slot="top-left"
-          config={config}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          renderOne={renderOne}
-        />
+        <SlotZone slot="top-left" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
       </div>
       <div className="flex items-start gap-2">
-        <SlotZone
-          slot="top-right"
-          config={config}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          renderOne={renderOne}
-        />
+        <SlotZone slot="top-right" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
       </div>
     </div>
   );
@@ -113,30 +89,51 @@ function CyclingBackdrop({ bg }: { bg: string | null }) {
   const idRef = useRef(0);
   useEffect(() => {
     if (!bg) return;
-    const id = idRef.current++;
-    setLayers((cur) => {
-      if (cur.length && cur[cur.length - 1].url === bg) return cur;
-      return [...cur, { url: bg, id }].slice(-2);
-    });
+    let alive = true;
+    const show = () => {
+      if (!alive) return;
+      const id = idRef.current++;
+      setLayers((cur) => {
+        if (cur.length && cur[cur.length - 1].url === bg) return cur;
+        return [...cur, { url: bg, id }].slice(-2);
+      });
+    };
+    const img = new Image();
+    img.decoding = "async";
+    img.src = bg;
+    img.decode().then(show, show);
+    return () => {
+      alive = false;
+    };
+  }, [bg]);
+  useEffect(() => {
+    if (layers.length <= 1) return;
     const tid = setTimeout(() => setLayers((cur) => cur.slice(-1)), 2600);
     return () => clearTimeout(tid);
-  }, [bg]);
+  }, [layers]);
   return (
     <>
-      {layers.map((layer, i) => (
-        <img
-          key={layer.id}
-          src={layer.url}
-          alt=""
-          className={`absolute inset-0 h-full w-full object-cover opacity-[0.40] ${
-            i === layers.length - 1 && layers.length > 1
-              ? "animate-in fade-in duration-[2200ms] ease-out"
-              : ""
-          }`}
-          style={{ filter: "saturate(1.15)" }}
-          draggable={false}
-        />
-      ))}
+      {layers.map((layer, i) => {
+        const isNew = i === layers.length - 1 && layers.length > 1;
+        return (
+          <img
+            key={layer.id}
+            src={layer.url}
+            alt=""
+            decoding="async"
+            draggable={false}
+            className="absolute inset-0 h-full w-full object-cover"
+            style={{
+              opacity: 0.4,
+              filter: "saturate(1.15)",
+              willChange: "opacity, transform",
+              animation: isNew
+                ? "harbor-bg-fade 2200ms ease-out both, harbor-bg-drift 30s ease-in-out infinite alternate"
+                : "harbor-bg-drift 30s ease-in-out infinite alternate",
+            }}
+          />
+        );
+      })}
     </>
   );
 }
@@ -156,106 +153,70 @@ export function DefaultLayout({
   renderOne,
   isLive,
   compact,
-}: LayoutProps & { compact: boolean }) {
+  hideSeek,
+}: LayoutProps & { compact: boolean; hideSeek?: boolean }) {
   return (
     <>
-      <div className="flex items-center gap-3">
-        {isLive ? (
-          <LiveSeekRowMock />
-        ) : (
-          <>
-            <SlotZone
-              slot="seek-leading"
-              config={config}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              renderOne={renderOne}
-            />
-            <div className="flex-1">
-              <SeekBarPlaceholder />
-            </div>
-            <SlotZone
-              slot="seek-trailing"
-              config={config}
-              selectedId={selectedId}
-              onSelect={onSelect}
-              renderOne={renderOne}
-            />
-          </>
-        )}
-      </div>
+      {!hideSeek && (
+        <div className="flex items-center gap-3">
+          {isLive ? (
+            <LiveSeekRowMock />
+          ) : (
+            <>
+              <SlotZone slot="seek-leading" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
+              <div className="flex-1">
+                <SeekBarPlaceholder />
+              </div>
+              <SlotZone slot="seek-trailing" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
+            </>
+          )}
+        </div>
+      )}
       <div
         className={`grid items-center ${
           compact ? "grid-cols-[auto_1fr_auto] gap-2" : "grid-cols-[1fr_auto_1fr] gap-4"
         }`}
       >
         <div className="flex min-w-0 items-center gap-2 justify-self-start">
-          <SlotZone
-            slot="bottom-left"
-            config={config}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            renderOne={renderOne}
-          />
+          <SlotZone slot="bottom-left" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         </div>
         <div className="flex items-center gap-1.5">
-          <SlotZone
-            slot="bottom-center"
-            config={config}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            renderOne={renderOne}
-          />
+          <SlotZone slot="bottom-center" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         </div>
         <div className="flex items-center gap-1.5 justify-self-end">
-          <SlotZone
-            slot="bottom-right"
-            config={config}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            renderOne={renderOne}
-          />
+          <SlotZone slot="bottom-right" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         </div>
       </div>
     </>
   );
 }
 
-export function StremioLayout({ config, selectedId, onSelect, renderOne, isLive }: LayoutProps) {
+export function StremioLayout({
+  config,
+  selectedId,
+  onSelect,
+  renderOne,
+  isLive,
+  hideSeek,
+}: LayoutProps & { hideSeek?: boolean }) {
   return (
     <>
-      <div className="flex h-6 items-center">
-        {isLive ? (
-          <LiveSeekRowMock />
-        ) : (
-          <div className="min-w-0 flex-1">
-            <SeekBarPlaceholder />
-          </div>
-        )}
-      </div>
+      {!hideSeek && (
+        <div className="flex h-6 items-center">
+          {isLive ? (
+            <LiveSeekRowMock />
+          ) : (
+            <div className="min-w-0 flex-1">
+              <SeekBarPlaceholder />
+            </div>
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-1">
-        <SlotZone
-          slot="bottom-left"
-          config={config}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          renderOne={renderOne}
-        />
-        <SlotZone
-          slot="bottom-center"
-          config={config}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          renderOne={renderOne}
-        />
+        <SlotZone slot="bottom-left" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
+        <SlotZone slot="bottom-center" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
         <div className="flex-1" />
-        <SlotZone
-          slot="bottom-right"
-          config={config}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          renderOne={renderOne}
-        />
+        <SlotZone slot="bottom-right" config={config} selectedId={selectedId} onSelect={onSelect} renderOne={renderOne} />
       </div>
     </>
   );
@@ -300,10 +261,7 @@ function SlotZone({
     .sort((a, b) => a.order - b.order);
   const items = allInSlot
     .map((c) => ({ c, rendered: renderOne(c.id) }))
-    .filter(
-      (x): x is { c: (typeof allInSlot)[number]; rendered: NonNullable<React.ReactNode> } =>
-        x.rendered != null,
-    );
+    .filter((x): x is { c: typeof allInSlot[number]; rendered: NonNullable<React.ReactNode> } => x.rendered != null);
   if (items.length === 0) return null;
   return (
     <>

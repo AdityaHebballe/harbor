@@ -13,7 +13,8 @@ import { ParentalPinModal } from "@/components/parental-pin-modal";
 import { close, minimize, toggleMaximize, useMaximized } from "@/lib/window";
 import { OverflowNav, type NavEntry } from "@/chrome/nav-overflow";
 import { NAV_ITEMS, applyNavCustomization, type NavItem } from "@/chrome/nav-items";
-import { ProfileChipCompact } from "@/chrome/cinematic-overlay/profile-chip-compact";
+import { NotificationCenter } from "@/components/notification-center/notification-center";
+import { AccountMenu } from "@/chrome/account-menu/account-menu";
 
 const IS_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -64,7 +65,6 @@ export function CinematicOverlay() {
         node: (
           <button
             type="button"
-            data-harbor-nav={item.view}
             onClick={() => navigate(item)}
             className={`relative h-9 whitespace-nowrap rounded-full px-3 text-[12.5px] font-medium transition-colors ${
               active ? "text-ink" : "text-ink-muted hover:text-ink"
@@ -93,7 +93,6 @@ export function CinematicOverlay() {
         <div className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/85 via-black/45 to-transparent" />
         <div
           data-tauri-drag-region
-          data-tv-top-chrome
           className="pointer-events-auto relative flex h-14 w-full items-center gap-2 px-1"
         >
           <button
@@ -130,6 +129,7 @@ export function CinematicOverlay() {
 
           <div className="ms-2 flex shrink-0 items-center gap-1">
             <RecordingPill />
+            <NotificationCenter />
             {view !== "live" && (
               <TogetherButton variant="ghost" connectStyle="tab" />
             )}
@@ -140,11 +140,15 @@ export function CinematicOverlay() {
             >
               <Search size={15} strokeWidth={2.2} />
             </IconBtn>
-            <ProfileChipCompact
+            <AccountMenu
+              trigger="pill"
+              placement="down"
+              align="end"
+              showSettings
               onOpenSettings={() => setView("settings")}
               settingsActive={view === "settings"}
             />
-            {IS_TAURI && !settings.useNativeTitleBar && (
+            {IS_TAURI && !settings.useNativeTitleBar && !settings.hybridTitleBar && (
               <div className="ms-1 flex items-center gap-0.5">
                 <WinBtn onClick={minimize} label={t("chrome.minimize")}>
                   <path

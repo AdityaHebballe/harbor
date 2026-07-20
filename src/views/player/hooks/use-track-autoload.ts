@@ -7,6 +7,7 @@ import { readPlayerPrefs, type PerShowPrefs } from "@/lib/player-prefs";
 import { tmdbImdbId } from "@/lib/providers/tmdb";
 import type { Addon } from "@/lib/addons";
 import { gatherSubtitleAddons } from "@/lib/subtitles/addon-source";
+import { buildStreamIds } from "@/lib/streams/stream-ids";
 import type { PlayerSrc } from "@/lib/view";
 import type { Settings } from "@/lib/settings";
 import {
@@ -15,6 +16,8 @@ import {
   subtitleSearchImdbId,
 } from "@/lib/subtitles/autoload";
 import { pickDesiredSubtitleTrack } from "@/lib/subtitles/track-selection";
+
+const EXTRA_AUTOLOAD_TRACKS = 8;
 
 export function useTrackAutoload(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
@@ -104,23 +107,42 @@ export function useTrackAutoload(params: {
       (src.meta.genres ?? []).some((g) => g.toLowerCase() === "anime");
     const rawLangs = resolveLangPreference(settings.preferredSubLangs, settings.preferredLanguages);
     const langs = subIsAnime ? rawLangs : rawLangs.filter((l) => !isJapanese(l));
+    const candidateIds = buildStreamIds(
+      src.meta.id,
+      src.episode,
+      searchImdbId ?? null,
+      src.meta.behaviorHints?.defaultVideoId ?? null,
+    );
+    const animeIds = candidateIds.some((i) => i.startsWith("kitsu:") || i.startsWith("mal:"));
+    const imdbEpAligned =
+      !animeIds || src.episode?.imdbEpisode == null || src.episode.episode === src.episode.imdbEpisode;
+    const searchSeason = imdbEpAligned
+      ? src.episode?.imdbSeason ?? src.episode?.season
+      : src.episode?.season;
+    const searchEpisode = imdbEpAligned
+      ? src.episode?.imdbEpisode ?? src.episode?.episode
+      : src.episode?.episode;
     autoSubLoadKeyRef.current = key;
     void (async () => {
       console.info("[subs/autoload] starting", {
         imdbId: searchImdbId,
-        season: src.episode?.season,
-        episode: src.episode?.episode,
+        candidateIds,
+        season: searchSeason,
+        episode: searchEpisode,
         langs,
       });
-      const { videoHash, videoSize } = settings.subtitleAutoSync ? await resolveVideoHash(src) : {};
+      const { videoHash, videoSize } = settings.subtitleAutoSync
+        ? await resolveVideoHash(src)
+        : {};
       if (videoHash) console.info(`[subs/autoload] moviehash ${videoHash} (${videoSize})`);
       const results = await searchSubtitles(
         {
           imdbId: searchImdbId,
           stremioId: src.meta.id,
+          candidateIds,
           type: src.meta.type === "series" ? "series" : "movie",
-          season: src.episode?.season,
-          episode: src.episode?.episode,
+          season: searchSeason,
+          episode: searchEpisode,
           langs,
           videoHash,
           videoSize,
@@ -151,14 +173,47 @@ export function useTrackAutoload(params: {
       console.info(`[subs/autoload] ${matches.length} match preferred langs`);
       const loaded = await loadFirstWorkingSubtitle(matches, async (r) => {
         if (autoSubLoadKeyRef.current !== key) return false;
-        return b.addSubtitle(r.url, r.lang, labelForTrack(r), false, {
+        const ok = await b.addSubtitle(r.url, r.lang, labelForTrack(r), false, {
           format: r.format,
           encoding: r.encoding,
         });
+        return ok === true;
       });
       console.info(
         `[subs/autoload] ${loaded ? "loaded best available subtitle" : "no subtitle loaded"}`,
       );
+      const diversityKey = (r: { source: string; title?: string }) =>
+        r.source === "addon" ? `addon:${r.title ?? ""}` : r.source;
+      const pool = new Map<string, typeof matches>();
+      for (const r of matches) {
+        if (r === loaded) continue;
+        const k = diversityKey(r);
+        const arr = pool.get(k) ?? [];
+        arr.push(r);
+        pool.set(k, arr);
+      }
+      const extras: typeof matches = [];
+      for (let depth = 0; extras.length < EXTRA_AUTOLOAD_TRACKS; depth++) {
+        let progressed = false;
+        for (const arr of pool.values()) {
+          const item = arr[depth];
+          if (!item) continue;
+          progressed = true;
+          extras.push(item);
+          if (extras.length >= EXTRA_AUTOLOAD_TRACKS) break;
+        }
+        if (!progressed) break;
+      }
+      let added = 0;
+      for (const r of extras) {
+        if (autoSubLoadKeyRef.current !== key) return;
+        const ok = await b.addSubtitle(r.url, r.lang, labelForTrack(r), false, {
+          format: r.format,
+          encoding: r.encoding,
+        });
+        if (ok === true) added++;
+      }
+      if (extras.length > 0) console.info(`[subs/autoload] added ${added} extra subtitle tracks`);
     })();
   }, [
     resolvedImdbId,
@@ -183,8 +238,7 @@ export function useTrackAutoload(params: {
   useEffect(() => {
     const choice = src.subtitlePreselect;
     if (!choice) return;
-    if (snap.audioTracks.length === 0 && snap.subtitleTracks.length === 0 && snap.durationSec === 0)
-      return;
+    if (snap.audioTracks.length === 0 && snap.subtitleTracks.length === 0 && snap.durationSec === 0) return;
     if (preselectAppliedRef.current === src.url) return;
     preselectAppliedRef.current = src.url;
     if (choice.off) {
@@ -194,14 +248,7 @@ export function useTrackAutoload(params: {
     if (choice.url) {
       void bridgeRef.current?.addSubtitle(choice.url, choice.lang, choice.title, true);
     }
-  }, [
-    src.url,
-    src.subtitlePreselect,
-    snap.audioTracks.length,
-    snap.subtitleTracks,
-    snap.durationSec,
-    bridgeRef,
-  ]);
+  }, [src.url, src.subtitlePreselect, snap.audioTracks.length, snap.subtitleTracks, snap.durationSec, bridgeRef]);
   useEffect(() => {
     if (engine !== "mpv") return;
     bridgeRef.current?.setAudioDevice?.(settings.audioDevice);
@@ -267,10 +314,10 @@ export function useTrackAutoload(params: {
           langScore(effAudio.lang ?? "", subLangs) >= 0;
         const want = nativeAudio
           ? (snap.subtitleTracks
-              .filter(isForcedTrack)
-              .sort(
-                (a, b) => langScore(b.lang ?? "", subLangs) - langScore(a.lang ?? "", subLangs),
-              )[0] ?? null)
+            .filter(isForcedTrack)
+            .sort(
+              (a, b) => langScore(b.lang ?? "", subLangs) - langScore(a.lang ?? "", subLangs),
+            )[0] ?? null)
           : pickDesiredSubtitleTrack(
               allow(snap.subtitleTracks),
               subLangs,
@@ -283,25 +330,19 @@ export function useTrackAutoload(params: {
       }
     }
 
-    if (prefs && prefsAppliedRef.current !== src.meta.id) {
+    if (prefsAppliedRef.current !== src.meta.id) {
       prefsAppliedRef.current = src.meta.id;
-      if (typeof prefs.rate === "number" && prefs.rate !== snap.rate) {
-        bridgeRef.current?.setRate(prefs.rate);
-      }
-      if (typeof prefs.subDelaySec === "number" && prefs.subDelaySec !== snap.subDelaySec) {
-        bridgeRef.current?.setSubDelay(prefs.subDelaySec);
+      const savedRate = typeof prefs?.rate === "number" ? prefs.rate : null;
+      const wanted = savedRate ?? settings.defaultPlaybackSpeed ?? 1;
+      if (Number.isFinite(wanted) && wanted > 0 && Math.abs(wanted - snap.rate) > 0.001) {
+        bridgeRef.current?.setRate(wanted);
       }
     }
-  }, [
-    engine,
-    src.url,
-    src.meta.id,
-    snap.audioTracks,
-    snap.subtitleTracks,
-    snap.rate,
-    snap.subDelaySec,
-    settings,
-  ]);
+  }, [engine, src.url, src.meta.id, snap.audioTracks, snap.subtitleTracks, snap.rate, settings]);
+
+  useEffect(() => {
+    bridgeRef.current?.setSubDelay(0);
+  }, [src.url]);
 
   useEffect(() => {
     if (!subsOffFor(readPlayerPrefs(src.meta.id), settings)) return;
@@ -351,7 +392,10 @@ function isLoopback(url: string): boolean {
 }
 
 function raceTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
-  return Promise.race([p, new Promise<null>((resolve) => setTimeout(() => resolve(null), ms))]);
+  return Promise.race([
+    p,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 }
 
 async function resolveVideoHash(

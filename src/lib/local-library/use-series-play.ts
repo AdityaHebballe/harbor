@@ -4,6 +4,7 @@ import { useView, type PlayEpisode } from "@/lib/view";
 import { useSettings } from "@/lib/settings";
 import { findLocalEpisodeByIds } from "@/lib/local-library";
 import { localPlayerSrc } from "@/lib/local-library/player-src";
+import { metaIsAnime } from "@/lib/player/anime-src";
 import { openLocalEpisodes } from "@/lib/player/local-episodes-modal";
 
 type PlayOpts = { autoPlay?: boolean; resume?: boolean };
@@ -20,6 +21,7 @@ export function useLocalAwareSeriesPlay() {
       videos?: Meta["videos"];
     }) => {
       const { meta, episode, opts, imdbId, videos } = args;
+      const srcIsAnime = metaIsAnime(meta);
       const stream = () => openPicker(meta, episode, opts);
       if (settings.localPlaybackMode === "stream") {
         stream();
@@ -34,7 +36,7 @@ export function useLocalAwareSeriesPlay() {
         return;
       }
       if (settings.localPlaybackMode === "local") {
-        openPlayer(localPlayerSrc(thisLocal));
+        openPlayer(localPlayerSrc(thisLocal, srcIsAnime));
         return;
       }
       openLocalEpisodes({
@@ -45,7 +47,7 @@ export function useLocalAwareSeriesPlay() {
         videos,
         initialSeason: episode.season,
         highlightEpisode: episode.episode,
-        onPlayLocal: (e) => openPlayer(localPlayerSrc(e)),
+        onPlayLocal: (e) => openPlayer(localPlayerSrc(e, srcIsAnime)),
         onStream: stream,
       });
     },

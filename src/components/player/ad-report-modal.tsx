@@ -43,7 +43,6 @@ export function AdReportModal({
 
   return (
     <div
-      data-tv-focus-scope
       className="fixed inset-0 z-[200] grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
@@ -72,7 +71,6 @@ export function AdReportModal({
             <button
               type="button"
               onClick={onClose}
-              data-tv-modal-close
               aria-label={t("Close")}
               className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
             >

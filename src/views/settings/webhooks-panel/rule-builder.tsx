@@ -1,8 +1,30 @@
-import { Plus, Trash2, X, Zap } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useT } from "@/lib/i18n";
 import { MOVIE_GENRES } from "@/lib/feed/tags";
 import type { Settings, WebhookTrigger } from "@/lib/settings";
+import { settingsAnchor } from "../shared";
+
+function AutomationsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={className}
+    >
+      <circle cx="4" cy="4.2" r="2.1" />
+      <path d="M4 6.3v2.5a2.6 2.6 0 0 0 2.6 2.6h3.2" />
+      <circle cx="12" cy="11.4" r="2.1" />
+    </svg>
+  );
+}
 
 type Rule = Settings["webhookRules"][number];
 type TrackedPerson = Settings["customCalendar"]["trackedPeople"][number];
@@ -147,110 +169,159 @@ export function RuleBuilder({
     });
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-edge-soft bg-canvas/40 p-5">
-      <div className="flex items-center justify-between gap-3">
+    <section
+      id={settingsAnchor(t("Automations"))}
+      className="scroll-mt-28 flex flex-col gap-4 rounded-2xl border border-edge-soft bg-elevated/40 p-7"
+    >
+      <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <span className="flex items-center gap-1.5 text-[11.5px] font-bold uppercase tracking-[0.16em] text-ink-subtle">
-            <Zap size={11} strokeWidth={2.3} />
-            {t("AUTOMATIONS")}
-          </span>
-          <p className="text-[12.5px] text-ink-muted">
+          <h2 className="flex items-center gap-2 text-[19px] font-medium tracking-tight text-ink">
+            <AutomationsIcon className="text-ink-muted" />
+            {t("Automations")}
+          </h2>
+          <p className="text-[13.5px] leading-relaxed text-ink-muted">
             {t("Each rule fires independently. Define what triggers a ping and where it goes.")}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={startNew}
-          disabled={!canDiscord && !canTelegram}
-          className="flex h-9 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[12.5px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
-        >
-          <Plus size={13} strokeWidth={2.4} />
-          {t("New rule")}
-        </button>
+        {!editing && (
+          <button
+            type="button"
+            onClick={startNew}
+            disabled={!canDiscord && !canTelegram}
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
+          >
+            <Plus size={13} strokeWidth={2.4} />
+            {t("New rule")}
+          </button>
+        )}
       </div>
-      {!canDiscord && !canTelegram && (
-        <div className="rounded-lg border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-[11.5px] text-amber-200/85">
-          {t("Add a Discord or Telegram URL above before creating rules.")}
-        </div>
-      )}
-      {rules.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-edge-soft/60 bg-canvas/20 px-3 py-6 text-center text-[12.5px] text-ink-subtle">
-          {t("No automations yet. Hit New rule to wire one up.")}
-        </div>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {rules.map((r) => (
-            <li
-              key={r.id}
-              className={`flex items-center gap-3 rounded-lg border px-3.5 py-2.5 transition-colors ${
-                r.enabled ? "border-edge-soft bg-elevated/40" : "border-edge-soft/40 bg-canvas/20 opacity-60"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => toggleEnabled(r.id)}
-                aria-label={r.enabled ? "Disable rule" : "Enable rule"}
-                className="shrink-0"
-              >
-                <span
-                  className={`relative block h-5 w-9 rounded-full transition-colors ${
-                    r.enabled ? "bg-ink" : "bg-edge"
-                  }`}
-                >
-                  <span
-                    className={`absolute start-0 top-0.5 block h-4 w-4 rounded-full bg-canvas transition-transform ${
-                      r.enabled ? "translate-x-[18px] rtl:-translate-x-[18px]" : "translate-x-0.5 rtl:-translate-x-0.5"
-                    }`}
-                  />
-                </span>
-              </button>
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[13px] font-semibold text-ink">
-                  {r.name || EVENT_LABELS[r.trigger.event]}
-                </span>
-                <span className="truncate text-[11.5px] text-ink-subtle">
-                  {describeTrigger(r.trigger, trackedPeople)} →{" "}
-                  {[r.channels.discord && "Discord", r.channels.telegram && "Telegram"]
-                    .filter(Boolean)
-                    .join(" + ") || "no channel"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditing(r)}
-                className="rounded-full px-2.5 py-1 text-[11.5px] font-medium text-ink-muted hover:bg-canvas/60 hover:text-ink"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(r.id)}
-                aria-label="Delete rule"
-                className="flex h-7 w-7 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-danger/15 hover:text-danger"
-              >
-                <Trash2 size={12} strokeWidth={1.9} />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {editing && (
+      {editing ? (
         <RuleEditor
           rule={editing}
+          isNew={!rules.some((r) => r.id === editing.id)}
           trackedPeople={trackedPeople}
           canDiscord={canDiscord}
           canTelegram={canTelegram}
           onSave={upsert}
           onCancel={() => setEditing(null)}
         />
+      ) : (
+        <>
+          {!canDiscord && !canTelegram && (
+            <div className="rounded-lg border border-amber-200/30 bg-amber-200/5 px-3 py-2 text-[11.5px] text-amber-200/85">
+              {t("Add a Discord or Telegram URL above before creating rules.")}
+            </div>
+          )}
+          {rules.length === 0 ? (
+            <div className="harbor-rise rounded-xl border border-dashed border-edge-soft/60 bg-canvas/20 px-3 py-7 text-center text-[12.5px] text-ink-subtle">
+              {t("No automations yet. Hit New rule to wire one up.")}
+            </div>
+          ) : (
+            <ul className="harbor-rise flex flex-col">
+              {rules.map((r) => (
+                <RuleRow
+                  key={r.id}
+                  rule={r}
+                  trackedPeople={trackedPeople}
+                  onToggle={() => toggleEnabled(r.id)}
+                  onEdit={() => setEditing(r)}
+                  onRemove={() => remove(r.id)}
+                />
+              ))}
+            </ul>
+          )}
+        </>
       )}
-    </div>
+    </section>
+  );
+}
+
+function RuleRow({
+  rule,
+  trackedPeople,
+  onToggle,
+  onEdit,
+  onRemove,
+}: {
+  rule: Rule;
+  trackedPeople: TrackedPerson[];
+  onToggle: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const [leaving, setLeaving] = useState(false);
+  const del = () => {
+    if (leaving) return;
+    setLeaving(true);
+    window.setTimeout(onRemove, 200);
+  };
+  return (
+    <li
+      className={`harbor-rise grid transition-[grid-template-rows,opacity,transform] duration-200 ease-out ${
+        leaving
+          ? "[grid-template-rows:0fr] -translate-x-1 opacity-0"
+          : "[grid-template-rows:1fr] opacity-100"
+      }`}
+    >
+      <div className="overflow-hidden">
+        <div
+          className={`mb-2 flex items-center gap-3 rounded-xl border px-3.5 py-2.5 transition-colors ${
+            rule.enabled ? "border-edge-soft bg-canvas/30" : "border-edge-soft/40 bg-canvas/15 opacity-60"
+          }`}
+        >
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-label={rule.enabled ? "Disable rule" : "Enable rule"}
+            className="shrink-0"
+          >
+            <span
+              className={`relative block h-5 w-9 rounded-full transition-colors ${
+                rule.enabled ? "bg-ink" : "bg-edge"
+              }`}
+            >
+              <span
+                className={`absolute start-0 top-0.5 block h-4 w-4 rounded-full bg-canvas transition-transform ${
+                  rule.enabled ? "translate-x-[18px] rtl:-translate-x-[18px]" : "translate-x-0.5 rtl:-translate-x-0.5"
+                }`}
+              />
+            </span>
+          </button>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-[13px] font-semibold text-ink">
+              {rule.name || EVENT_LABELS[rule.trigger.event]}
+            </span>
+            <span className="truncate text-[11.5px] text-ink-subtle">
+              {describeTrigger(rule.trigger, trackedPeople)} →{" "}
+              {[rule.channels.discord && "Discord", rule.channels.telegram && "Telegram"]
+                .filter(Boolean)
+                .join(" + ") || "no channel"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="rounded-full px-2.5 py-1 text-[11.5px] font-medium text-ink-muted hover:bg-canvas/60 hover:text-ink"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={del}
+            aria-label="Delete rule"
+            className="flex h-7 w-7 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-danger/15 hover:text-danger"
+          >
+            <Trash2 size={12} strokeWidth={1.9} />
+          </button>
+        </div>
+      </div>
+    </li>
   );
 }
 
 function RuleEditor({
   rule,
+  isNew,
   trackedPeople,
   canDiscord,
   canTelegram,
@@ -258,6 +329,7 @@ function RuleEditor({
   onCancel,
 }: {
   rule: Rule;
+  isNew: boolean;
   trackedPeople: TrackedPerson[];
   canDiscord: boolean;
   canTelegram: boolean;
@@ -271,21 +343,10 @@ function RuleEditor({
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-canvas/80 p-6 backdrop-blur-sm">
-      <div className="flex max-h-[88vh] w-full max-w-[560px] flex-col gap-5 overflow-y-auto rounded-2xl border border-edge-soft bg-elevated p-6 shadow-[0_28px_80px_-20px_rgba(0,0,0,0.7)]">
-        <div className="flex items-start justify-between">
-          <h2 className="text-[18px] font-semibold text-ink">
-            {rule.name ? "Edit rule" : "New rule"}
-          </h2>
-          <button
-            type="button"
-            onClick={onCancel}
-            aria-label="Close"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-ink-subtle hover:bg-canvas/70 hover:text-ink"
-          >
-            <X size={14} strokeWidth={2.2} />
-          </button>
-        </div>
+    <div className="harbor-rise flex flex-col gap-5 rounded-xl border border-edge-soft bg-canvas/30 p-5">
+        <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-subtle">
+          {isNew ? "New rule" : "Edit rule"}
+        </span>
 
         <Field label="Name">
           <input
@@ -468,11 +529,11 @@ function RuleEditor({
           </div>
         </Field>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-1">
           <button
             type="button"
             onClick={onCancel}
-            className="h-10 rounded-xl px-4 text-[13px] font-medium text-ink-muted hover:text-ink"
+            className="h-10 rounded-full px-4 text-[13px] font-medium text-ink-muted transition-colors hover:text-ink"
           >
             Cancel
           </button>
@@ -480,12 +541,11 @@ function RuleEditor({
             type="button"
             onClick={() => onSave(draft)}
             disabled={!draft.channels.discord && !draft.channels.telegram}
-            className="h-10 rounded-xl bg-ink px-5 text-[13px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="h-10 rounded-full bg-ink px-5 text-[13px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             Save rule
           </button>
         </div>
-      </div>
     </div>
   );
 }

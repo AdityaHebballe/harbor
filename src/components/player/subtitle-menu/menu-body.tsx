@@ -1,12 +1,14 @@
-import { Check, FolderOpen, Languages, Loader2, Search as SearchIcon, SlidersHorizontal, Sparkles, Timer, X } from "lucide-react";
+import { Check, FolderOpen, Languages, Loader2, Search as SearchIcon, SlidersHorizontal, Timer, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Flag } from "@/components/flag";
 import { markImportedSub } from "@/lib/player/imported-subs";
 import { useT } from "@/lib/i18n";
 import { openSyncBar } from "@/lib/player/sub-sync";
+import { useAutoSyncHandle } from "@/components/player/autosync/autosync-store";
 import { Tooltip } from "../transport/tooltip";
 import { SearchSection } from "./search-section";
 import { VariantRow } from "./variant-row";
+import { Count, EmptyState, ImportBanner, Tab, ToggleChip } from "./menu-body-parts";
 import type { SubtitleMenuProps } from "./types";
 import { groupByLang, isVeryNewRelease } from "./utils";
 
@@ -67,6 +69,10 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
   const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
   const [localError, setLocalError] = useState<string | null>(null);
   const delayNonZero = delaySec !== 0;
+  const autoSync = useAutoSyncHandle();
+  const selectedTrack = useMemo(() => tracks.find((t) => t.id === selectedId) ?? null, [tracks, selectedId]);
+  const canAutoSync = selectedTrack?.external === true;
+  const autoSyncBusy = autoSync?.status === "analyzing";
 
   const loadLocal = async () => {
     setLocalError(null);
@@ -107,6 +113,35 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
         </div>
 
         <div className="flex items-center gap-1">
+          <Tooltip
+            label={canAutoSync ? tr("Auto-sync this subtitle now") : tr("Pick an external subtitle to auto-sync")}
+            side="bottom"
+            align="end"
+          >
+            <button
+              type="button"
+              disabled={!canAutoSync}
+              onClick={() => {
+                if (!canAutoSync) return;
+                autoSync?.run();
+                onClose();
+              }}
+              aria-label={tr("Auto sync")}
+              className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-colors ${
+                canAutoSync
+                  ? "bg-accent/10 text-accent hover:bg-accent/20"
+                  : "cursor-not-allowed text-ink-subtle/50"
+              }`}
+            >
+              {autoSyncBusy ? (
+                <Loader2 size={14} strokeWidth={2.4} className="animate-spin motion-reduce:animate-none" />
+              ) : (
+                <Wand2 size={14} strokeWidth={2.2} />
+              )}
+              {tr("Auto sync")}
+            </button>
+          </Tooltip>
+
           {/* ── Sync button → opens the floating player-level bar ── */}
           <Tooltip label={tr("Subtitle sync")} side="bottom" align="end">
             <button
@@ -144,7 +179,6 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
           <button
             onClick={onClose}
             aria-label={tr("Close")}
-            data-tv-modal-close
             className="flex h-9 w-9 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-raised hover:text-ink"
           >
             <X size={16} strokeWidth={2.2} />
@@ -323,108 +357,3 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
   );
 }
 
-// ─── Helper components ────────────────────────────────────────────────────────
-
-function Tab({
-  active,
-  onClick,
-  disabled,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  disabled?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={`flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${
-        active
-          ? "bg-elevated text-ink ring-1 ring-edge"
-          : "text-ink-muted hover:bg-elevated/60 hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function Count({ value }: { value: number }) {
-  return <span className="text-[11.5px] tabular-nums text-ink-subtle">{value}</span>;
-}
-
-function ToggleChip({
-  active,
-  onClick,
-  label,
-  hint,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  hint?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={hint}
-      className={`flex h-6 items-center rounded-full px-2 text-[11px] font-semibold transition-colors ${
-        active ? "bg-accent text-canvas" : "bg-raised text-ink-muted hover:bg-elevated"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function ImportBanner({ name }: { name: string }) {
-  const tr = useT();
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  return (
-    <div
-      className={`mx-2 mt-2 flex items-center gap-3 overflow-hidden rounded-xl border border-accent/35 bg-accent/10 px-3.5 py-2.5 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-        shown ? "translate-y-0 scale-100 opacity-100" : "-translate-y-1 scale-[0.97] opacity-0"
-      }`}
-    >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-canvas shadow-[0_0_18px_-2px_var(--color-accent)]">
-        <Check size={16} strokeWidth={3} />
-      </span>
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-[13px] font-semibold text-ink">{name}</span>
-        <span className="text-[11px] font-medium text-accent">{tr("Imported and now playing")}</span>
-      </div>
-      <Sparkles size={15} className="ms-auto shrink-0 text-accent" />
-    </div>
-  );
-}
-
-function EmptyState({ searchSettled, veryNewMovie }: { searchSettled: boolean; veryNewMovie: boolean }) {
-  const tr = useT();
-  if (!searchSettled) {
-    return (
-      <div className="flex items-center gap-2.5 px-5 py-6 text-[13.5px] text-ink-muted">
-        <Loader2 size={14} className="animate-spin text-ink-subtle" />
-        {tr("Looking for subtitles…")}
-      </div>
-    );
-  }
-  if (veryNewMovie) {
-    return (
-      <div className="flex flex-col gap-1.5 px-5 py-6 text-[13.5px] leading-snug text-ink-muted">
-        <span className="text-[14px] font-semibold text-ink">{tr("Movie's too new")}</span>
-        <span>{tr("Subtitles haven't been published yet. Try search below or check back in a few days.")}</span>
-      </div>
-    );
-  }
-  return (
-    <p className="px-5 py-6 text-[13.5px] text-ink-muted">
-      {tr("No subtitles found yet. Try the search at the bottom.")}
-    </p>
-  );
-}

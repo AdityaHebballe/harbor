@@ -26,6 +26,7 @@ export type LibraryItem = {
     episode?: number;
     timeWatched?: number;
     flaggedWatched?: number;
+    timesWatched?: number;
     watched?: string;
     video_id?: string;
     lastWatched?: string;
@@ -75,8 +76,11 @@ function resumeForItem(i: LibraryItem): { ms: number; t: number } | null {
 }
 
 export function cwSortKey(i: LibraryItem): number {
-  const fromState = Date.parse(i.state?.lastWatched ?? i._mtime ?? "");
-  if (Number.isFinite(fromState)) return fromState;
+  const m = i._mtime as unknown;
+  const mtime = typeof m === "number" ? m : Date.parse(String(m ?? ""));
+  if (Number.isFinite(mtime)) return mtime;
+  const lastWatched = Date.parse(i.state?.lastWatched ?? "");
+  if (Number.isFinite(lastWatched)) return lastWatched;
   return resumeForItem(i)?.t ?? 0;
 }
 
@@ -86,11 +90,14 @@ export function isCwMember(i: LibraryItem): boolean {
     const local = resumeForItem(i)?.ms ?? 0;
     return local > 0;
   }
-  if (i.state.timeOffset > 0) return true;
   if ((i.state.flaggedWatched ?? 0) > 0) return false;
+  const duration = i.state.duration ?? 0;
+  if (duration > 0 && i.state.timeOffset > 0 && i.state.timeOffset / duration >= CW_FINISHED_RATIO) {
+    return false;
+  }
+  if (i.state.timeOffset > 0) return true;
   const local = resumeForItem(i)?.ms ?? 0;
   if (local <= 0) return false;
-  const duration = i.state.duration ?? 0;
   if (duration > 0 && local / duration >= CW_FINISHED_RATIO) return false;
   return true;
 }
@@ -101,8 +108,15 @@ async function call<T>(path: string, body: object): Promise<T> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
+  const text = await res.text();
+  let json: { error?: { message?: string }; result?: unknown };
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`stremio ${path} ${res.status}: invalid response`);
+  }
   if (json.error) throw new Error(json.error.message ?? "Request failed");
+  if (!res.ok) throw new Error(`stremio ${path} failed (${res.status})`);
   return json.result as T;
 }
 
@@ -146,6 +160,16 @@ export async function libraryGetOne(authKey: string, id: string): Promise<Librar
   return items?.find((it) => it._id === id) ?? null;
 }
 
+export async function libraryGetOneStrict(authKey: string, id: string): Promise<LibraryItem | null> {
+  const items = await call<LibraryItem[]>("datastoreGet", {
+    authKey,
+    collection: "libraryItem",
+    ids: [id],
+    all: false,
+  });
+  return items?.find((it) => it._id === id) ?? null;
+}
+
 export async function libraryPut(authKey: string, item: LibraryItem): Promise<void> {
   await call<unknown>("datastorePut", {
     authKey,
@@ -173,8 +197,10 @@ export async function removeStremioLibraryItem(authKey: string, id: string): Pro
 
 export const CLOUD_OK = /^(tt\d|kitsu:|mal:|anilist:|anidb:|tmdb:)/;
 
+const ANIME_CLOUD_ID = /^(kitsu|mal|anilist|anidb):/;
 export function cloudWriteId(metaId: string, resolved: string | null, verified: boolean): string | null {
   if (metaId.startsWith("tt")) return metaId;
+  if (ANIME_CLOUD_ID.test(metaId)) return CLOUD_OK.test(metaId) ? metaId : null;
   if (verified && resolved && resolved.startsWith("tt")) return resolved;
   return CLOUD_OK.test(metaId) ? metaId : null;
 }
@@ -185,7 +211,12 @@ export async function saveStremioBookmark(
   input: { type?: string; name?: string; poster?: string },
 ): Promise<void> {
   const now = new Date().toISOString();
-  const existing = await libraryGetOne(authKey, id).catch(() => null);
+  let existing: LibraryItem | null;
+  try {
+    existing = await libraryGetOneStrict(authKey, id);
+  } catch {
+    return;
+  }
   if (existing) {
     await libraryPut(authKey, { ...existing, removed: false, temp: false, _mtime: now });
     return;
@@ -223,12 +254,10 @@ export async function saveStremioBookmark(
 export async function removeStremioBookmark(authKey: string, id: string): Promise<void> {
   const existing = await libraryGetOne(authKey, id).catch(() => null);
   if (!existing) return;
-  const hasProgress =
-    (existing.state?.timeOffset ?? 0) > 0 || (existing.state?.flaggedWatched ?? 0) > 0;
   await libraryPut(authKey, {
     ...existing,
     removed: true,
-    temp: hasProgress,
+    temp: false,
     _mtime: new Date().toISOString(),
   });
 }

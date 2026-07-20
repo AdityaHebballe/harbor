@@ -1,16 +1,20 @@
 import { ArrowRight, X } from "lucide-react";
 import { useTogether } from "@/lib/together/provider";
+import { useSelfIdentity } from "@/lib/together/use-self-identity";
 import { useView, type View } from "@/lib/view";
 import type { Meta } from "@/lib/cinemeta";
+import { Avatar } from "./together-modal/avatar";
 
 export function TogetherSummonToast() {
-  const { incomingSummon, dismissSummon } = useTogether();
+  const { incomingSummon, dismissSummon, snapshot, clientId } = useTogether();
+  const { avatar: selfAvatar, color: selfColor } = useSelfIdentity();
   const { openMeta, setView, openQueue, openAddonDetail, player } = useView();
   if (player || !incomingSummon) return null;
-  const { name, target } = incomingSummon;
-  const hue = nameHue(name);
-  const tint = `oklch(0.78 0.13 ${hue})`;
-  const initial = (name.trim()[0] || "?").toUpperCase();
+  const { from, name, target } = incomingSummon;
+  const isSelf = from === clientId;
+  const sender = snapshot.participants.find((p) => p.id === from);
+  const avatarSrc = isSelf ? selfAvatar : sender?.avatar ?? null;
+  const avatarColor = isSelf ? selfColor : sender?.color ?? null;
 
   const isViewTarget = target.view != null;
   const headline = target.addonId
@@ -50,11 +54,8 @@ export function TogetherSummonToast() {
   return (
     <div className="pointer-events-none fixed inset-x-0 top-6 z-[125] flex justify-center px-6">
       <div className="harbor-together-pill pointer-events-auto flex items-center gap-3 rounded-full border border-edge bg-surface/98 py-2 ps-2 pe-2 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.75)] animate-popover-in">
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-canvas"
-          style={{ backgroundColor: tint }}
-        >
-          {initial}
+        <span className="shrink-0 ps-0.5">
+          <Avatar name={name} src={avatarSrc} color={avatarColor} size={36} />
         </span>
 
         <div className="flex min-w-0 flex-col gap-0.5 pe-2">
@@ -84,10 +85,4 @@ export function TogetherSummonToast() {
       </div>
     </div>
   );
-}
-
-function nameHue(name: string): number {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return h;
 }

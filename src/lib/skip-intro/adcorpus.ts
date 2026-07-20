@@ -4,11 +4,7 @@ import type { SkipSegment } from "./types";
 const CORPUS_URL = "https://harbor.site/updates/ad-segments.json";
 const CORPUS_PUBKEY = "yszDA2+G0Rtep39h67iuhl8+5pCQkM+O4D4pMnpg4Ks=";
 
-type CorpusEntry = {
-  content: string;
-  source: string;
-  ranges: Array<{ start: number; end: number }>;
-};
+type CorpusEntry = { content: string; source: string; ranges: Array<{ start: number; end: number }> };
 
 let entriesCache: CorpusEntry[] | null = null;
 let inflight: Promise<CorpusEntry[]> | null = null;
@@ -24,12 +20,7 @@ export async function fetchAdSegments(
   return entries
     .filter((e) => e.content === content && e.source === source)
     .flatMap((e) => e.ranges)
-    .map((r) => ({
-      kind: "ad" as const,
-      startSec: r.start,
-      endSec: r.end,
-      source: "adcorpus" as const,
-    }))
+    .map((r) => ({ kind: "ad" as const, startSec: r.start, endSec: r.end, source: "adcorpus" as const }))
     .filter((s) => Number.isFinite(s.startSec) && s.endSec > s.startSec);
 }
 
@@ -64,18 +55,13 @@ async function verify(payload: string, sigB64: string): Promise<boolean> {
       false,
       ["verify"],
     );
-    return await crypto.subtle.verify(
-      "Ed25519",
-      key,
-      b64(sigB64),
-      new TextEncoder().encode(payload),
-    );
+    return await crypto.subtle.verify("Ed25519", key, b64(sigB64), new TextEncoder().encode(payload));
   } catch {
     return false;
   }
 }
 
-function b64(value: string): Uint8Array<ArrayBuffer> {
+function b64(value: string): Uint8Array {
   const bin = atob(value);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);

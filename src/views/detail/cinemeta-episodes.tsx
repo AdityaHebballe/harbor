@@ -29,9 +29,11 @@ function pickDefaultSeason(metaId: string, seasons: number[]): number {
 export function CinemetaEpisodes({
   meta,
   videos,
+  stremioWatched,
 }: {
   meta: Meta;
   videos: NonNullable<Meta["videos"]>;
+  stremioWatched?: Set<string>;
 }) {
   const t = useT();
   useSyncExternalStore(subscribeManualWatched, manualWatchedVersion);
@@ -71,6 +73,7 @@ export function CinemetaEpisodes({
         g.episodes.map((ep, i) => ({
           season: ep.season ?? 0,
           episode: ep.episode ?? ep.number ?? (ep.season == null ? i + 1 : 1),
+          released: ep.released ?? null,
         })),
       ),
     [grouped],
@@ -124,7 +127,13 @@ export function CinemetaEpisodes({
               meta={meta}
               ep={ep}
               flatIndex={ep.season == null ? i + 1 : undefined}
-              watched={manualWatchedState(meta.id, season, epNumber) === true}
+              watched={(() => {
+                const st = manualWatchedState(meta.id, season, epNumber);
+                return (
+                  st === true ||
+                  (st === undefined && (stremioWatched?.has(`${season}:${epNumber}`) ?? false))
+                );
+              })()}
               onContextMenu={openWatchedMenu}
             />
           );

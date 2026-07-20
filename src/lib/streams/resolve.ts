@@ -51,6 +51,7 @@ export async function resolveStream(
   userCommitted = false,
   forceP2p = false,
   hint?: EpisodeHint,
+  allowP2pFallback = true,
 ): Promise<ResolveResult> {
   const expectedSize = stream.size ?? null;
   const tried: Array<{ slug: string; code: string }> = [];
@@ -101,6 +102,7 @@ export async function resolveStream(
     return { ok: false, code: "no-source", tried };
   }
   if (debrids.length === 0) {
+    if (!allowP2pFallback) return { ok: false, code: "no-debrid-configured", tried };
     const direct = await tryTorrentEngine(stream, hint);
     if (direct) return { ok: true, data: direct, via: "p2p" };
     return { ok: false, code: engineFailureCode(), tried };
@@ -117,7 +119,7 @@ export async function resolveStream(
   const cachedMap = stream.cached ?? {};
   const libMap = (stream as { inLibrary?: Record<string, boolean> }).inLibrary ?? {};
   const anyCached = sorted.some((d) => cachedMap[d.slug] === true || libMap[d.slug] === true);
-  if (userCommitted && !anyCached && hasUncachedMarker(stream) && engineP2pEligible(stream)) {
+  if (allowP2pFallback && userCommitted && !anyCached && hasUncachedMarker(stream) && engineP2pEligible(stream)) {
     const direct = await tryTorrentEngine(stream, hint);
     if (direct) return { ok: true, data: direct, via: "p2p" };
   }
@@ -140,9 +142,11 @@ export async function resolveStream(
     dwarn(`[resolve] ${d.slug} returned suspicious link (likely error/downloading video), trying next debrid`);
     tried.push({ slug: d.slug, code: "stub-or-error-video" });
   }
-  const direct = await tryTorrentEngine(stream, hint);
-  if (direct) return { ok: true, data: direct, via: "p2p" };
-  if (directTorrentEnabled()) return { ok: false, code: engineFailureCode(), tried };
+  if (allowP2pFallback) {
+    const direct = await tryTorrentEngine(stream, hint);
+    if (direct) return { ok: true, data: direct, via: "p2p" };
+    if (directTorrentEnabled()) return { ok: false, code: engineFailureCode(), tried };
+  }
   return { ok: false, code: tried[tried.length - 1]?.code ?? "all-debrids-failed", tried };
 }
 

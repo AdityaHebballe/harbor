@@ -1,4 +1,12 @@
-import { aniZipByAnidb, aniZipByAnilist, aniZipByImdb, aniZipByKitsu, aniZipByTmdbTv } from "@/lib/providers/anizip";
+import {
+  aniZipByAnidb,
+  aniZipByAnilist,
+  aniZipByImdb,
+  aniZipByKitsu,
+  aniZipByMal,
+  aniZipByTmdbTv,
+  type AniZipMapping,
+} from "@/lib/providers/anizip";
 import { kitsuMainTvSeries } from "@/lib/providers/kitsu";
 
 const SIDE_ENTRY_TYPES = new Set(["ova", "ona", "special", "music"]);
@@ -15,7 +23,7 @@ const ARM = "https://relations.yuna.moe/api/ids";
 const ANIME_LIST_URL =
   "https://raw.githubusercontent.com/Anime-Lists/anime-lists/master/anime-list-master.xml";
 
-const ARM_KITSU_KEY = "harbor.armkitsucache";
+const ARM_KITSU_KEY = "harbor.armkitsucache.v2";
 const ANIDB_TVDB_KEY = "harbor.anidbtvdbcache";
 const ARM_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const XML_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -76,7 +84,7 @@ async function armFromKitsu(kitsuId: number): Promise<ArmKitsuEntry | null> {
   return p;
 }
 
-const EXT_KITSU_KEY = "harbor.extkitsucache";
+const EXT_KITSU_KEY = "harbor.extkitsucache.v2";
 type ExtKitsuCache = Record<string, { kitsu: number | null; t: number }>;
 const inflightExt = new Map<string, Promise<number | null>>();
 
@@ -186,7 +194,7 @@ export async function kitsuToMal(kitsuId: number): Promise<number | null> {
   return az?.mappings?.mal_id ?? null;
 }
 
-const ARM_SRC_KEY = "harbor.armsrcmalcache";
+const ARM_SRC_KEY = "harbor.armsrcmalcache.v2";
 type ArmSrcCache = Record<string, { mal: number | null; t: number }>;
 const inflightArmSrc = new Map<string, Promise<number | null>>();
 
@@ -262,4 +270,38 @@ export async function tmdbTvToKitsu(tmdbId: number): Promise<number | null> {
   }
   if (typeof az?.mappings?.anidb_id === "number") return externalToKitsu("anidb", az.mappings.anidb_id);
   return null;
+}
+
+export async function relatedLibraryIds(id: string): Promise<string[]> {
+  let az: AniZipMapping | null = null;
+  const anime = /^(kitsu|mal|anilist|anidb):(\d+)/.exec(id);
+  if (anime) {
+    const n = Number(anime[2]);
+    az =
+      anime[1] === "kitsu"
+        ? await aniZipByKitsu(n).catch(() => null)
+        : anime[1] === "anilist"
+          ? await aniZipByAnilist(n).catch(() => null)
+          : anime[1] === "mal"
+            ? await aniZipByMal(n).catch(() => null)
+            : await aniZipByAnidb(n).catch(() => null);
+  } else if (/^tt\d+$/.test(id)) {
+    az = await aniZipByImdb(id).catch(() => null);
+  } else {
+    const tv = /^tmdb:tv:(\d+)/.exec(id);
+    if (tv) az = await aniZipByTmdbTv(Number(tv[1])).catch(() => null);
+  }
+  const mp = az?.mappings;
+  if (!mp) return [];
+  const out = new Set<string>();
+  if (mp.imdb_id) out.add(mp.imdb_id);
+  if (mp.themoviedb_id != null && String(mp.themoviedb_id).trim() !== "") {
+    out.add(`tmdb:tv:${mp.themoviedb_id}`);
+  }
+  if (typeof mp.kitsu_id === "number") out.add(`kitsu:${mp.kitsu_id}`);
+  if (typeof mp.anilist_id === "number") out.add(`anilist:${mp.anilist_id}`);
+  if (typeof mp.mal_id === "number") out.add(`mal:${mp.mal_id}`);
+  if (typeof mp.anidb_id === "number") out.add(`anidb:${mp.anidb_id}`);
+  out.delete(id);
+  return [...out];
 }

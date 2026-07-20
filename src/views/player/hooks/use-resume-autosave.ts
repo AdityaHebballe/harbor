@@ -8,12 +8,15 @@ import { saveLocalCw } from "@/lib/local-cw";
 import { isLocalUrl } from "@/lib/player/local-url";
 import { isManuallyWatched, recordManualWatchedMeta, setManualWatched } from "@/lib/manual-watched";
 import { savePlayback } from "@/lib/playback-history";
-import { saveResumeMs } from "@/lib/resume";
+import { clearResume, saveResumeMs } from "@/lib/resume";
+import { setMovieWatchedLocal } from "@/lib/movie-watched";
+import { setViewedSeason } from "@/lib/season-view-pref";
 import type { PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition, subscribePlaybackClock } from "@/lib/player/playback-clock";
 import { useSettings } from "@/lib/settings";
 import type { PlayerSrc } from "@/lib/view";
 import { CLOUD_OK } from "@/lib/stremio";
+import { syncSeriesWatchedToStremio } from "@/lib/stremio-episode-watched";
 
 const TICK_MS = 4000;
 const MIN_POSITION_SEC = 5;
@@ -36,8 +39,10 @@ export function useResumeAutosave(params: {
   snap: PlayerSnapshot;
   season: number | undefined;
   episode: number | undefined;
+  resolvedImdbId: string | null;
+  resolvedImdbVerified: boolean;
 }) {
-  const { src, snap, season, episode } = params;
+  const { src, snap, season, episode, resolvedImdbId, resolvedImdbVerified } = params;
   const { settings } = useSettings();
   const lastSavedRef = useRef(0);
   const taughtRef = useRef<Set<string>>(new Set());
@@ -45,8 +50,8 @@ export function useResumeAutosave(params: {
   anilistAutoSyncRef.current = settings.anilistAutoSync;
   const malAutoSyncRef = useRef(settings.malAutoSync);
   malAutoSyncRef.current = settings.malAutoSync;
-  const latestRef = useRef({ src, snap, season, episode });
-  latestRef.current = { src, snap, season, episode };
+  const latestRef = useRef({ src, snap, season, episode, resolvedImdbId, resolvedImdbVerified });
+  latestRef.current = { src, snap, season, episode, resolvedImdbId, resolvedImdbVerified };
   const lastGoodPosRef = useRef(0);
 
   useEffect(() => {
@@ -71,7 +76,9 @@ export function useResumeAutosave(params: {
     const finished =
       (sn.durationSec > 0 && pos / sn.durationSec >= WATCHED_RATIO) || sn.status === "ended";
     lastSavedRef.current = pos * 1000;
-    saveResumeMs(id, pos * 1000, se, ep);
+    if (finished) clearResume(id, se, ep);
+    else saveResumeMs(id, pos * 1000, se, ep);
+    if (typeof se === "number") setViewedSeason(id, se);
     if (isExternalPlaylistId(id)) return;
     if (s.streamRef) {
       savePlayback(id, { ...s.streamRef, url: s.url, title: s.meta.name }, se, ep);
@@ -92,7 +99,10 @@ export function useResumeAutosave(params: {
         background: s.meta.background,
       });
       setManualWatched(id, se, ep, true);
+      const { resolvedImdbId: rid, resolvedImdbVerified: rv } = latestRef.current;
+      void syncSeriesWatchedToStremio(s.meta, rv ? rid : null);
     }
+    if (s.meta.type === "movie" && finished) setMovieWatchedLocal(id, true);
     if (
       (s.meta.type === "series" || s.meta.type === "movie") &&
       (!CLOUD_OK.test(id) || isLocalUrl(s.url))
@@ -112,18 +122,20 @@ export function useResumeAutosave(params: {
       });
     }
     if (pos < TASTE_MIN_SEC) return;
-    const trackId = animeTrackId(s);
+    const trackId = s.episode?.sourceMetaId ?? animeTrackId(s);
     if (anilistAutoSyncRef.current && trackId) {
       void markAnimeWatching(trackId, s.meta.name);
     }
     if (malAutoSyncRef.current && trackId) {
       void markMalWatching(trackId, s.meta.name);
     }
+    const absEp = s.episode?.absoluteNumber;
+    const trackEp = s.episode?.sourceMetaId ? ep : (s.episode?.imdbEpisode ?? ep);
     if (finished && anilistAutoSyncRef.current && trackId) {
-      void syncAnimeProgress(trackId, ep, s.meta.name);
+      void syncAnimeProgress(trackId, trackEp, s.meta.name, absEp);
     }
     if (finished && malAutoSyncRef.current && trackId) {
-      void syncMalProgress(trackId, ep, s.meta.name);
+      void syncMalProgress(trackId, trackEp, s.meta.name, absEp);
     }
     const kind = finished ? "watched" : "play";
     const key = `${id}|${kind}`;

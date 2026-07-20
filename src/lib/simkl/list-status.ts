@@ -1,3 +1,4 @@
+import { currentActivitiesAll } from "./activities/gate";
 import { simklRequest } from "./client";
 import { simklTargetIds } from "./ids";
 import { subscribeSession } from "./session";
@@ -70,9 +71,11 @@ function targetKeys(target: SimklTarget): string[] {
 }
 
 let cache: Promise<SimklData> | null = null;
+let cacheMarker: string | null = null;
 
 subscribeSession(() => {
   cache = null;
+  cacheMarker = null;
 });
 
 async function pull(): Promise<SimklData> {
@@ -106,8 +109,12 @@ async function pull(): Promise<SimklData> {
   return { statuses, watched };
 }
 
-function loadData(): Promise<SimklData> {
-  if (!cache) cache = pull();
+async function loadData(): Promise<SimklData> {
+  const all = await currentActivitiesAll();
+  if (!cache || (all !== null && all !== cacheMarker)) {
+    cache = pull();
+    cacheMarker = all;
+  }
   return cache;
 }
 

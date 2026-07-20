@@ -3,7 +3,7 @@ import type { PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition } from "@/lib/player/playback-clock";
 import type { Meta } from "@/lib/cinemeta";
 import type { PlayEpisode, PlayerSrc } from "@/lib/view";
-import { getSleepAtEnd, queueShift, setSleepAtEnd, type QueueItem } from "@/lib/queue";
+import { getSleepAtEnd, queueItemAfter, setSleepAtEnd, type QueueItem } from "@/lib/queue";
 
 const STUB_MAX_SEC = 150;
 
@@ -39,10 +39,10 @@ export function useQueueAdvance(params: {
     if (!naturalEnd && !errorAtEnd && !reachedEnd) return;
     if (firedForRef.current === src.url) return;
 
-    if (queue.length > 0) {
+    const nextItem = queueItemAfter(src.meta, src.episode);
+    if (nextItem) {
       firedForRef.current = src.url;
-      const item = queueShift();
-      if (item) openPicker(item.meta, item.episode, { autoPlay: true, resume: true });
+      openPicker(nextItem.meta, nextItem.episode);
       return;
     }
     if (getSleepAtEnd()) {

@@ -119,10 +119,6 @@ export function localTorrentAllowed(): boolean {
   }
 }
 
-/// Hard kill-switch for torrent streaming. When this returns `true`, the
-/// torrent engine is not started, DHT/tracker traffic is disabled, and the
-/// picker will never call into the engine. The user must explicitly opt back
-/// in via Settings → Player.
 export function torrentsDisabled(): boolean {
   try {
     const raw = localStorage.getItem("harbor.settings");

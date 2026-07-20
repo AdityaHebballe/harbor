@@ -3,6 +3,7 @@ dist
 dist-ssr
 *.local
 *.bak
+*.bak-orig
 *.tmp.*
 _backups/
 
@@ -11,7 +12,6 @@ _backups/
 !.env.example
 
 target
-.flatpak-work/
 
 *.tsbuildinfo
 /vite.config.js
@@ -40,3 +40,11 @@ pnpm-debug.log*
 /src-tauri/fonts/*.otf
 /src-tauri/fonts/*.ttf
 local_docs/
+.diag/
+
+# Stripped IP assets (legal) - do not re-commit
+public/avatars/
+public/kids/avatars/
+public/awards/
+src/assets/awards/
+src/assets/manga-badges/

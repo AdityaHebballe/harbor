@@ -1,5 +1,5 @@
-import { Check, Clock, Moon, Play, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Check, Clock, GripVertical, Moon, Play, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
@@ -117,18 +117,47 @@ export function QueuePanel({
   const sleepAtEnd = useSleepAtEnd();
   const [upcoming, setUpcoming] = useState<PlayEpisode[]>([]);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const dragRef = useRef<string | null>(null);
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
 
-  const dropQueue = (targetId: string) => {
-    if (dragId && dragId !== targetId) {
-      const ids = queue.map((q) => q.id);
-      const to = ids.indexOf(targetId);
-      ids.splice(ids.indexOf(dragId), 1);
-      ids.splice(to, 0, dragId);
+  const startDrag = (e: React.PointerEvent, id: string) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = id;
+    setDragId(id);
+  };
+  const moveDrag = (e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const y = e.clientY;
+    const q = queueRef.current;
+    let idx = q.length;
+    for (let i = 0; i < q.length; i++) {
+      const el = rowRefs.current.get(q[i].id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y < r.top + r.height / 2) {
+        idx = i;
+        break;
+      }
+    }
+    setDropIndex(idx);
+  };
+  const endDrag = () => {
+    const id = dragRef.current;
+    const q = queueRef.current;
+    if (id && dropIndex != null) {
+      const from = q.findIndex((x) => x.id === id);
+      const insertAt = from < dropIndex ? dropIndex - 1 : dropIndex;
+      const ids = q.map((x) => x.id).filter((x) => x !== id);
+      ids.splice(insertAt, 0, id);
       queueReorder(ids);
     }
+    dragRef.current = null;
     setDragId(null);
-    setOverId(null);
+    setDropIndex(null);
   };
 
   const isSeriesCurrent =
@@ -257,31 +286,31 @@ export function QueuePanel({
           const mins = runtimeMinutes(item);
           const epLabel = episodeLabel(item.episode);
           return (
-            <div
-              key={item.id}
-              draggable
-              onDragStart={(e) => {
-                setDragId(item.id);
-                e.dataTransfer.effectAllowed = "move";
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                if (dragId && overId !== item.id) setOverId(item.id);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                dropQueue(item.id);
-              }}
-              onDragEnd={() => {
-                setDragId(null);
-                setOverId(null);
-              }}
-              className={`group flex cursor-grab items-center gap-3 rounded-xl bg-white/[0.04] p-2 transition-colors hover:bg-white/[0.07] active:cursor-grabbing ${
-                dragId === item.id ? "opacity-40" : ""
-              } ${overId === item.id && dragId !== item.id ? "ring-2 ring-white/40" : ""}`}
-            >
-              <span className="w-6 shrink-0 text-center text-[13px] font-bold text-white/35">{i + 1}</span>
+            <div key={item.id} className="flex flex-col gap-2">
+              {dragId != null && dragId !== item.id && dropIndex === i && (
+                <div className="mx-1 h-0.5 rounded-full bg-accent" />
+              )}
+              <div
+                ref={(el) => {
+                  if (el) rowRefs.current.set(item.id, el);
+                  else rowRefs.current.delete(item.id);
+                }}
+                className={`group flex items-center gap-2 rounded-xl bg-white/[0.04] p-2 transition-[opacity,background-color] hover:bg-white/[0.07] ${
+                  dragId === item.id ? "opacity-40" : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  aria-label={t("Drag to reorder")}
+                  onPointerDown={(e) => startDrag(e, item.id)}
+                  onPointerMove={moveDrag}
+                  onPointerUp={endDrag}
+                  onPointerCancel={endDrag}
+                  className="flex h-10 w-5 shrink-0 cursor-grab touch-none items-center justify-center text-white/30 transition-colors hover:text-white/60 active:cursor-grabbing"
+                >
+                  <GripVertical size={16} />
+                </button>
+                <span className="w-4 shrink-0 text-center text-[13px] font-bold text-white/35">{i + 1}</span>
               <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-white/[0.06]">
                 {(item.meta.background || item.meta.poster) && (
                   <img
@@ -317,6 +346,10 @@ export function QueuePanel({
               >
                 <X size={18} strokeWidth={2.2} />
               </button>
+              </div>
+              {dragId != null && dragId !== item.id && dropIndex === queue.length && i === queue.length - 1 && (
+                <div className="mx-1 h-0.5 rounded-full bg-accent" />
+              )}
             </div>
           );
         })}

@@ -1,5 +1,6 @@
 import { Component, useCallback, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
 import { ExternalLink, Heart, Loader2, MessageCircle, RefreshCw, Users } from "lucide-react";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import type { Meta } from "@/lib/cinemeta";
 import { useLetterboxd } from "@/lib/stremboxd/provider";
 import {
@@ -186,14 +187,16 @@ function LetterboxdReviewsInner({ meta, imdbId }: { meta: Meta; imdbId: string |
           </div>
 
           {/* Refresh */}
-          <button
-            onClick={() => fetchReviews()}
-            disabled={loading}
-            title={t("Refresh")}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted ring-1 ring-edge transition-colors hover:bg-elevated hover:text-ink disabled:opacity-50"
-          >
-            {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-          </button>
+          <HoverTooltip label={t("Refresh")} align="center" className="shrink-0">
+            <button
+              onClick={() => fetchReviews()}
+              disabled={loading}
+              aria-label={t("Refresh")}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted ring-1 ring-edge transition-colors hover:bg-elevated hover:text-ink disabled:opacity-50"
+            >
+              {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            </button>
+          </HoverTooltip>
 
           {reviewsUrl && (
             <button

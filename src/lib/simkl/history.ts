@@ -1,3 +1,4 @@
+import { currentActivitiesAll } from "./activities/gate";
 import { simklRequest } from "./client";
 import { simklTargetIds } from "./ids";
 import type { SimklIds, SimklTarget } from "./types";
@@ -30,7 +31,31 @@ function num(v: number | string | undefined): number | undefined {
   return undefined;
 }
 
+const HISTORY_TTL_MS = 25000;
+let historyCache: { at: number; val: Promise<SimklHistoryItem[]> } | null = null;
+let historyMarker: string | null = null;
+
+export function invalidateHistoryCache(): void {
+  historyCache = null;
+}
+
+async function loadHistory(): Promise<SimklHistoryItem[]> {
+  const all = await currentActivitiesAll();
+  if (historyCache) {
+    if (all !== null && all === historyMarker) return historyCache.val;
+    if (all === null && Date.now() - historyCache.at < HISTORY_TTL_MS) return historyCache.val;
+  }
+  const val = pullHistory();
+  historyCache = { at: Date.now(), val };
+  historyMarker = all;
+  return val;
+}
+
 export async function fetchWatchedHistory(limit = 200): Promise<SimklHistoryItem[]> {
+  return (await loadHistory()).slice(0, limit);
+}
+
+async function pullHistory(): Promise<SimklHistoryItem[]> {
   const data = await simklRequest<RawAllItems>(
     "/sync/all-items/all/completed?extended=full",
   ).catch(() => ({}) as RawAllItems);
@@ -62,12 +87,13 @@ export async function fetchWatchedHistory(limit = 200): Promise<SimklHistoryItem
     });
   }
   out.sort((a, b) => b.watchedAt.localeCompare(a.watchedAt));
-  return out.slice(0, limit);
+  return out;
 }
 
 export async function addToHistory(target: SimklTarget): Promise<boolean> {
   const watchedAt = new Date().toISOString();
   try {
+    invalidateHistoryCache();
     if (target.kind === "movie") {
       const r = await simklRequest<{ added?: { movies?: number } }>("/sync/history", {
         method: "POST",
@@ -115,6 +141,7 @@ export async function markEpisodesWatched(
   if (episodes.length === 0) return false;
   const watchedAt = new Date().toISOString();
   try {
+    invalidateHistoryCache();
     await simklRequest("/sync/history", {
       method: "POST",
       body: {
@@ -142,11 +169,23 @@ export async function unmarkEpisodeWatched(
   season: number,
   episode: number,
 ): Promise<boolean> {
+  return unmarkEpisodesWatched(show, season, [episode]);
+}
+
+export async function unmarkEpisodesWatched(
+  show: SimklIds,
+  season: number,
+  episodes: number[],
+): Promise<boolean> {
+  if (episodes.length === 0) return false;
   try {
+    invalidateHistoryCache();
     await simklRequest("/sync/history/remove", {
       method: "POST",
       body: {
-        shows: [{ ids: show, seasons: [{ number: season, episodes: [{ number: episode }] }] }],
+        shows: [
+          { ids: show, seasons: [{ number: season, episodes: episodes.map((n) => ({ number: n })) }] },
+        ],
       },
     });
     return true;

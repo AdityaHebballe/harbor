@@ -5,6 +5,7 @@ import type { Meta } from "@/lib/cinemeta";
 import type { Settings } from "@/lib/settings";
 import type { DebridStore } from "@/lib/debrid/types";
 import { fetchAdjacentEpisodes } from "@/lib/series-episodes";
+import { isEpisodeHidden } from "@/lib/hidden-episodes";
 import { findLocalEpisode, localShowEpisodes } from "@/lib/local-library";
 import { isLocalUrl } from "@/lib/player/local-url";
 import { localPlayerSrc } from "@/views/library/local-tab/show-group";
@@ -51,6 +52,7 @@ export function useEpisodeNavigation(params: {
     fetchAdjacentEpisodes(src.meta, cur, {
       tmdbKey: settings.tmdbKey,
       kitsuStreamId: src.episode.kitsuStreamId,
+      skip: settings.episodeHiding ? (s, e) => isEpisodeHidden(src.meta.id, s, e) : undefined,
     }).then((r) => {
       if (cancelled) return;
       if (localShowKey) {
@@ -74,7 +76,7 @@ export function useEpisodeNavigation(params: {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src.meta.id, src.meta.type, src.episode, src.url, settings.tmdbKey]);
+  }, [src.meta.id, src.meta.type, src.episode, src.url, settings.tmdbKey, settings.episodeHiding]);
 
   const goToEpisode = useCallback(
     (ep: PlayEpisode | null) => {
@@ -87,9 +89,13 @@ export function useEpisodeNavigation(params: {
           return;
         }
       }
-      openPicker(src.meta, ep, { autoPlay: true });
+      const carried =
+        src.meta.id.startsWith("tt") && src.episode?.sourceMetaId && !ep.sourceMetaId
+          ? { ...ep, sourceMetaId: src.episode.sourceMetaId }
+          : ep;
+      openPicker(src.meta, carried, { autoPlay: true });
     },
-    [openPicker, replacePlayerSrc, src.meta, src.imdbId, src.url, inRoom, isHost],
+    [openPicker, replacePlayerSrc, src.meta, src.episode, src.imdbId, src.url, inRoom, isHost],
   );
 
   return { adjacent, swappingEp: false, goToEpisode };

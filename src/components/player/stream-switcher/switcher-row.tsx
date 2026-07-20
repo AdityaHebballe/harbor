@@ -2,7 +2,7 @@ import { Loader2, Zap } from "lucide-react";
 import { AddonLogo } from "@/components/addon-logo";
 import { CopyLinkButton, resolveStreamLink } from "@/components/player/copy-link-button";
 import { FlagStack } from "@/components/flag";
-import { FormatBadge, streamBadges } from "@/components/format-badge";
+import { FormatBadge, RuleBadges, streamBadges } from "@/components/format-badge";
 import type { ScoredStream } from "@/lib/streams/types";
 import { useT } from "@/lib/i18n";
 
@@ -109,6 +109,7 @@ export function SwitcherRow({
               {cornerBadges.map((b) => (
                 <FormatBadge key={b} kind={b} size="sm" />
               ))}
+              <RuleBadges stream={stream} size="sm" />
             </span>
           )}
           {isCurrent && (

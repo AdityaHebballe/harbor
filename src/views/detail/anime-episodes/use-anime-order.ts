@@ -20,6 +20,7 @@ export function useAnimeOrder(
   seasonType: string,
   tvdbKey: string,
   preferredSeasonKey?: string,
+  intentSeasonKey?: string,
 ): AnimeOrder | null {
   const t = useT();
   const ordering = useEpisodeOrder(imdbId, metaId, provider, seasonType, tvdbKey);
@@ -41,9 +42,11 @@ export function useAnimeOrder(
   const activeKey =
     touched && built.items.some((i) => i.key === sel)
       ? (sel as string)
-      : preferredSeasonKey && built.items.some((i) => i.key === preferredSeasonKey)
-        ? preferredSeasonKey
-        : built.items[0].key;
+      : intentSeasonKey && built.items.some((i) => i.key === intentSeasonKey)
+        ? intentSeasonKey
+        : preferredSeasonKey && built.items.some((i) => i.key === preferredSeasonKey)
+          ? preferredSeasonKey
+          : built.items[0].key;
   return {
     items: built.items,
     activeKey,

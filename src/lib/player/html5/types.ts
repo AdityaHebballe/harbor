@@ -1,5 +1,5 @@
 import type { SubCue } from "@/lib/subtitles/parser";
-import type { SubtitleLoadMetadata } from "../subtitle-load";
+import type { SubtitleLoadMetadata } from "@/lib/subtitles/types";
 
 export type SubTrack = {
   id: string;

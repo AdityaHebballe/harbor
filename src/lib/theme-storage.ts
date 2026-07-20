@@ -71,6 +71,38 @@ export async function saveBgImage(data: string | null): Promise<boolean> {
   });
 }
 
+export async function themeKvGet(key: string): Promise<string | null> {
+  const db = await openDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).get(key);
+      req.onsuccess = () => resolve(typeof req.result === "string" ? req.result : null);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function themeKvPut(key: string, value: string): Promise<boolean> {
+  const db = await openDB();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(STORE, "readwrite");
+      const req = tx.objectStore(STORE).put(value, key);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 function readLegacy(): string | null {
   try {
     return localStorage.getItem(LEGACY_LOCALSTORAGE_KEY);

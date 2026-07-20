@@ -35,7 +35,7 @@ export function CollectionCard({
           io.disconnect();
         }
       },
-      { rootMargin: "600px" },
+      { rootMargin: "250px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -79,7 +79,7 @@ export function CollectionCard({
     >
       {backdrop && (
         <img
-          src={backdrop}
+          src={backdrop.replace("/t/p/original/", "/t/p/w780/")}
           alt=""
           loading="lazy"
           draggable={false}

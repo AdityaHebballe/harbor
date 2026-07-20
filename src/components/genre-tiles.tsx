@@ -9,7 +9,7 @@ import { useView } from "@/lib/view";
 import { Row } from "./row";
 import { Poster } from "./poster";
 
-const GENRE_PALETTE: Record<string, { from: string; to: string; ink: string }> = {
+export const GENRE_PALETTE: Record<string, { from: string; to: string; ink: string }> = {
   Action: { from: "oklch(0.40 0.18 25)", to: "oklch(0.18 0.10 20)", ink: "oklch(0.96 0.02 25)" },
   Adventure: { from: "oklch(0.45 0.14 145)", to: "oklch(0.20 0.10 155)", ink: "oklch(0.96 0.02 145)" },
   Animation: { from: "oklch(0.50 0.16 200)", to: "oklch(0.20 0.10 195)", ink: "oklch(0.96 0.02 200)" },

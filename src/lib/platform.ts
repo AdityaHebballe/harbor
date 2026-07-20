@@ -4,32 +4,43 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
-type DesktopPlatform = "linux" | "macos" | "windows" | null;
-
-function detectedDesktopPlatform(): DesktopPlatform {
-  if (!isTauri()) return null;
-
-  const platform = nativePlatform();
-  if (platform === "linux" || platform === "macos" || platform === "windows") {
-    return platform;
-  }
-  return null;
-}
-
 export function isWeb(): boolean {
   return typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window);
 }
 
+export type OsClass = "linux" | "macos" | "windows" | "web";
+
+function detectOs(): OsClass {
+  if (!isTauri()) return "web";
+  const platform = nativePlatform();
+  if (platform === "linux") return "linux";
+  if (platform === "macos") return "macos";
+  if (platform === "windows") return "windows";
+  return "web";
+}
+
+let cachedOs: OsClass | null = null;
+
+export function osClass(): OsClass {
+  if (cachedOs === null) cachedOs = detectOs();
+  return cachedOs;
+}
+
+export function applyOsDataset(): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.dataset.os = osClass();
+}
+
 export function isLinuxDesktop(): boolean {
-  return detectedDesktopPlatform() === "linux";
+  return osClass() === "linux";
 }
 
 export function isMacDesktop(): boolean {
-  return detectedDesktopPlatform() === "macos";
+  return osClass() === "macos";
 }
 
 export function isWindowsDesktop(): boolean {
-  return detectedDesktopPlatform() === "windows";
+  return osClass() === "windows";
 }
 
 export function isMobileDevice(): boolean {
@@ -41,4 +52,45 @@ export function isMobileDevice(): boolean {
     return true;
   }
   return false;
+}
+
+export function isMangaReaderRoute(): boolean {
+  try {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/reader" || path.endsWith("/reader")) return true;
+    return new URLSearchParams(window.location.search).get("reader") === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function isRemoteRoute(): boolean {
+  try {
+    const path = window.location.pathname.replace(/\/+$/, "") || "/";
+    if (path === "/remote" || path.endsWith("/remote")) return true;
+    if (path === "/reader" || path.endsWith("/reader")) return true;
+    const q = new URLSearchParams(window.location.search);
+    return q.get("remote") === "1" || q.get("reader") === "1";
+  } catch {
+    return false;
+  }
+}
+
+let mobileWebCache: boolean | null = null;
+
+export function isMobileWeb(): boolean {
+  if (mobileWebCache !== null) return mobileWebCache;
+  let forcedOn = false;
+  try {
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("desktop") === "1") {
+      mobileWebCache = false;
+      return false;
+    }
+    if (q.get("mobile") === "1") forcedOn = true;
+  } catch {
+    /* ignore */
+  }
+  mobileWebCache = forcedOn || (isWeb() && isMobileDevice());
+  return mobileWebCache;
 }

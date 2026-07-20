@@ -1,41 +1,13 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type RefObject,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
+import { subscribeOpenProfile } from "@/lib/social/open-profile";
 import type { Meta } from "./cinemeta";
 import { profileFromMeta, trackEvent } from "./discover";
 import type { StreamingService } from "./settings";
 import { useTogether } from "./together/provider";
 import type { SportsGame } from "./sports/espn";
 import { beginMarathonAdvance } from "./fullscreen-state";
-import { armRemoteStickyHop } from "./remote/session";
-import { franchiseRoot, franchiseRootSync } from "./providers/anime-franchise-root";
 
-const isAnimeMetaId = (id: string) => /^(kitsu|mal|anilist|anidb):/.test(id);
-export type View =
-  | "home"
-  | "settings"
-  | "anime"
-  | "discover"
-  | "catalogs"
-  | "addons"
-  | "calendar"
-  | "movies"
-  | "shows"
-  | "kids"
-  | "library"
-  | "live"
-  | "vod"
-  | "downloads"
-  | "wrapped";
+export type View = "home" | "settings" | "anime" | "discover" | "catalogs" | "addons" | "calendar" | "movies" | "shows" | "kids" | "library" | "live" | "vod" | "downloads" | "wrapped" | "manga";
 
 export type PlayEpisode = {
   season: number;
@@ -44,7 +16,10 @@ export type PlayEpisode = {
   imdbId?: string;
   imdbSeason?: number;
   imdbEpisode?: number;
+  absoluteNumber?: number;
+  tvdbEpisodeId?: number;
   kitsuStreamId?: string;
+  sourceMetaId?: string;
   videoId?: string;
   still?: string;
   overview?: string;
@@ -62,6 +37,7 @@ export type PlayerSrc = {
   title: string;
   subtitle?: string;
   notWebReady?: boolean;
+  isAnime?: boolean;
   subtitles?: Array<{ url: string; lang?: string; id?: string }>;
   subtitlePreselect?: { off: boolean; url?: string; lang?: string; title?: string };
   attempt?: number;
@@ -91,7 +67,7 @@ export type PlayerStreamRef = {
 
 export type GridSpec = {
   title: string;
-  fetcher: (page: number) => Promise<Meta[]>;
+  fetcher: (page: number, loaded?: number) => Promise<Meta[]>;
   initial?: Meta[];
   kidsHero?: { grad: string; art: string; name: string };
 };
@@ -123,74 +99,22 @@ export type Frame =
   | { kind: "live" }
   | { kind: "vod" }
   | { kind: "downloads" }
+  | { kind: "manga"; mangaId?: string }
   | { kind: "service"; service: StreamingService }
-  | {
-      kind: "meta";
-      meta: Meta;
-      liveContext?: boolean;
-      episodeHint?: { season: number; episode: number };
-      seasonEntryId?: string;
-    }
+  | { kind: "meta"; meta: Meta; liveContext?: boolean; episodeHint?: { season: number; episode: number }; seasonEntryId?: string }
+  | { kind: "addon-collection"; meta: Meta }
   | { kind: "episode-detail"; seriesId: string; season: number; episode: number; seriesMeta?: Meta }
   | { kind: "person"; id: number }
+  | { kind: "profile"; handle: string }
   | { kind: "collection"; id: number }
   | { kind: "collections" }
   | { kind: "filter"; filter: MetaFilter }
   | { kind: "grid"; grid: GridSpec }
   | { kind: "award"; awardType: import("./providers/wikidata").AwardType }
   | { kind: "anime-award"; sourceId: import("./anime-awards").AwardSourceId }
-  | {
-      kind: "picker";
-      meta: Meta;
-      episode?: PlayEpisode;
-      autoPlay?: boolean;
-      attempt?: number;
-      intent?: "play" | "download";
-      resume?: boolean;
-    }
+  | { kind: "picker"; meta: Meta; episode?: PlayEpisode; autoPlay?: boolean; attempt?: number; intent?: "play" | "download"; resume?: boolean }
   | { kind: "player"; src: PlayerSrc }
   | { kind: "match-detail"; game: SportsGame };
-
-const ROOT_VIEW_BY_KIND: Record<Frame["kind"], View | null> = {
-  home: "home",
-  settings: "settings",
-  anime: "anime",
-  discover: "discover",
-  catalogs: "catalogs",
-  addons: "addons",
-  "addon-detail": "addons",
-  calendar: "calendar",
-  wrapped: "wrapped",
-  queue: "discover",
-  movies: "movies",
-  shows: "shows",
-  kids: "kids",
-  library: "library",
-  live: "live",
-  vod: "vod",
-  downloads: "downloads",
-  service: null,
-  meta: null,
-  "episode-detail": null,
-  person: null,
-  collection: null,
-  collections: null,
-  filter: null,
-  grid: null,
-  award: null,
-  "anime-award": null,
-  picker: null,
-  player: null,
-  "match-detail": null,
-};
-
-function rootViewFromStack(stack: Frame[]): View {
-  for (let i = stack.length - 1; i >= 0; i--) {
-    const candidate = ROOT_VIEW_BY_KIND[stack[i].kind];
-    if (candidate) return candidate;
-  }
-  return "home";
-}
 
 export type ScrollSnapshot = {
   anchor?: string;
@@ -209,6 +133,7 @@ export type SettingsSection =
   | "streaming"
   | "language"
   | "player"
+  | "streamFilters"
   | "advanced";
 
 type ViewValue = {
@@ -224,15 +149,7 @@ type ViewValue = {
   metaLiveContext: boolean;
   metaEpisodeHint: { season: number; episode: number } | null;
   metaSeasonEntryId: string | null;
-  openMeta: (
-    m: Meta | null,
-    opts?: {
-      liveContext?: boolean;
-      episodeHint?: { season: number; episode: number };
-      seasonEntryId?: string;
-      exact?: boolean;
-    },
-  ) => void;
+  openMeta: (m: Meta | null, opts?: { liveContext?: boolean; episodeHint?: { season: number; episode: number }; seasonEntryId?: string; exact?: boolean }) => void;
   episodeDetail: { seriesId: string; season: number; episode: number; seriesMeta?: Meta } | null;
   openEpisodeDetail: (seriesId: string, season: number, episode: number, seriesMeta?: Meta) => void;
   matchDetailGame: SportsGame | null;
@@ -240,8 +157,13 @@ type ViewValue = {
   promoteMetaToRoot: () => void;
   personId: number | null;
   openPerson: (id: number | null) => void;
+  profileHandle: string | null;
+  openProfile: (handle: string) => void;
   collectionId: number | null;
   openCollection: (id: number) => void;
+  mangaId: string | null;
+  openManga: (mangaId?: string) => void;
+  addonCollectionMeta: Meta | null;
   openQueue: () => void;
   filter: MetaFilter | null;
   openFilter: (f: MetaFilter) => void;
@@ -254,14 +176,7 @@ type ViewValue = {
   animeAwardSource: import("./anime-awards").AwardSourceId | null;
   openAnimeAward: (s: import("./anime-awards").AwardSourceId) => void;
   homeResetTick: number;
-  picker: {
-    meta: Meta;
-    episode?: PlayEpisode;
-    autoPlay?: boolean;
-    attempt?: number;
-    intent?: "play" | "download";
-    resume?: boolean;
-  } | null;
+  picker: { meta: Meta; episode?: PlayEpisode; autoPlay?: boolean; attempt?: number; intent?: "play" | "download"; resume?: boolean } | null;
   openPicker: (
     meta: Meta,
     episode?: PlayEpisode,
@@ -302,13 +217,6 @@ function pushFrame(cur: Frame[], next: Frame): Frame[] {
   return [out[0], ...out.slice(out.length - STACK_MAX + 1)];
 }
 
-/** Drop trailing player/picker frames (used by exitPlayback and next-episode autoplay). */
-function stripPlaybackFrames(cur: Frame[]): Frame[] {
-  let i = cur.length - 1;
-  while (i > 0 && (cur[i].kind === "player" || cur[i].kind === "picker")) i--;
-  return cur.slice(0, i + 1);
-}
-
 function frameKey(f: Frame): string {
   switch (f.kind) {
     case "home":
@@ -345,14 +253,20 @@ function frameKey(f: Frame): string {
       return "vod";
     case "downloads":
       return "downloads";
+    case "manga":
+      return f.mangaId ? `manga:${f.mangaId}` : "manga";
     case "service":
       return `service:${f.service}`;
     case "meta":
       return `meta:${f.meta.id}`;
+    case "addon-collection":
+      return `addon-collection:${f.meta.id}`;
     case "episode-detail":
       return `episode-detail:${f.seriesId}:${f.season}:${f.episode}`;
     case "person":
       return `person:${f.id}`;
+    case "profile":
+      return `profile:${f.handle}`;
     case "collection":
       return `collection:${f.id}`;
     case "collections":
@@ -442,32 +356,51 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const top = stack[stack.length - 1];
 
-  const view = rootViewFromStack(stack);
+  const view: View = (() => {
+    for (let i = stack.length - 1; i >= 0; i--) {
+      const f = stack[i];
+      if (f.kind === "settings") return "settings";
+      if (f.kind === "anime") return "anime";
+      if (f.kind === "addons" || f.kind === "addon-detail") return "addons";
+      if (f.kind === "discover" || f.kind === "queue") return "discover";
+      if (f.kind === "catalogs") return "catalogs";
+      if (f.kind === "calendar") return "calendar";
+      if (f.kind === "wrapped") return "wrapped";
+      if (f.kind === "movies") return "movies";
+      if (f.kind === "shows") return "shows";
+      if (f.kind === "kids") return "kids";
+      if (f.kind === "library") return "library";
+      if (f.kind === "live") return "live";
+      if (f.kind === "vod") return "vod";
+      if (f.kind === "downloads") return "downloads";
+      if (f.kind === "manga") return "manga";
+      if (f.kind === "home") return "home";
+    }
+    return "home";
+  })();
   const service = top.kind === "service" ? top.service : null;
-  const metaFrame = stack
-    .slice()
-    .reverse()
-    .find((f) => f.kind === "meta");
+  const metaFrame = stack.slice().reverse().find((f) => f.kind === "meta");
   const meta = metaFrame && metaFrame.kind === "meta" ? metaFrame.meta : null;
   const metaLiveContext =
     metaFrame && metaFrame.kind === "meta" ? metaFrame.liveContext === true : false;
   const metaEpisodeHint =
-    metaFrame && metaFrame.kind === "meta" ? (metaFrame.episodeHint ?? null) : null;
+    metaFrame && metaFrame.kind === "meta" ? metaFrame.episodeHint ?? null : null;
   const metaSeasonEntryId =
-    metaFrame && metaFrame.kind === "meta" ? (metaFrame.seasonEntryId ?? null) : null;
+    metaFrame && metaFrame.kind === "meta" ? metaFrame.seasonEntryId ?? null : null;
   const personFrame = lastOfKind(stack, "person");
   const personId = personFrame ? personFrame.id : null;
+  const profileFrame = lastOfKind(stack, "profile");
+  const profileHandle = profileFrame ? profileFrame.handle : null;
   const collectionFrame = lastOfKind(stack, "collection");
   const collectionId = collectionFrame ? collectionFrame.id : null;
+  const mangaFrame = lastOfKind(stack, "manga");
+  const mangaId = mangaFrame ? mangaFrame.mangaId ?? null : null;
+  const addonCollectionFrame = lastOfKind(stack, "addon-collection");
+  const addonCollectionMeta = addonCollectionFrame ? addonCollectionFrame.meta : null;
   const episodeDetail = useMemo(
     () =>
       top.kind === "episode-detail"
-        ? {
-            seriesId: top.seriesId,
-            season: top.season,
-            episode: top.episode,
-            seriesMeta: top.seriesMeta,
-          }
+        ? { seriesId: top.seriesId, season: top.season, episode: top.episode, seriesMeta: top.seriesMeta }
         : null,
     [
       top.kind,
@@ -485,14 +418,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   const matchDetailGame = top.kind === "match-detail" ? top.game : null;
   const picker =
     top.kind === "picker"
-      ? {
-          meta: top.meta,
-          episode: top.episode,
-          autoPlay: top.autoPlay,
-          attempt: top.attempt,
-          intent: top.intent,
-          resume: top.resume,
-        }
+      ? { meta: top.meta, episode: top.episode, autoPlay: top.autoPlay, attempt: top.attempt, intent: top.intent, resume: top.resume }
       : null;
   const player = top.kind === "player" ? top.src : null;
   const canGoBack = stack.length > 1;
@@ -527,29 +453,29 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     setForwardStack([]);
   }, []);
 
-  const setNavStack = useCallback(
-    (updater: (s: Frame[]) => Frame[]) => {
-      clearForwardStack();
-      setStack(updater);
-    },
-    [clearForwardStack],
-  );
+  const setNavStack = useCallback((updater: (s: Frame[]) => Frame[]) => {
+    clearForwardStack();
+    setStack(updater);
+  }, [clearForwardStack]);
 
   const exitPlayback = useCallback(() => {
-    setNavStack((s) => stripPlaybackFrames(s));
+    setNavStack((s) => {
+      let i = s.length - 1;
+      while (i > 0 && (s[i].kind === "player" || s[i].kind === "picker")) i--;
+      return s.slice(0, i + 1);
+    });
   }, [setNavStack]);
 
-  const exitPickerToDetail = useCallback(
-    (m: Meta) => {
-      setNavStack((s) => {
-        const base = stripPlaybackFrames(s);
-        const top = base[base.length - 1];
-        if (top && top.kind === "meta") return base;
-        return [...base, { kind: "meta", meta: m }];
-      });
-    },
-    [setNavStack],
-  );
+  const exitPickerToDetail = useCallback((m: Meta) => {
+    setNavStack((s) => {
+      let i = s.length - 1;
+      while (i > 0 && (s[i].kind === "player" || s[i].kind === "picker")) i--;
+      const base = s.slice(0, i + 1);
+      const top = base[base.length - 1];
+      if (top && top.kind === "meta") return base;
+      return [...base, { kind: "meta", meta: m }];
+    });
+  }, [setNavStack]);
 
   const exitPlayer = useCallback(() => {
     setNavStack((s) => {
@@ -569,132 +495,127 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     nonce: 0,
   });
 
-  const setView = useCallback(
-    (v: View) => {
-      if (typeof window !== "undefined") {
-        window.__harborProfiler?.recordNav(`view:${v}`);
+  const setView = useCallback((v: View) => {
+    if (typeof window !== "undefined") {
+      window.__harborProfiler?.recordNav(`view:${v}`);
+    }
+    if (v === "home") setHomeResetTick((n) => n + 1);
+    if (typeof window !== "undefined" && v !== "settings") {
+      window.dispatchEvent(
+        new CustomEvent("harbor:reset-row-scrolls", { detail: { prefix: `${v}:` } }),
+      );
+      const fireScrollTop = () =>
+        window.dispatchEvent(new CustomEvent("harbor:scroll-top", { detail: { view: v } }));
+      fireScrollTop();
+      window.requestAnimationFrame(fireScrollTop);
+      window.setTimeout(fireScrollTop, 60);
+    }
+    setNavStack((s) => {
+      const t = s[s.length - 1];
+      if (v === "home") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "home" }];
       }
-      if (v === "home") setHomeResetTick((n) => n + 1);
-      // Always clear horizontal poster rails when changing root tabs — keep-alive
-      // pages were leaving mid-scrolled rows everywhere.
-      rowScrollMem.current.clear();
-      if (typeof window !== "undefined" && v !== "settings") {
-        window.dispatchEvent(new CustomEvent("harbor:reset-row-scrolls", { detail: {} }));
-        const fireScrollTop = () =>
-          window.dispatchEvent(new CustomEvent("harbor:scroll-top", { detail: { view: v } }));
-        fireScrollTop();
-        window.requestAnimationFrame(fireScrollTop);
-        window.setTimeout(fireScrollTop, 60);
+      if (v === "anime") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "anime" }];
       }
-      setNavStack((s) => {
-        const t = s[s.length - 1];
-        if (v === "home") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "home" }];
-        }
-        if (v === "anime") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "anime" }];
-        }
-        if (v === "discover") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "discover" }];
-        }
-        if (v === "catalogs") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "catalogs" }];
-        }
-        if (v === "addons") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "addons" }];
-        }
-        if (v === "calendar") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "calendar" }];
-        }
-        if (v === "wrapped") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "wrapped" }];
-        }
-        if (v === "downloads") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "downloads" }];
-        }
-        if (v === "movies") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "movies" }];
-        }
-        if (v === "shows") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "shows" }];
-        }
-        if (v === "kids") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "kids" }];
-        }
-        if (v === "library") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "library" }];
-        }
-        if (v === "live") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "live" }];
-        }
-        if (v === "vod") {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return [{ kind: "vod" }];
-        }
-        if (t.kind === "settings") return s;
-        return pushFrame(s, { kind: "settings" });
-      });
-    },
-    [setNavStack],
-  );
+      if (v === "discover") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "discover" }];
+      }
+      if (v === "catalogs") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "catalogs" }];
+      }
+      if (v === "addons") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "addons" }];
+      }
+      if (v === "calendar") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "calendar" }];
+      }
+      if (v === "wrapped") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "wrapped" }];
+      }
+      if (v === "downloads") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "downloads" }];
+      }
+      if (v === "movies") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "movies" }];
+      }
+      if (v === "shows") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "shows" }];
+      }
+      if (v === "kids") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "kids" }];
+      }
+      if (v === "library") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "library" }];
+      }
+      if (v === "live") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "live" }];
+      }
+      if (v === "vod") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "vod" }];
+      }
+      if (v === "manga") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "manga" }];
+      }
+      if (t.kind === "settings") return s;
+      return pushFrame(s, { kind: "settings" });
+    });
+  }, [setNavStack]);
 
-  const openSettings = useCallback(
-    (section?: SettingsSection) => {
-      setSectionReq((r) => ({ section: section ?? null, nonce: r.nonce + 1 }));
-      setNavStack((s) => {
-        const t = s[s.length - 1];
-        if (t.kind === "settings") return s;
-        return pushFrame(s, { kind: "settings" });
-      });
-    },
-    [setNavStack],
-  );
+  const openSettings = useCallback((section?: SettingsSection) => {
+    setSectionReq((r) => ({ section: section ?? null, nonce: r.nonce + 1 }));
+    setNavStack((s) => {
+      const t = s[s.length - 1];
+      if (t.kind === "settings") return s;
+      return pushFrame(s, { kind: "settings" });
+    });
+  }, [setNavStack]);
 
-  const openService = useCallback(
-    (s: StreamingService | null) => {
-      if (s === null) {
-        setNavStack((cur) => {
-          scrollMem.current.clear();
-          rowScrollMem.current.clear();
-          return cur.length === 1 && cur[0].kind === "home" ? cur : [{ kind: "home" }];
-        });
-        return;
-      }
+  const openService = useCallback((s: StreamingService | null) => {
+    if (s === null) {
       setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (t.kind === "service" && t.service === s) return cur;
-        return pushFrame(cur, { kind: "service", service: s });
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return cur.length === 1 && cur[0].kind === "home" ? cur : [{ kind: "home" }];
       });
-    },
-    [setNavStack],
-  );
+      return;
+    }
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "service" && t.service === s) return cur;
+      return pushFrame(cur, { kind: "service", service: s });
+    });
+  }, [setNavStack]);
 
   const promoteMetaToRoot = useCallback(() => {
     setNavStack((s) => {
@@ -724,6 +645,14 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         setNavStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
         return;
       }
+      if (m.isCollection) {
+        setNavStack((cur) => {
+          const t = cur[cur.length - 1];
+          if (t.kind === "addon-collection" && t.meta.id === m.id) return cur;
+          return pushFrame(cur, { kind: "addon-collection", meta: m });
+        });
+        return;
+      }
       const push = (target: Meta, seasonEntryId?: string) => {
         setNavStack((cur) => {
           const t = cur[cur.length - 1];
@@ -738,37 +667,33 @@ export function ViewProvider({ children }: { children: ReactNode }) {
           });
         });
       };
-      if (!isAnimeMetaId(m.id) || opts?.exact) {
-        push(m);
-        return;
-      }
-      const warm = franchiseRootSync(m.id);
-      if (warm != null) {
-        if (warm === m.id) push(m);
-        else push({ ...m, id: warm }, m.id);
-        return;
-      }
-      void franchiseRoot(m.id)
-        .then((root) => (root === m.id ? push(m) : push({ ...m, id: root }, m.id)))
-        .catch(() => push(m));
+      push(m);
     },
     [setNavStack],
   );
 
-  const openPerson = useCallback(
-    (id: number | null) => {
-      if (id === null) {
-        setNavStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
-        return;
-      }
-      setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (t.kind === "person" && t.id === id) return cur;
-        return pushFrame(cur, { kind: "person", id });
-      });
-    },
-    [setNavStack],
-  );
+  const openPerson = useCallback((id: number | null) => {
+    if (id === null) {
+      setNavStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
+      return;
+    }
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "person" && t.id === id) return cur;
+      return pushFrame(cur, { kind: "person", id });
+    });
+  }, [setNavStack]);
+
+  const openProfile = useCallback((handle: string) => {
+    const h = handle.trim().toLowerCase();
+    if (!h) return;
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "profile" && t.handle === h) return cur;
+      return pushFrame(cur, { kind: "profile", handle: h });
+    });
+  }, [setNavStack]);
+  useEffect(() => subscribeOpenProfile(openProfile), [openProfile]);
 
   const openQueue = useCallback(() => {
     setNavStack((cur) => {
@@ -778,27 +703,29 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     });
   }, [setNavStack]);
 
-  const openCollection = useCallback(
-    (id: number) => {
-      setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (t.kind === "collection" && t.id === id) return cur;
-        return pushFrame(cur, { kind: "collection", id });
-      });
-    },
-    [setNavStack],
-  );
+  const openCollection = useCallback((id: number) => {
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "collection" && t.id === id) return cur;
+      return pushFrame(cur, { kind: "collection", id });
+    });
+  }, [setNavStack]);
 
-  const openMatchDetail = useCallback(
-    (game: SportsGame) => {
-      setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (t.kind === "match-detail" && t.game.id === game.id) return cur;
-        return pushFrame(cur, { kind: "match-detail", game });
-      });
-    },
-    [setNavStack],
-  );
+  const openManga = useCallback((mangaId?: string) => {
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "manga" && t.mangaId === mangaId) return cur;
+      return pushFrame(cur, { kind: "manga", mangaId });
+    });
+  }, [setNavStack]);
+
+  const openMatchDetail = useCallback((game: SportsGame) => {
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "match-detail" && t.game.id === game.id) return cur;
+      return pushFrame(cur, { kind: "match-detail", game });
+    });
+  }, [setNavStack]);
 
   const openEpisodeDetail = useCallback(
     (seriesId: string, season: number, episode: number, seriesMeta?: Meta) => {
@@ -818,58 +745,44 @@ export function ViewProvider({ children }: { children: ReactNode }) {
     [setNavStack],
   );
 
-  const openAward = useCallback(
-    (t: import("./providers/wikidata").AwardType) => {
-      setNavStack((cur) => {
-        const top = cur[cur.length - 1];
-        if (top.kind === "award" && top.awardType === t) return cur;
-        return pushFrame(cur, { kind: "award", awardType: t });
-      });
-    },
-    [setNavStack],
-  );
+  const openAward = useCallback((t: import("./providers/wikidata").AwardType) => {
+    setNavStack((cur) => {
+      const top = cur[cur.length - 1];
+      if (top.kind === "award" && top.awardType === t) return cur;
+      return pushFrame(cur, { kind: "award", awardType: t });
+    });
+  }, [setNavStack]);
 
-  const openAnimeAward = useCallback(
-    (s: import("./anime-awards").AwardSourceId) => {
-      setNavStack((cur) => {
-        const top = cur[cur.length - 1];
-        if (top.kind === "anime-award" && top.sourceId === s) return cur;
-        return pushFrame(cur, { kind: "anime-award", sourceId: s });
-      });
-    },
-    [setNavStack],
-  );
+  const openAnimeAward = useCallback((s: import("./anime-awards").AwardSourceId) => {
+    setNavStack((cur) => {
+      const top = cur[cur.length - 1];
+      if (top.kind === "anime-award" && top.sourceId === s) return cur;
+      return pushFrame(cur, { kind: "anime-award", sourceId: s });
+    });
+  }, [setNavStack]);
 
-  const openFilter = useCallback(
-    (f: MetaFilter) => {
-      setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (
-          t.kind === "filter" &&
-          t.filter.kind === f.kind &&
-          t.filter.mediaType === f.mediaType &&
-          ("name" in f && "name" in t.filter
-            ? t.filter.name === f.name
-            : (t.filter as any).value === (f as any).value)
-        ) {
-          return cur;
-        }
-        return pushFrame(cur, { kind: "filter", filter: f });
-      });
-    },
-    [setNavStack],
-  );
+  const openFilter = useCallback((f: MetaFilter) => {
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (
+        t.kind === "filter" &&
+        t.filter.kind === f.kind &&
+        t.filter.mediaType === f.mediaType &&
+        ("name" in f && "name" in t.filter ? t.filter.name === f.name : (t.filter as any).value === (f as any).value)
+      ) {
+        return cur;
+      }
+      return pushFrame(cur, { kind: "filter", filter: f });
+    });
+  }, [setNavStack]);
 
-  const openGrid = useCallback(
-    (g: GridSpec) => {
-      setNavStack((cur) => {
-        const t = cur[cur.length - 1];
-        if (t.kind === "grid" && t.grid.title === g.title) return cur;
-        return pushFrame(cur, { kind: "grid", grid: g });
-      });
-    },
-    [setNavStack],
-  );
+  const openGrid = useCallback((g: GridSpec) => {
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "grid" && t.grid.title === g.title) return cur;
+      return pushFrame(cur, { kind: "grid", grid: g });
+    });
+  }, [setNavStack]);
 
   const openCollections = useCallback(() => {
     setNavStack((cur) => {
@@ -880,20 +793,16 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   }, [setNavStack]);
 
   const openPicker = useCallback(
-    (
-      m: Meta,
-      ep?: PlayEpisode,
-      opts?: {
-        autoPlay?: boolean;
-        attempt?: number;
-        intent?: "play" | "download";
-        resume?: boolean;
-      },
-    ) => {
-      if (opts?.autoPlay) {
-        beginMarathonAdvance();
-        armRemoteStickyHop();
+    (m: Meta, ep?: PlayEpisode, opts?: { autoPlay?: boolean; attempt?: number; intent?: "play" | "download"; resume?: boolean }) => {
+      if (m.id?.startsWith("magnet:")) {
+        setNavStack((s) => {
+          let i = s.length - 1;
+          while (i > 0 && (s[i].kind === "player" || s[i].kind === "picker")) i--;
+          return s.slice(0, i + 1);
+        });
+        return;
       }
+      if (opts?.autoPlay) beginMarathonAdvance();
       setNavStack((cur) => {
         const t = cur[cur.length - 1];
         if (
@@ -904,10 +813,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         ) {
           return cur;
         }
-        // Next-episode / autoplay replaces in-flight player+picker frames so the
-        // stack doesn't nest prior episodes under the new load.
-        const base = opts?.autoPlay ? stripPlaybackFrames(cur) : cur;
-        return pushFrame(base, {
+        return pushFrame(cur, {
           kind: "picker",
           meta: m,
           episode: ep,
@@ -928,16 +834,13 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   const pendingLiveSrcRef = useRef<PlayerSrc | null>(null);
   pendingLiveSrcRef.current = pendingLiveSrc;
 
-  const openPlayer = useCallback(
-    (src: PlayerSrc) => {
-      if (src.meta.id?.startsWith("iptv:") && togetherRef.current.snapshot.state === "joined") {
-        setPendingLiveSrc(src);
-        return;
-      }
-      setNavStack((cur) => pushFrame(cur, { kind: "player", src }));
-    },
-    [setNavStack],
-  );
+  const openPlayer = useCallback((src: PlayerSrc) => {
+    if (src.meta.id?.startsWith("iptv:") && togetherRef.current.snapshot.state === "joined") {
+      setPendingLiveSrc(src);
+      return;
+    }
+    setNavStack((cur) => pushFrame(cur, { kind: "player", src }));
+  }, [setNavStack]);
 
   const confirmLeavePartyForLive = useCallback(() => {
     const src = pendingLiveSrcRef.current;
@@ -949,28 +852,22 @@ export function ViewProvider({ children }: { children: ReactNode }) {
 
   const cancelLeavePartyForLive = useCallback(() => setPendingLiveSrc(null), []);
 
-  const replacePlayerSrc = useCallback(
-    (src: PlayerSrc) => {
-      setNavStack((cur) => {
-        const top = cur[cur.length - 1];
-        if (top.kind !== "player") return cur;
-        return [...cur.slice(0, -1), { kind: "player", src }];
-      });
-    },
-    [setNavStack],
-  );
+  const replacePlayerSrc = useCallback((src: PlayerSrc) => {
+    setNavStack((cur) => {
+      const top = cur[cur.length - 1];
+      if (top.kind !== "player") return cur;
+      return [...cur.slice(0, -1), { kind: "player", src }];
+    });
+  }, [setNavStack]);
 
-  const openAddonDetail = useCallback(
-    (id: string) => {
-      setNavStack((cur) => {
-        const top = cur[cur.length - 1];
-        if (top.kind === "addon-detail" && top.id === id) return cur;
-        if (top.kind === "addon-detail") return [...cur.slice(0, -1), { kind: "addon-detail", id }];
-        return pushFrame(cur, { kind: "addon-detail", id });
-      });
-    },
-    [setNavStack],
-  );
+  const openAddonDetail = useCallback((id: string) => {
+    setNavStack((cur) => {
+      const top = cur[cur.length - 1];
+      if (top.kind === "addon-detail" && top.id === id) return cur;
+      if (top.kind === "addon-detail") return [...cur.slice(0, -1), { kind: "addon-detail", id }];
+      return pushFrame(cur, { kind: "addon-detail", id });
+    });
+  }, [setNavStack]);
 
   const addonDetailId = top.kind === "addon-detail" ? top.id : null;
 
@@ -996,8 +893,13 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       promoteMetaToRoot,
       personId,
       openPerson,
+      profileHandle,
+      openProfile,
       collectionId,
       openCollection,
+      mangaId,
+      openManga,
+      addonCollectionMeta,
       episodeDetail,
       openEpisodeDetail,
       matchDetailGame,
@@ -1050,8 +952,12 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       metaSeasonEntryId,
       promoteMetaToRoot,
       personId,
+      profileHandle,
       collectionId,
       openCollection,
+      mangaId,
+      openManga,
+      addonCollectionMeta,
       episodeDetail,
       openEpisodeDetail,
       matchDetailGame,
@@ -1070,6 +976,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       openService,
       openMeta,
       openPerson,
+      openProfile,
       openQueue,
       openFilter,
       grid,
@@ -1105,9 +1012,7 @@ export function useView() {
 }
 
 function anchorOffsetIn(scrollEl: HTMLElement, anchor: HTMLElement): number {
-  return (
-    anchor.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop
-  );
+  return anchor.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top + scrollEl.scrollTop;
 }
 
 function pickAnchor(el: HTMLElement, scrollTop: number): { key: string; delta: number } | null {
@@ -1143,6 +1048,7 @@ export function useScrollMemory(
   key: string,
   ref: RefObject<HTMLElement | null>,
   active: boolean = true,
+  hideUntilRestored: boolean = false,
 ) {
   const { rememberScroll, recallScroll } = useView();
 
@@ -1166,6 +1072,23 @@ export function useScrollMemory(
     let restoring = true;
     let settleId: number | null = null;
     let saveTimer: number | null = null;
+    let revealId: number | null = null;
+
+    const initialSnap = recallScroll(key);
+    const wantsHide =
+      hideUntilRestored && !!initialSnap && (targetForSnap(el, initialSnap) ?? 0) > 8;
+    let revealed = !wantsHide;
+    const reveal = () => {
+      if (revealed) return;
+      revealed = true;
+      el.style.transition = "opacity 160ms ease-out";
+      el.style.opacity = "1";
+      window.setTimeout(() => {
+        el.style.opacity = "";
+        el.style.transition = "";
+      }, 220);
+    };
+    if (wantsHide) el.style.opacity = "0";
 
     const cancelSettle = () => {
       if (settleId !== null) {
@@ -1180,6 +1103,7 @@ export function useScrollMemory(
       if (!snap) {
         restoring = false;
         cancelSettle();
+        reveal();
         return;
       }
       if (el.clientHeight === 0) return;
@@ -1187,6 +1111,7 @@ export function useScrollMemory(
       if (target === null) {
         restoring = false;
         cancelSettle();
+        reveal();
         return;
       }
       const max = el.scrollHeight - el.clientHeight;
@@ -1194,12 +1119,15 @@ export function useScrollMemory(
       el.scrollTop = Math.min(target, max);
       restoring = false;
       cancelSettle();
+      reveal();
     };
 
     settleId = window.setTimeout(() => {
       restoring = false;
       settleId = null;
+      reveal();
     }, 30000);
+    if (wantsHide) revealId = window.setTimeout(reveal, 220);
 
     tryRestore();
 
@@ -1239,11 +1167,13 @@ export function useScrollMemory(
     return () => {
       cancelSave();
       cancelSettle();
+      if (revealId !== null) clearTimeout(revealId);
+      reveal();
       ro.disconnect();
       el.removeEventListener("scroll", onScroll);
       if (!restoring && el.clientHeight > 0 && el.scrollTop > 0) saveNow();
     };
-  }, [active, key, ref, rememberScroll, recallScroll]);
+  }, [active, key, ref, rememberScroll, recallScroll, hideUntilRestored]);
 }
 
 export { frameKey };

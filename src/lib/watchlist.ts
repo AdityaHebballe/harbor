@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  addToWatchlist as traktAdd,
-  removeFromWatchlist as traktRemove,
-} from "@/lib/trakt/watchlist";
+import { addToWatchlist as traktAdd, removeFromWatchlist as traktRemove } from "@/lib/trakt/watchlist";
 import { stremioIdToTraktTarget } from "@/lib/trakt/ids";
-import {
-  addToWatchlist as simklAdd,
-  removeFromWatchlist as simklRemove,
-} from "@/lib/simkl/watchlist";
+import { addToWatchlist as simklAdd, removeFromWatchlist as simklRemove } from "@/lib/simkl/watchlist";
 import { stremioIdToSimklTarget } from "@/lib/simkl/ids";
 import { isAuthenticated as simklConnected } from "@/lib/simkl/session";
 import { setItemWithRecovery, freeStorageSpace } from "@/lib/storage-recovery";
@@ -26,13 +20,7 @@ export type LocalEntry = {
   addedAt: number;
 };
 
-export type WatchlistInput = {
-  id: string;
-  type?: string;
-  name?: string;
-  poster?: string;
-  imdbId?: string | null;
-};
+export type WatchlistInput = { id: string; type?: string; name?: string; poster?: string; imdbId?: string | null };
 
 let memoryFallback: Map<string, LocalEntry> | null = null;
 
@@ -71,13 +59,7 @@ function read(): Map<string, LocalEntry> {
       if (typeof el === "string") {
         map.set(el, { id: el, type: inferType(el), name: "", addedAt: 0 });
       } else if (el && typeof el === "object" && typeof (el as { id?: unknown }).id === "string") {
-        const e = el as {
-          id: string;
-          type?: string;
-          name?: string;
-          poster?: string;
-          addedAt?: number;
-        };
+        const e = el as { id: string; type?: string; name?: string; poster?: string; addedAt?: number };
         map.set(e.id, {
           id: e.id,
           type: e.type === "series" ? "series" : "movie",
@@ -124,22 +106,12 @@ export function subscribeWatchlist(fn: () => void): () => void {
 
 let aggregateIds: Set<string> = readAggregateCache();
 
-function setsEqual(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) return false;
-  for (const id of left) {
-    if (!right.has(id)) return false;
-  }
-  return true;
-}
-
 function readAggregateCache(): Set<string> {
   try {
     const raw = localStorage.getItem(AGG_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw) as unknown;
-    return new Set(
-      Array.isArray(arr) ? (arr as string[]).filter((v) => typeof v === "string") : [],
-    );
+    return new Set(Array.isArray(arr) ? (arr as string[]).filter((v) => typeof v === "string") : []);
   } catch {
     return new Set();
   }
@@ -154,9 +126,7 @@ function writeAggregateCache(set: Set<string>) {
 }
 
 export function setWatchlistAggregate(ids: Iterable<string>): void {
-  const next = new Set(ids);
-  if (setsEqual(aggregateIds, next)) return;
-  aggregateIds = next;
+  aggregateIds = new Set(ids);
   writeAggregateCache(aggregateIds);
   for (const s of subs) s();
 }
@@ -187,7 +157,7 @@ export function removeFromWatchlist(id: string): void {
 export function toggleWatchlist(input: string | WatchlistInput): boolean {
   const map = read();
   const id = typeof input === "string" ? input : input.id;
-  const imdb = typeof input === "string" ? null : (input.imdbId ?? null);
+  const imdb = typeof input === "string" ? null : input.imdbId ?? null;
   const has = map.has(id) || aggregateIds.has(id) || (!!imdb && aggregateIds.has(imdb));
   if (has) {
     map.delete(id);
@@ -231,18 +201,21 @@ async function syncWithStremio(input: string | WatchlistInput, added: boolean): 
   const authKey = readActiveStremioAuthKey();
   if (!authKey) return;
   const id = typeof input === "string" ? input : input.id;
-  const imdb = typeof input === "string" ? null : (input.imdbId ?? null);
-  const writeId = cloudWriteId(id, imdb, !!imdb);
-  if (!writeId) return;
+  const imdb = typeof input === "string" ? null : input.imdbId ?? null;
   try {
     if (added) {
+      const writeId = cloudWriteId(id, imdb, !!imdb);
+      if (!writeId) return;
       const meta =
-        typeof input === "string"
-          ? {}
-          : { type: input.type, name: input.name, poster: input.poster };
+        typeof input === "string" ? {} : { type: input.type, name: input.name, poster: input.poster };
       await saveStremioBookmark(authKey, writeId, meta);
     } else {
-      await removeStremioBookmark(authKey, writeId);
+      const forms = new Set<string>();
+      const withImdb = cloudWriteId(id, imdb, !!imdb);
+      const withMeta = cloudWriteId(id, imdb, false);
+      if (withImdb) forms.add(withImdb);
+      if (withMeta) forms.add(withMeta);
+      for (const rid of forms) await removeStremioBookmark(authKey, rid);
     }
   } catch (e) {
     console.warn("[watchlist] stremio sync failed", e);

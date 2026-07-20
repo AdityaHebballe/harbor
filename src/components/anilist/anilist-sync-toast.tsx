@@ -1,8 +1,11 @@
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeSync, type SyncEvent } from "@/lib/anilist/sync";
+import { useSettings } from "@/lib/settings";
+import { syncToastWrapClass } from "@/lib/sync-toast-position";
 
 export function AnilistSyncToast() {
+  const { settings } = useSettings();
   const [event, setEvent] = useState<SyncEvent | null>(null);
   const timerRef = useRef<number | undefined>(undefined);
 
@@ -20,14 +23,14 @@ export function AnilistSyncToast() {
     };
   }, []);
 
-  if (!event) return null;
+  if (!event || !settings.syncIndicator) return null;
   const ok = event.kind === "ok";
   const watching = event.kind === "watching";
   const good = ok || watching;
   const syncing = event.kind === "syncing";
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[130] flex justify-center px-6">
+    <div className={syncToastWrapClass(settings.syncIndicatorPosition)}>
       <div className="harbor-together-pill flex items-center gap-2.5 rounded-full border border-edge bg-surface/98 py-2 ps-2.5 pe-4 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.75)] animate-popover-in">
         <span
           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${

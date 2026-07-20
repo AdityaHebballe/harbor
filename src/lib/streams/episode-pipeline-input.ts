@@ -50,8 +50,9 @@ export function buildEpisodePipelineInput(params: {
   settings: Settings;
   strictMode: boolean;
   filterDisabled: boolean;
+  animeTitles?: string[] | null;
 }): PipelineInput {
-  const { meta, episode, imdbId, streamIds, addons, debrids, settings, strictMode, filterDisabled } = params;
+  const { meta, episode, imdbId, streamIds, addons, debrids, settings, strictMode, filterDisabled, animeTitles } = params;
   const embedded = embeddedStreams(meta, episode);
   const addonNative = isAddonNativeMeta(meta);
   const requestType = addonNative
@@ -102,6 +103,7 @@ export function buildEpisodePipelineInput(params: {
       allowSeasonPacks: !strictMode,
       allowSizeOutliers: !strictMode,
       isAnime: animeReq,
+      expectedTitles: animeReq ? (animeTitles ?? null) : null,
     },
     score: {
       activeDebrids: debrids.map((d) => d.slug),

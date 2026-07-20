@@ -1,3 +1,5 @@
+import { APP_VERSION } from "@/lib/build-info";
+
 export const SIMKL_API_BASE = "https://api.simkl.com";
 export const SIMKL_CLIENT_ID =
   (import.meta.env.VITE_SIMKL_CLIENT_ID as string | undefined) ||
@@ -6,4 +8,5 @@ export const SIMKL_VERIFY_URL = "https://simkl.com/pin";
 export const WATCHED_RATIO = 0.85;
 export const SIMKL_WATCHED_RATIO = 0.8;
 export const SIMKL_APP_NAME = "harbor";
-export const SIMKL_APP_VERSION = "0.9.75";
+export const SIMKL_APP_VERSION = APP_VERSION;
+export const SIMKL_USER_AGENT = `Harbor/${APP_VERSION} (+https://harbor.site)`;

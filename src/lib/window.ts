@@ -27,6 +27,13 @@ export const toggleMaximize = async () => {
 
 export const close = () => win?.close();
 
+export const setWindowFullscreen = async (fs: boolean) => {
+  await win?.setFullscreen(fs).catch(() => {});
+};
+
+export const readWindowFullscreen = async (): Promise<boolean> =>
+  win ? win.isFullscreen().catch(() => false) : false;
+
 export type ResizeDir =
   | "East"
   | "North"
@@ -65,7 +72,15 @@ export function useMaximized(): boolean {
     return () => {
       cancelled = true;
       if (timer != null) window.clearTimeout(timer);
-      unlisten.then((fn) => fn());
+      void unlisten
+        .then((fn) => {
+          try {
+            void Promise.resolve(fn()).catch(() => {});
+          } catch {
+            /* listener already torn down */
+          }
+        })
+        .catch(() => {});
     };
   }, []);
   return maxed;

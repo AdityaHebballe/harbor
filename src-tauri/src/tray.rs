@@ -15,6 +15,10 @@ pub fn close_to_tray() -> bool {
     CLOSE_TO_TRAY.load(Ordering::Relaxed)
 }
 
+pub fn always_on_top_pref() -> bool {
+    ALWAYS_ON_TOP.load(Ordering::Relaxed)
+}
+
 #[derive(Serialize, Deserialize, Clone, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct TrayPrefs {
@@ -70,6 +74,9 @@ fn show_main(app: &AppHandle) {
 }
 
 fn apply_always_on_top(app: &AppHandle, on: bool) {
+    if !on && crate::pip::window_pip_is_active(app) {
+        return;
+    }
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_always_on_top(on);
     }

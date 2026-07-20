@@ -1,4 +1,4 @@
-import { langScore } from "./language.ts";
+import { langScore } from "./language";
 
 type SelectableSubtitleTrack = {
   id: string;

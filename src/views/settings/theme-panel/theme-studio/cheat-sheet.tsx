@@ -11,6 +11,7 @@ import {
   TAILWIND_UTILITIES,
   VIEW_NAMES,
   WINDOW_EVENTS,
+  WINDOW_HARBOR,
   Z_INDEX_MAP,
   type TokenRow,
 } from "./cheat-sheet-data";
@@ -33,6 +34,7 @@ const SECTIONS = [
   { id: "tokens-color", label: "Color tokens" },
   { id: "tokens-font", label: "Font tokens" },
   { id: "tokens-easing", label: "Easing tokens" },
+  { id: "api", label: "window.harbor API" },
   { id: "data-attrs", label: "Root data-attrs" },
   { id: "utilities", label: "Tailwind utilities" },
   { id: "selectors", label: "Stable selectors" },
@@ -149,6 +151,20 @@ export function CheatSheet({ onClose }: { onClose: () => void }) {
 
             <Section id="tokens-easing" title="Easing tokens" sub="Shared transition curves. Use anywhere you transition.">
               <TokenTable rows={EASING_TOKENS} />
+            </Section>
+
+            <Section id="api" title="window.harbor API" sub="Call these from onclick handlers or your theme JS. They are stable and safe: each one drives the real Harbor feature, so your chrome never goes stale when Harbor adds menu items.">
+              <div className="flex flex-col gap-1.5">
+                {WINDOW_HARBOR.map((a) => (
+                  <div
+                    key={a.call}
+                    className="rounded-lg border border-edge-soft bg-elevated/15 px-3.5 py-2.5"
+                  >
+                    <CopyName text={a.call} />
+                    <p className="mt-1 text-[12px] leading-snug text-ink-muted">{a.desc}</p>
+                  </div>
+                ))}
+              </div>
             </Section>
 
             <Section id="data-attrs" title="Root data attributes" sub="Set on <html>. Use them to scope styles to a specific layout/card/button choice.">

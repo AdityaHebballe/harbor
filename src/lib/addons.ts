@@ -287,6 +287,11 @@ function catalogRequestUrl(base: string, cat: CatalogDef): string | null {
   return `${base}/catalog/${cat.type}/${cat.id}/${parts.join("&")}.json`;
 }
 
+export function isCollectionCatalog(c: { type?: string; id?: string; name?: string }): boolean {
+  const hay = `${c.type ?? ""} ${c.id ?? ""} ${c.name ?? ""}`;
+  return /\bcollections\b/i.test(hay);
+}
+
 export async function loadAddonRows(
   authKey: string | null,
   opts: { dedup?: boolean; cap?: number } = {},
@@ -313,7 +318,12 @@ export async function loadAddonRows(
             logo: addon.manifest.logo,
             base,
           };
-          const metas: Meta[] = raw.map((m) => ({ ...m, addonOrigin: origin }));
+          const collection = isCollectionCatalog(cat);
+          const metas: Meta[] = raw.map((m) => ({
+            ...m,
+            addonOrigin: origin,
+            ...(collection ? { isCollection: true } : null),
+          }));
           return {
             key: `${addon.manifest.id}-${cat.type}-${cat.id}`,
             type: cat.type,
@@ -383,11 +393,11 @@ const DEFAULT_CATALOG_PAGE_SIZE = 20;
 export function createAddonCatalogFetcher(
   cursor: AddonCatalogCursor,
   opts: { initialPageSize?: number; mapMeta?: (meta: Meta) => Meta } = {},
-): (page: number) => Promise<Meta[]> {
+): (page: number, loaded?: number) => Promise<Meta[]> {
   let pageSize = opts.initialPageSize && opts.initialPageSize > 0 ? opts.initialPageSize : null;
-  return async (page: number): Promise<Meta[]> => {
+  return async (page: number, loaded?: number): Promise<Meta[]> => {
     const step = pageSize ?? DEFAULT_CATALOG_PAGE_SIZE;
-    const skip = page <= 1 ? 0 : (page - 1) * step;
+    const skip = loaded != null && loaded > 0 ? loaded : page <= 1 ? 0 : (page - 1) * step;
     const metas = await fetchAddonCatalogPage(cursor.base, cursor.type, cursor.id, skip, cursor.extras);
     if (metas.length > 0 && pageSize == null) pageSize = metas.length;
     return opts.mapMeta ? metas.map(opts.mapMeta) : metas;

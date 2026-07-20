@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { AI_MODELS, GROQ_MODELS, PROVIDER_NAME, providerForModel } from "@/lib/ai-models";
+import { pruneToCatalog, useGroqCatalog, useOpenRouterCatalog } from "@/lib/ai-live-models";
 import { ProviderLogo } from "@/components/ai-provider-logo";
 import { HoverTooltip } from "@/components/hover-tooltip";
 import { useT } from "@/lib/i18n";
-
-const ALL_MODELS = [...GROQ_MODELS, ...AI_MODELS];
+import { useSettings } from "@/lib/settings";
 
 export function AiModeButton({
   active,
@@ -18,11 +18,18 @@ export function AiModeButton({
   onSelectModel: (id: string) => void;
 }) {
   const t = useT();
+  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const holdTimer = useRef<number | null>(null);
   const heldRef = useRef(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const provider = providerForModel(currentModel);
+  const orCatalog = useOpenRouterCatalog();
+  const groqCatalog = useGroqCatalog(settings.aiGroqKey);
+  const allModels = [
+    ...(settings.aiGroqKey.trim() ? pruneToCatalog(GROQ_MODELS, groqCatalog) : []),
+    ...pruneToCatalog(AI_MODELS, orCatalog),
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -49,26 +56,47 @@ export function AiModeButton({
       holdTimer.current = null;
     }
   };
-  const onDown = () => {
+  const onPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
     heldRef.current = false;
     holdTimer.current = window.setTimeout(() => {
       heldRef.current = true;
       setOpen(true);
     }, 320);
   };
-  const onUp = () => {
+  const onPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
     clearHold();
     if (!heldRef.current && !open) onToggle();
+  };
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    clearHold();
+    setOpen(true);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onToggle();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setOpen(true);
+    }
   };
 
   return (
     <div ref={wrapRef} className="relative shrink-0">
-      <HoverTooltip label={t("Hold for more")} side="top" align="center">
+      <HoverTooltip label={t("Hold or right-click for models")} side="top" align="center">
         <button
           type="button"
-          onMouseDown={onDown}
-          onMouseUp={onUp}
-          onMouseLeave={clearHold}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onPointerCancel={clearHold}
+          onContextMenu={onContextMenu}
+          onKeyDown={onKeyDown}
+          aria-haspopup="menu"
+          aria-expanded={open}
           aria-label={t("AI search")}
           className={`flex h-10 w-10 items-center justify-center rounded-full border transition-all ${
             active
@@ -85,7 +113,7 @@ export function AiModeButton({
             {t("AI model")}
           </div>
           <div className="max-h-[320px] overflow-y-auto">
-            {ALL_MODELS.map((m) => {
+            {allModels.map((m) => {
               const on = m.id === currentModel;
               return (
                 <button

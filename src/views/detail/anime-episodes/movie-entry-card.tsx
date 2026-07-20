@@ -34,6 +34,7 @@ export function MovieEntryCard({
                 imdbId: ep.imdbId,
                 imdbSeason: ep.imdbSeason,
                 imdbEpisode: ep.imdbEpisode,
+                absoluteNumber: ep.absoluteNumber ?? ep.number,
               }
             : { season: 1, episode: 1 },
           { autoPlay: settings.instantPlay },

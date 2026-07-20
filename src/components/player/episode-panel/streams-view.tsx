@@ -10,6 +10,7 @@ import type { ScoredStream } from "@/lib/streams/types";
 import { hasCachedMarker } from "@/lib/streams/cached";
 import type { PlayEpisode } from "@/lib/view";
 import { useAddons } from "@/views/play-picker/use-addons";
+import { useAnimeAltTitles } from "@/views/play-picker/use-anime-alt-titles";
 import { useImdbId } from "@/views/play-picker/use-imdb-id";
 import { usePipelineResult } from "@/views/play-picker/use-pipeline-result";
 import { useStreamIds } from "@/views/play-picker/use-stream-ids";
@@ -36,6 +37,7 @@ export function StreamsView({
   const { addons } = useAddons(authKey, settings);
   const imdbId = useImdbId(meta, settings.tmdbKey).id;
   const streamIds = useStreamIds(meta, episode, imdbId);
+  const animeTitles = useAnimeAltTitles(meta);
   const { result, loading, pipelineDone } = usePipelineResult({
     meta,
     episode,
@@ -46,6 +48,7 @@ export function StreamsView({
     settings,
     strictMode: settings.streamFilterLevel === "strict",
     filterDisabled: settings.streamFilterLevel === "off",
+    animeTitles,
   });
 
   const isCached = useCallback(

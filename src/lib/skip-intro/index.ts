@@ -6,6 +6,8 @@ import { fetchAdSegments } from "./adcorpus";
 import { fingerprint } from "./fingerprint";
 import { fetchAniSkipSegments, kitsuToMal } from "./aniskip";
 import { chaptersToSegments } from "./chapters";
+import { fetchIntroDbAppSegments } from "./introdb-app";
+import { fetchSkipDbSegments } from "./skipdb";
 import { fetchIntroDbSegments } from "./theintrodb";
 import type { SkipSegment } from "./types";
 import { getLocalCache } from "../simkl/activities";
@@ -66,6 +68,8 @@ export function useSkipSegments(
 ): SkipSegment[] {
   const [aniSkip, setAniSkip] = useState<SkipSegment[]>([]);
   const [introDb, setIntroDb] = useState<SkipSegment[]>([]);
+  const [skipDb, setSkipDb] = useState<SkipSegment[]>([]);
+  const [introDbApp, setIntroDbApp] = useState<SkipSegment[]>([]);
   const resolvedExternalId = useMemo(() => resolveAnimeToExternalId(meta.id), [meta.id]);
   const kitsuId = parseKitsuId(meta.id);
   const epNum = episode?.episode;
@@ -77,6 +81,13 @@ export function useSkipSegments(
       : episode?.imdbId && episode.imdbId.startsWith("tt")
         ? episode.imdbId
         : resolvedExternalId || meta.id;
+  const skipImdbId = meta.id.startsWith("tt")
+    ? meta.id
+    : episode?.imdbId && episode.imdbId.startsWith("tt")
+      ? episode.imdbId
+      : resolvedExternalId && resolvedExternalId.startsWith("tt")
+        ? resolvedExternalId
+        : null;
 
   useEffect(() => {
     setAniSkip([]);
@@ -113,13 +124,45 @@ export function useSkipSegments(
     };
   }, [introDbId, introSeason, introEpisode, durationSec]);
 
+  useEffect(() => {
+    setSkipDb([]);
+    if (!skipImdbId || durationSec <= 0) return;
+    let cancelled = false;
+    const ep =
+      introSeason != null && introEpisode != null
+        ? { season: introSeason, episode: introEpisode }
+        : undefined;
+    fetchSkipDbSegments(skipImdbId, ep, durationSec)
+      .then((segs) => {
+        if (!cancelled) setSkipDb(segs);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [skipImdbId, introSeason, introEpisode, durationSec]);
+
+  useEffect(() => {
+    setIntroDbApp([]);
+    if (!skipImdbId || introSeason == null || introEpisode == null) return;
+    let cancelled = false;
+    fetchIntroDbAppSegments(skipImdbId, { season: introSeason, episode: introEpisode })
+      .then((segs) => {
+        if (!cancelled) setIntroDbApp(segs);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [skipImdbId, introSeason, introEpisode]);
+
   const fromChapters = useMemo(
     () => chaptersToSegments(chapters, durationSec),
     [chapters, durationSec],
   );
 
   return useMemo(() => {
-    const base = mergeSegments([adSegments, aniSkip, introDb, fromChapters]);
+    const base = mergeSegments([adSegments, aniSkip, skipDb, introDb, introDbApp, fromChapters]);
     if (durationSec <= 0) return base;
     const minOutroStart = durationSec * MIN_OUTRO_START_FRACTION;
     return base
@@ -130,7 +173,7 @@ export function useSkipSegments(
         return len >= 2 && len <= MAX_SEGMENT_SEC;
       })
       .filter((s) => s.kind !== "outro" || s.startSec >= minOutroStart);
-  }, [aniSkip, introDb, fromChapters, durationSec, adSegments]);
+  }, [aniSkip, skipDb, introDb, introDbApp, fromChapters, durationSec, adSegments]);
 }
 
 export function useAdSegments(
@@ -199,5 +242,13 @@ export function prefetchSegments(meta: Meta, episode?: PlayEpisode): void {
         ? { season: introSeason, episode: introEpisode }
         : undefined;
     fetchIntroDbSegments(introDbId, ep, 0).catch(() => {});
+    const tt = meta.id.startsWith("tt")
+      ? meta.id
+      : episode?.imdbId && episode.imdbId.startsWith("tt")
+        ? episode.imdbId
+        : resolvedExternalId && resolvedExternalId.startsWith("tt")
+          ? resolvedExternalId
+          : null;
+    if (tt && ep) fetchIntroDbAppSegments(tt, ep).catch(() => {});
   }
 }

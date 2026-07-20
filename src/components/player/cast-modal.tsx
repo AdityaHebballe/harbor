@@ -139,7 +139,6 @@ export function CastModal({
       }}
     >
       <div
-        data-tv-focus-scope
         style={cardHeight ? { height: cardHeight } : undefined}
         className={`relative flex max-h-[88vh] w-[72vw] min-w-0 max-w-6xl flex-col overflow-hidden rounded-[18px] bg-neutral-950/75 ring-1 ring-white/10 shadow-[0_44px_120px_-32px_rgba(0,0,0,0.9)] backdrop-blur-2xl transition-[height,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] animate-in zoom-in-95 fade-in ${confirmTarget ? "pointer-events-none opacity-0" : ""}`}
       >
@@ -206,7 +205,6 @@ export function CastModal({
             <button
               type="button"
               onClick={onClose}
-              data-tv-modal-close
               className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white/80 transition-colors hover:bg-white/20 hover:text-white"
               aria-label={t("Close")}
             >

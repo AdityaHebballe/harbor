@@ -6,6 +6,7 @@ import { meta as fetchMeta, narrowMediaType, type Meta } from "@/lib/cinemeta";
 import { tmdbLogo, tmdbTrailerList, useTmdbImdbId } from "@/lib/providers/tmdb";
 import { useImdbRating } from "@/lib/imdb-rating";
 import { useSettings } from "@/lib/settings";
+import { useTitleLogo } from "@/lib/title-logo";
 import { useLocalizedOverview } from "@/lib/use-localized-overview";
 import { smartPlayEpisode } from "@/lib/smart-play";
 import { fetchTrailer, prefetchTrailer, trailerSrc, type TrailerInfo } from "@/lib/trailer";
@@ -156,7 +157,7 @@ export function CinemaHero({
           style={{
             transform: trackTransform,
             transition: dragging ? "none" : `transform 700ms ${EASE_OUT}`,
-            willChange: "transform",
+            willChange: dragging ? "transform" : "auto",
           }}
         >
           {slides.map((m, i) => {
@@ -169,6 +170,7 @@ export function CinemaHero({
                     meta={m}
                     active={i === active && !dragging}
                     eyebrow={eyebrow}
+                    inViewport={inViewport}
                   />
                 ) : null}
               </div>
@@ -197,10 +199,12 @@ export function CinemaHero({
 function CinemaSlide({
   meta,
   active,
+  inViewport,
   eyebrow,
 }: {
   meta: Meta;
   active: boolean;
+  inViewport: boolean;
   eyebrow: string;
 }) {
   const t = useT();
@@ -209,7 +213,9 @@ function CinemaSlide({
   const description = useLocalizedOverview(meta);
   const resolvedImdb = useTmdbImdbId(meta.id);
   const imdbRating = useImdbRating(meta, resolvedImdb);
-  const [logo, setLogo] = useState<string | undefined>(meta.logo);
+  const [logoState, setLogo] = useState<string | undefined>(meta.logo);
+  const pinnedLogo = useTitleLogo(meta.id);
+  const logo = pinnedLogo ?? logoState;
   const [logoLoaded, setLogoLoaded] = useState(false);
   const [logoResolved, setLogoResolved] = useState<boolean>(!!meta.logo);
   const [trailerCandidates, setTrailerCandidates] = useState<string[]>([]);
@@ -217,7 +223,7 @@ function CinemaSlide({
   const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pageVisible = usePageVisible();
-  const wantsPlayback = active && !!trailerInfo && pageVisible;
+  const wantsPlayback = active && !!trailerInfo && pageVisible && inViewport && settings.heroTrailers;
   const bg = upsizeTmdb(meta.background || meta.poster);
 
   useEffect(() => {
@@ -245,7 +251,7 @@ function CinemaSlide({
   }, [active, logoResolved, meta.id, meta.type, settings.tmdbKey]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !settings.heroTrailers) return;
     setTrailerCandidates([]);
     setTrailerInfo(null);
     setVideoReady(false);
@@ -271,10 +277,10 @@ function CinemaSlide({
     return () => {
       cancelled = true;
     };
-  }, [active, meta.id, meta.type, settings.tmdbKey]);
+  }, [active, meta.id, meta.type, settings.tmdbKey, settings.heroTrailers]);
 
   useEffect(() => {
-    if (!active || trailerCandidates.length === 0 || trailerInfo) return;
+    if (!active || !settings.heroTrailers || trailerCandidates.length === 0 || trailerInfo) return;
     let cancelled = false;
     fetchTrailer(trailerCandidates[0], "360p").then((info) => {
       if (!cancelled && info) setTrailerInfo(info);
@@ -282,7 +288,7 @@ function CinemaSlide({
     return () => {
       cancelled = true;
     };
-  }, [active, trailerCandidates, trailerInfo]);
+  }, [active, trailerCandidates, trailerInfo, settings.heroTrailers]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -337,7 +343,7 @@ function CinemaSlide({
             playsInline
             preload="none"
             onCanPlay={() => setVideoReady(true)}
-            className="absolute left-1/2 top-1/2 h-[135%] w-[135%] -translate-x-1/2 -translate-y-1/2 object-cover"
+            className="absolute left-1/2 top-1/2 h-[110%] w-[110%] -translate-x-1/2 -translate-y-1/2 object-cover"
           />
         </div>
       )}
@@ -453,5 +459,5 @@ function Dot() {
 
 function upsizeTmdb(url?: string): string | undefined {
   if (!url) return url;
-  return url.replace("/t/p/w780/", "/t/p/w1280/");
+  return url.replace(/\/t\/p\/(w780|original)\//, "/t/p/w1280/");
 }

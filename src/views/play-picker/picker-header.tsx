@@ -5,15 +5,11 @@ import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import type { PlayEpisode } from "@/lib/view";
 
-export function PickerHeader({
-  meta,
-  episode,
+export function PickerNav({
   onBack,
   onRefresh,
   refreshing = false,
 }: {
-  meta: Meta;
-  episode?: PlayEpisode;
   onBack: () => void;
   onRefresh?: () => void;
   refreshing?: boolean;
@@ -21,40 +17,50 @@ export function PickerHeader({
   const t = useT();
   const { settings } = useSettings();
   return (
-    <header className="flex flex-col gap-3">
-      <div className="sticky top-4 z-20 mb-2">
-        <div
-          className={`relative flex items-center gap-3 ${
-            settings.pickerRefreshNextToBack ? "justify-start" : "justify-between"
-          }`}
+    <div className="-mb-9">
+      <div
+        className={`flex items-center gap-3 ${
+          settings.pickerRefreshNextToBack ? "justify-start" : "justify-between"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={onBack}
+          className="group/back -ms-2 flex w-fit items-center gap-3 rounded-full py-1.5 pe-6 ps-1.5 text-[17px] font-semibold text-ink-muted transition-colors hover:text-ink"
         >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-elevated/70 ring-1 ring-edge-soft transition-colors group-hover/back:bg-elevated">
+            <ChevronLeft size={26} strokeWidth={2.4} className="dir-icon" />
+          </span>
+          Back
+        </button>
+        {onRefresh && (
           <button
             type="button"
-            onClick={onBack}
-            data-tv-modal-close
-            aria-label={t("common.back")}
-            className="group/back -ms-1 flex w-fit items-center gap-3 rounded-full py-1.5 pe-6 ps-1.5 text-[17px] font-semibold text-ink-muted transition-colors hover:text-ink"
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label={t("Refresh sources")}
+            className="group/refresh flex w-fit shrink-0 items-center gap-3 rounded-full py-1.5 pe-6 ps-1.5 text-[17px] font-semibold text-ink-muted transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-elevated/70 ring-1 ring-edge-soft transition-colors group-hover/back:bg-elevated">
-              <ChevronLeft size={26} strokeWidth={2.4} className="dir-icon" />
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-elevated/70 ring-1 ring-edge-soft transition-colors group-hover/refresh:bg-elevated">
+              <RefreshCw size={20} strokeWidth={2.4} className={refreshing ? "animate-spin" : ""} />
             </span>
-            Back
+            {t("Refresh")}
           </button>
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={refreshing}
-              title={t("Refresh sources")}
-              aria-label={t("Refresh sources")}
-              className="flex h-11 shrink-0 items-center gap-2 rounded-full border border-edge-soft bg-elevated/70 ps-4 pe-5 text-[14px] font-semibold text-ink-muted transition-colors hover:bg-elevated hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <RefreshCw size={17} strokeWidth={2.4} className={refreshing ? "animate-spin" : ""} />
-              {t("Refresh")}
-            </button>
-          )}
-        </div>
+        )}
       </div>
+    </div>
+  );
+}
+
+export function PickerHeader({
+  meta,
+  episode,
+}: {
+  meta: Meta;
+  episode?: PlayEpisode;
+}) {
+  return (
+    <header className="flex flex-col gap-3">
       {episode ? (
         <>
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-ink-subtle">

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { useSettings } from "@/lib/settings";
 import { useView, type MetaFilter } from "@/lib/view";
 import { useTogether } from "@/lib/together/provider";
@@ -8,6 +8,7 @@ import { awardTypeLabel } from "@/lib/providers/wikidata";
 import { awardSourceMeta } from "@/lib/anime-awards";
 import { tmdbPerson, tmdbPersonCached } from "@/lib/providers/tmdb/tmdb-people";
 import type { Meta } from "@/lib/cinemeta";
+import { getMangaReading, subscribeMangaReading, type MangaReadingState } from "@/lib/manga-reading-state";
 import { configureDiscord, setBrowsePresence, setPartyPresence, type BrowsePresence } from "./presence";
 import { useActivityHint } from "./activity-hint";
 
@@ -78,10 +79,20 @@ function personBrowse(name: string, profilePath: string | null): BrowsePresence 
   };
 }
 
+function mangaBrowse(m: NonNullable<MangaReadingState>): BrowsePresence {
+  return {
+    details: `Reading ${m.title}`,
+    state: `${m.chapterLabel}, page ${m.page}/${m.totalPages}`,
+    largeImage: m.cover,
+    largeText: m.title,
+  };
+}
+
 export function useDiscordPresence(): void {
   const { settings } = useSettings();
   const { topKind, service, meta, awardType, animeAwardSource, filter, personId } = useView();
   const hint = useActivityHint();
+  const manga = useSyncExternalStore(subscribeMangaReading, getMangaReading, getMangaReading);
   const { snapshot } = useTogether();
   const relayUrl = settings.togetherRelayUrl;
 
@@ -107,6 +118,10 @@ export function useDiscordPresence(): void {
 
   useEffect(() => {
     if (topKind === "player") return;
+    if (manga) {
+      setBrowsePresence(mangaBrowse(manga));
+      return;
+    }
     if (hint) {
       setBrowsePresence(hint);
       return;
@@ -171,6 +186,7 @@ export function useDiscordPresence(): void {
     personId,
     settings.tmdbKey,
     hint,
+    manga,
   ]);
 
   useEffect(() => {

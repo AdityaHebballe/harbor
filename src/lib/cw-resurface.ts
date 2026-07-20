@@ -1,4 +1,5 @@
 import { fetchAdjacentEpisodes } from "@/lib/series-episodes";
+import { relatedLibraryIds } from "@/lib/providers/anime-mapping";
 import type { Meta } from "@/lib/cinemeta";
 import {
   episodeFromVideoId,
@@ -98,7 +99,11 @@ export async function resurfaceCandidates(
       cache.set(key, { next: nx, t: now });
     }
     if (nx && watchedFor && watchedFor(i, cur)(nx.season, nx.episode)) nx = null;
-    if (nx) out.set(i._id, nx);
+    if (nx) {
+      const related = await relatedLibraryIds(i._id).catch(() => []);
+      if (related.some((r) => inCw.has(r))) continue;
+      out.set(i._id, nx);
+    }
   }
   return out;
 }

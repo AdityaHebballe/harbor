@@ -25,6 +25,7 @@ import flagTur from "@/assets/flags/flag-tur.svg";
 import flagUkr from "@/assets/flags/flag-ukr.svg";
 import flagVie from "@/assets/flags/flag-vie.svg";
 import flagZho from "@/assets/flags/flag-zho.svg";
+import { regionFlagSrc } from "@/lib/region-flags";
 
 const FLAG: Record<string, string> = {
   English: flagEng,
@@ -56,6 +57,10 @@ const FLAG: Record<string, string> = {
   Ukrainian: flagUkr,
   Vietnamese: flagVie,
 };
+
+export function countryFlagSrc(code: string): string | null {
+  return regionFlagSrc(code);
+}
 
 export type FlagSize = "sm" | "md" | "lg";
 

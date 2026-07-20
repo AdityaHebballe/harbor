@@ -3,6 +3,7 @@ import { check } from "@tauri-apps/plugin-updater";
 
 const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 const DISMISS_KEY = "harbor.update.dismissed";
+const PENDING_KEY = "harbor.update.pending";
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 export type UpdateStatus =
@@ -23,6 +24,7 @@ export type UpdateState = {
   downloadedBytes: number;
   totalBytes: number;
   error: string | null;
+  installFailed: boolean;
   manualCheck: boolean;
   dismissed: string | null;
   panelOpen: boolean;
@@ -44,6 +46,7 @@ let state: UpdateState = {
   downloadedBytes: 0,
   totalBytes: 0,
   error: null,
+  installFailed: false,
   manualCheck: false,
   dismissed: readDismissed(),
   panelOpen: false,
@@ -150,8 +153,13 @@ export async function downloadUpdate(): Promise<void> {
 
 export async function installUpdate(): Promise<void> {
   if (!handle) return;
-  set({ status: "installing", error: null });
+  set({ status: "installing", error: null, installFailed: false });
   try {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify({ version: handle.version, at: Date.now() }));
+    } catch {
+      /* private mode: we just lose next-launch failure detection */
+    }
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("close_aux_windows").catch(() => {});
@@ -164,8 +172,75 @@ export async function installUpdate(): Promise<void> {
     const { relaunch } = await import("@tauri-apps/plugin-process");
     await relaunch();
   } catch (e) {
-    set({ status: "error", error: String(e) });
+    set({ status: "error", error: String(e), installFailed: true, panelOpen: true });
   }
+}
+
+function cmpVersion(a: string, b: string): number {
+  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d > 0 ? 1 : -1;
+  }
+  return 0;
+}
+
+export async function openManualDownload(): Promise<void> {
+  const { openUrl } = await import("@/lib/window");
+  let target = "https://harbor.site";
+  try {
+    const { safeFetch } = await import("@/lib/safe-fetch");
+    const res = await safeFetch(
+      "https://harbor.site/updates/latest.json",
+      betaChannel() ? { headers: { "x-harbor-channel": "beta" } } : undefined,
+    );
+    const manifest = (await res.json()) as { platforms?: Record<string, { url?: string }> };
+    const platforms = manifest.platforms ?? {};
+    const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const want = ua.includes("Windows") ? "windows" : ua.includes("Mac") ? "darwin" : "linux";
+    const key =
+      Object.keys(platforms).find((k) => k.toLowerCase().startsWith(want)) ?? Object.keys(platforms)[0];
+    const url = key ? platforms[key]?.url : undefined;
+    if (typeof url === "string" && url) target = url;
+  } catch {
+    /* fall back to the site download */
+  }
+  openUrl(target);
+}
+
+async function detectFailedUpdate(): Promise<boolean> {
+  if (!IS_TAURI) return false;
+  let pending: { version?: string } | null = null;
+  try {
+    pending = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "null");
+  } catch {
+    pending = null;
+  }
+  if (!pending?.version) return false;
+  let current: string | null = null;
+  try {
+    const { getVersion } = await import("@tauri-apps/api/app");
+    current = await getVersion();
+  } catch {
+    current = null;
+  }
+  if (current && cmpVersion(current, pending.version) >= 0) {
+    try {
+      localStorage.removeItem(PENDING_KEY);
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  set({
+    status: "error",
+    installFailed: true,
+    version: pending.version,
+    error: `Harbor ${pending.version} downloaded but did not install on its own.`,
+    panelOpen: true,
+  });
+  return true;
 }
 
 export function openUpdatePanel(): void {
@@ -208,6 +283,9 @@ let started = false;
 export function startUpdateWatcher(): void {
   if (started || !IS_TAURI) return;
   started = true;
-  void checkForUpdate(false);
-  window.setInterval(() => void checkForUpdate(false), CHECK_INTERVAL_MS);
+  void (async () => {
+    const failed = await detectFailedUpdate();
+    if (!failed) void checkForUpdate(false);
+    window.setInterval(() => void checkForUpdate(false), CHECK_INTERVAL_MS);
+  })();
 }

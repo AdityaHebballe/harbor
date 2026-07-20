@@ -21,7 +21,9 @@ export type LocalEntry = {
   episode?: number | null;
   addedAt: number;
   needsReview?: boolean;
+  isAnime?: boolean;
   source?: "tmdb" | "nfo";
+  folder?: string;
   localArt?: { poster?: string; logo?: string; backdrop?: string };
 };
 
@@ -81,6 +83,10 @@ export function addLocalEntries(entries: LocalEntry[]): void {
 
 export function removeLocalEntry(id: string): void {
   write(read().filter((e) => e.id !== id));
+}
+
+export function removeLocalFolder(folder: string): void {
+  write(read().filter((e) => e.folder !== folder));
 }
 
 export function updateLocalEntry(id: string, patch: Partial<LocalEntry>): void {

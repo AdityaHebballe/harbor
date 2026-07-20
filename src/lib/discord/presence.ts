@@ -92,8 +92,7 @@ function computeBase(): Base {
         posterUrl: (config.showPoster && playback.posterUrl) || HARBOR_LOGO,
         smallImageUrl: (config.showPoster && playback.smallImageUrl) || undefined,
         largeText: playback.year != null ? `${playback.title} (${playback.year})` : playback.title,
-        startTs:
-          live && config.showTimestamp ? nowSec - Math.floor(playback.positionSec) : undefined,
+        startTs: live && config.showTimestamp ? nowSec - Math.floor(playback.positionSec) : undefined,
         endTs: live && config.showTimestamp ? nowSec + Math.floor(remaining) : undefined,
         paused: playback.paused,
       },
@@ -102,10 +101,7 @@ function computeBase(): Base {
   }
   if (browse && config.showWhenBrowsing) {
     if (config.hideTitle)
-      return {
-        payload: { details: "Browsing Harbor", posterUrl: HARBOR_LOGO },
-        key: "browse:hide",
-      };
+      return { payload: { details: "Browsing Harbor", posterUrl: HARBOR_LOGO }, key: "browse:hide" };
     return {
       payload: {
         details: browse.details ?? "Browsing Harbor",
@@ -185,9 +181,27 @@ export function configureDiscord(next: DiscordConfig): void {
   schedule();
 }
 
+export type ActivityState = { playback: PlaybackPresence | null; party: PartyPresence | null };
+
+const activitySubs = new Set<(s: ActivityState) => void>();
+
+function emitActivity(): void {
+  const s: ActivityState = { playback, party };
+  for (const fn of activitySubs) fn(s);
+}
+
+export function subscribeActivity(fn: (s: ActivityState) => void): () => void {
+  activitySubs.add(fn);
+  fn({ playback, party });
+  return () => {
+    activitySubs.delete(fn);
+  };
+}
+
 export function setPlaybackPresence(p: PlaybackPresence | null): void {
   playback = p;
   schedule();
+  emitActivity();
 }
 
 export function setBrowsePresence(b: BrowsePresence | null): void {
@@ -198,4 +212,5 @@ export function setBrowsePresence(b: BrowsePresence | null): void {
 export function setPartyPresence(p: PartyPresence | null): void {
   party = p;
   schedule();
+  emitActivity();
 }

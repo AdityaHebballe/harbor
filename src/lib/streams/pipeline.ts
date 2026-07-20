@@ -82,6 +82,7 @@ export async function runPipeline(
   input: PipelineInput,
   signal: AbortSignal,
   onProgress?: (partial: PipelineResult) => void,
+  onAddonProgress?: (settled: number, total: number) => void,
 ): Promise<PipelineResult> {
   let library: Stream[] = [];
   let lastPartialAt = 0;
@@ -117,7 +118,7 @@ export async function runPipeline(
     }),
     presets.length > 0
       ? Promise.resolve(presets)
-      : fetchAddonStreams(input.addons, input.request, signal, emitPartial),
+      : fetchAddonStreams(input.addons, input.request, signal, emitPartial, onAddonProgress),
   ]);
   if (librarySettled.status === "fulfilled") library = librarySettled.value;
   const addonStreams = addonSettled.status === "fulfilled" ? addonSettled.value : [];

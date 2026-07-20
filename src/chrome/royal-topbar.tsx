@@ -1,29 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { LogIn, LogOut, Pencil, Search, Settings as SettingsLucide, Users } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Search } from "lucide-react";
 import { HarborMark } from "@/components/icons/harbor-mark";
-import { CatAvatar } from "@/components/icons/cat-avatar";
-import { AuthModal } from "@/components/auth-modal";
+import { NotificationCenter } from "@/components/notification-center/notification-center";
 import { ParentalPinModal } from "@/components/parental-pin-modal";
-import { TvModalClose } from "@/components/tv-modal-close";
 import { TogetherButton } from "@/chrome/topbar";
-import { useAuth } from "@/lib/auth";
+import { AccountMenu } from "@/chrome/account-menu/account-menu";
 import { useT } from "@/lib/i18n";
-import { useTvFocusScope } from "@/lib/keyboard-navigation";
-import { useProfiles } from "@/lib/profiles";
 import { useSearch } from "@/lib/search-context";
-import {
-  effectiveBinding,
-  eventToBinding,
-  formatBindingForDisplay,
-  shouldHandleGlobalKeyboardEvent,
-} from "@/lib/hotkeys";
+import { effectiveBinding, eventToBinding, formatBindingForDisplay, shouldHandleGlobalKeyboardEvent } from "@/lib/hotkeys";
 import { useSettings } from "@/lib/settings";
 import { getThemeById } from "@/lib/theme";
 import { useParental } from "@/lib/parental";
 import { useView, type View } from "@/lib/view";
 import { close, minimize, toggleMaximize, useMaximized } from "@/lib/window";
 import { OverflowNav, type NavEntry } from "@/chrome/nav-overflow";
-import { HoverNavIcon } from "@/chrome/hover-nav-icon";
 import { NAV_ITEMS, applyNavCustomization, type NavItem } from "@/chrome/nav-items";
 
 const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -51,8 +41,7 @@ export function RoyalTopbar() {
   };
 
   const navigate = (item: NavItem) => {
-    const needsPin =
-      locked && (item.pinGated || (item.parentalKey && hiddenTabs[item.parentalKey]));
+    const needsPin = locked && (item.pinGated || (item.parentalKey && hiddenTabs[item.parentalKey]));
     if (needsPin) setPinFor(item.view);
     else setView(item.view);
   };
@@ -69,7 +58,6 @@ export function RoyalTopbar() {
       node: (
         <button
           type="button"
-          data-harbor-nav={item.view}
           onClick={() => navigate(item)}
           aria-label={label}
           title={label}
@@ -84,7 +72,7 @@ export function RoyalTopbar() {
             />
           )}
           <span className="grid h-[18px] w-[18px] place-items-center [&_svg]:h-[18px] [&_svg]:w-[18px]">
-            <HoverNavIcon render={item.render} />
+            {item.render(false)}
           </span>
           <span className="hidden xl:inline">{label}</span>
         </button>
@@ -97,14 +85,11 @@ export function RoyalTopbar() {
       <header
         aria-hidden={chromeHidden}
         className={`fixed inset-x-0 top-0 z-[60] flex h-20 items-center px-4 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          chromeHidden
-            ? "pointer-events-none -translate-y-1.5 opacity-0"
-            : "translate-y-0 opacity-100"
+          chromeHidden ? "pointer-events-none -translate-y-1.5 opacity-0" : "translate-y-0 opacity-100"
         }`}
       >
         <div
           data-tauri-drag-region
-          data-tv-top-chrome
           className="harbor-royal-bar pointer-events-auto grid h-14 w-full grid-cols-[1fr_auto] items-center gap-3 rounded-[10px] border border-[color-mix(in_srgb,var(--color-accent)_22%,var(--color-edge))] bg-canvas/85 ps-3.5 pe-2 shadow-[inset_0_1px_0_color-mix(in_srgb,var(--color-accent)_14%,transparent),0_22px_60px_-26px_rgba(0,0,0,0.85)] backdrop-blur-xl"
         >
           <div className="flex min-w-0 items-center gap-2.5">
@@ -139,36 +124,25 @@ export function RoyalTopbar() {
 
           <div className="flex shrink-0 items-center gap-1.5">
             <SearchPill onOpen={() => setSearchOpen(true)} />
+            <NotificationCenter />
             {view !== "live" && <TogetherButton variant="ghost" />}
-            <RoyalProfileMenu
+            <AccountMenu
+              trigger="pill"
+              placement="down"
+              align="end"
+              showSettings
               onOpenSettings={() => setView("settings")}
               settingsActive={view === "settings"}
             />
-            {IS_TAURI && !settings.useNativeTitleBar && (
+            {IS_TAURI && !settings.useNativeTitleBar && !settings.hybridTitleBar && (
               <div className="ms-0.5 flex items-center gap-1">
                 <WinBtn onClick={minimize} label={t("chrome.minimize")}>
-                  <path
-                    d="M3 6.5h7"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
+                  <path d="M3 6.5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </WinBtn>
-                <WinBtn
-                  onClick={toggleMaximize}
-                  label={maxed ? t("chrome.restore") : t("chrome.maximize")}
-                >
+                <WinBtn onClick={toggleMaximize} label={maxed ? t("chrome.restore") : t("chrome.maximize")}>
                   {maxed ? (
                     <>
-                      <rect
-                        x="2.5"
-                        y="4.5"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        rx="1"
-                      />
+                      <rect x="2.5" y="4.5" width="6" height="6" stroke="currentColor" strokeWidth="1.4" rx="1" />
                       <path
                         d="M5 4.5V3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H9"
                         stroke="currentColor"
@@ -177,24 +151,11 @@ export function RoyalTopbar() {
                       />
                     </>
                   ) : (
-                    <rect
-                      x="3"
-                      y="3"
-                      width="7"
-                      height="7"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      rx="1.2"
-                    />
+                    <rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.4" rx="1.2" />
                   )}
                 </WinBtn>
                 <WinBtn onClick={close} label={t("common.close")} danger>
-                  <path
-                    d="M3.5 3.5l6 6M9.5 3.5l-6 6"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
+                  <path d="M3.5 3.5l6 6M9.5 3.5l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </WinBtn>
               </div>
             )}
@@ -221,10 +182,7 @@ export function RoyalTopbar() {
 
 function Filigree() {
   return (
-    <span
-      aria-hidden
-      className="harbor-royal-filigree relative mx-1 h-6 w-px shrink-0 overflow-hidden"
-    >
+    <span aria-hidden className="harbor-royal-filigree relative mx-1 h-6 w-px shrink-0 overflow-hidden">
       <span className="absolute inset-0 bg-[color-mix(in_srgb,var(--color-accent)_42%,transparent)]" />
       <span className="harbor-royal-glint absolute inset-x-0 top-0 h-1.5 bg-[linear-gradient(to_bottom,transparent,color-mix(in_srgb,var(--color-accent)_85%,white),transparent)]" />
     </span>
@@ -289,165 +247,6 @@ function WinBtn({
       <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
         {children}
       </svg>
-    </button>
-  );
-}
-
-function RoyalProfileMenu({
-  onOpenSettings,
-  settingsActive,
-}: {
-  onOpenSettings: () => void;
-  settingsActive: boolean;
-}) {
-  const { user, signOut } = useAuth();
-  const { settings } = useSettings();
-  const { profiles, activeProfile, openPicker, selectProfile } = useProfiles();
-  const t = useT();
-  const [open, setOpen] = useState(false);
-  const [authOpen, setAuthOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useTvFocusScope(open, ref);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  const name =
-    activeProfile?.name ?? user?.fullname ?? user?.email?.split("@")[0] ?? t("profile.fallback");
-  const color = activeProfile?.color ?? "#f08032";
-  const avatarSrc = activeProfile?.avatar ?? settings.harborAvatar ?? user?.avatar ?? null;
-  const otherProfiles = profiles.filter((p) => p.id !== activeProfile?.id);
-  const dismiss = (run: () => void) => {
-    setOpen(false);
-    run();
-  };
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="flex h-9 items-center gap-2 rounded-md border border-transparent ps-1 pe-2.5 text-[13px] font-medium text-ink-muted transition-colors duration-150 hover:border-[color-mix(in_srgb,var(--color-accent)_30%,transparent)] hover:text-ink"
-      >
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-[color-mix(in_srgb,var(--color-accent)_40%,transparent)]"
-          style={{ background: color }}
-        >
-          {avatarSrc ? (
-            <img src={avatarSrc} alt="" className="h-full w-full object-cover" draggable={false} />
-          ) : (
-            <CatAvatar className="h-full w-full" />
-          )}
-        </span>
-        <span className="hidden max-w-[8rem] truncate md:inline">{name}</span>
-      </button>
-      {open && (
-        <div
-          data-tv-focus-scope
-          className="harbor-royal-menu absolute end-0 top-[calc(100%+10px)] z-40 w-60 overflow-hidden rounded-[10px] border border-[color-mix(in_srgb,var(--color-accent)_24%,var(--color-edge))] bg-canvas/95 shadow-[0_24px_60px_-18px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
-        >
-          <TvModalClose onClose={() => setOpen(false)} label={t("common.close")} />
-          <div className="border-b border-edge-soft px-4 py-3">
-            <div
-              className="text-[14px] leading-tight text-ink"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {name}
-            </div>
-            {user?.email && (
-              <div className="truncate pt-0.5 text-[11.5px] text-ink-subtle">{user.email}</div>
-            )}
-          </div>
-          {otherProfiles.length > 0 && (
-            <div className="flex flex-col gap-0.5 border-b border-edge-soft p-1.5">
-              <span className="px-2.5 pb-1 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-ink-subtle">
-                {t("profile.switch")}
-              </span>
-              {otherProfiles.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() =>
-                    dismiss(() =>
-                      p.passwordHash
-                        ? openPicker({ kind: "unlock", profileId: p.id })
-                        : selectProfile(p.id),
-                    )
-                  }
-                  className="flex items-center gap-2 rounded-md px-2 py-1.5 text-start transition-colors hover:bg-elevated"
-                >
-                  <span
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-canvas"
-                    style={{ background: p.color }}
-                  >
-                    {p.name.slice(0, 1).toUpperCase()}
-                  </span>
-                  <span className="truncate text-[12.5px] text-ink">{p.name}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-col py-1">
-            <MenuItem onClick={() => dismiss(() => openPicker({ kind: "list" }))}>
-              <Users size={13} strokeWidth={2.2} /> {t("profile.whoWatching")}
-            </MenuItem>
-            {activeProfile && (
-              <MenuItem
-                onClick={() =>
-                  dismiss(() => openPicker({ kind: "edit", profileId: activeProfile.id }))
-                }
-              >
-                <Pencil size={13} strokeWidth={2.2} /> {t("Edit profile")}
-              </MenuItem>
-            )}
-            <MenuItem active={settingsActive} onClick={() => dismiss(onOpenSettings)}>
-              <SettingsLucide size={13} strokeWidth={2.2} /> {t("nav.settings")}
-            </MenuItem>
-            {user ? (
-              <MenuItem bordered onClick={() => dismiss(signOut)}>
-                <LogOut size={13} strokeWidth={2.2} /> {t("Sign out")}
-              </MenuItem>
-            ) : (
-              <MenuItem bordered onClick={() => dismiss(() => setAuthOpen(true))}>
-                <LogIn size={13} strokeWidth={2.2} /> {t("profile.signIn")}
-              </MenuItem>
-            )}
-          </div>
-        </div>
-      )}
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-    </div>
-  );
-}
-
-function MenuItem({
-  onClick,
-  active,
-  bordered,
-  children,
-}: {
-  onClick: () => void;
-  active?: boolean;
-  bordered?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-2.5 px-4 py-2.5 text-start text-[13px] transition-colors hover:bg-elevated hover:text-ink ${
-        bordered ? "mt-1 border-t border-edge-soft pt-3" : ""
-      } ${active ? "text-accent" : "text-ink-muted"}`}
-    >
-      {children}
     </button>
   );
 }

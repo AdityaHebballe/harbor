@@ -5,6 +5,8 @@ use tokio::process::Command;
 
 use crate::transcode::locate_ffmpeg;
 
+use super::vad;
+
 const NOISE_DB: &str = "-30dB";
 const MIN_SILENCE: &str = "0.35";
 const SPEECH_FILTER: &str = "aformat=channel_layouts=mono,highpass=f=200,lowpass=f=3000";
@@ -103,6 +105,28 @@ pub async fn speech_intervals(
     let _ = child.kill().await;
 
     Ok(complement(&mut silences, len_sec, start_sec))
+}
+
+pub async fn speech_intervals_reference(
+    url: &str,
+    headers: &HashMap<String, String>,
+    start_sec: f32,
+    len_sec: f32,
+) -> Result<Vec<(f32, f32)>, String> {
+    match vad::speech_intervals_ml(
+        url,
+        headers,
+        start_sec,
+        len_sec,
+        &vad::VadConfig::default(),
+        vad::Backend::Heuristic,
+        "0:a:0",
+    )
+    .await
+    {
+        Ok(iv) => Ok(iv),
+        Err(_) => speech_intervals(url, headers, start_sec, len_sec).await,
+    }
 }
 
 #[cfg(test)]

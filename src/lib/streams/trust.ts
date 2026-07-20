@@ -17,6 +17,7 @@ export type TrustOptions = {
   preferredAudioLangs?: string[];
   requirePreferredLanguage?: boolean;
   isAnime?: boolean;
+  expectedTitles?: string[] | null;
 };
 
 export type Rejection = {
@@ -26,10 +27,27 @@ export type Rejection = {
 
 const FILENAME_BLACKLIST = [".exe", ".zip", ".rar", ".lnk", ".scr", ".bat", ".iso", ".img"];
 const TRAILER_RX = /(?<![A-Za-z0-9])(?:trailer|teaser|tlr|trl|tra(?:iler)?|sneak[\s.\-_]?peek|preview|behind[\s.\-_]?the[\s.\-_]?scenes|featurette|making[\s.\-_]?of|deleted[\s.\-_]?scene|bloopers?|gag[\s.\-_]?reel|extras?|promo)(?![A-Za-z0-9])/i;
-const UNCACHED_EMOJI_RX = /[⬇⏳⌛⏬🔽📥☁]/u;
 const PLACEHOLDER_BANNER_RX = /(?:🚫|⚠️?|❗|ℹ️?)\s*(?:no\s+streams?\s+(?:found|available)|streams?\s+filtered|streams?\s+blocked|filtered)/iu;
 const STATUS_LINE_RX = /\b(?:expires?\s+in|days?\s+left|premium\s+(?:active|expir(?:ed|ing))|api\s+limit|quota\s+used)\b/i;
 const TINY_STUB_FLOOR = 5 * 1024 ** 2;
+
+// Notorious fake/scam release groups. These uploaders only ever post fakes
+// (malware stubs, mislabeled ad-trailer reuploads), so they are rejected
+// regardless of the cinema window. Scene-style tags are matched against the
+// PARSED release group only (never free title text) so a legit title that
+// merely contains a common word like "rude" is never nuked. The multi-word
+// ad-studio brands are matched as word-boundary phrases in the haystack because
+// they are rarely parsed as a clean release-group token.
+const FAKE_GROUP_TOKENS = new Set([
+  "LAMA",
+  "DJT",
+  "TELLY",
+  "RUDE",
+  "TELESYNC",
+  "TELESYNCH",
+  "DRAGONMONEY",
+]);
+const FAKE_STUDIO_RX = /(?:^|[^a-z0-9])(?:dragon[\s._-]?money|telesynch)(?:$|[^a-z0-9])/i;
 
 const MIB = 1024 ** 2;
 const GIB = 1024 ** 3;
@@ -132,8 +150,11 @@ function checkOne(
     return "trailer-or-extra";
   }
 
-  if (UNCACHED_EMOJI_RX.test(titleNameDesc)) {
-    return "addon-uncached-emoji";
+  if (
+    (s.releaseGroupNormalized != null && FAKE_GROUP_TOKENS.has(s.releaseGroupNormalized)) ||
+    FAKE_STUDIO_RX.test(haystack)
+  ) {
+    return "known-fake-group";
   }
 
   if (s.size != null && s.size < TINY_STUB_FLOOR) {
@@ -216,6 +237,12 @@ function checkOne(
       return "fresh-cinema-fake-4k-web";
     }
     if (
+      (s.resolution === "1080p" || s.resolution === "720p") &&
+      (s.source === "WEB-DL" || s.source === "WEBRip" || s.source === "BDRip" || s.source === "HDRip")
+    ) {
+      return "fresh-cinema-fake-web";
+    }
+    if (
       s.source === "HDTV" &&
       (s.resolution === "4K" || s.resolution === "1080p")
     ) {
@@ -233,6 +260,20 @@ function checkOne(
     if (!titleMatches(opts.expectedTitle, s.parsedTitle, s.year, opts.expectedYear ?? null)) {
       return "title-mismatch";
     }
+  }
+
+  if (
+    strict &&
+    opts.kind === "series" &&
+    opts.isAnime &&
+    opts.expectedTitles != null &&
+    opts.expectedTitles.length > 0 &&
+    s.parsedTitle
+  ) {
+    const ok = opts.expectedTitles.some((t) =>
+      titleMatches(t, s.parsedTitle, s.year, opts.expectedYear ?? null),
+    );
+    if (!ok) return "anime-title-mismatch";
   }
 
   const hasFileIdx = s.fileIdx != null;
@@ -336,7 +377,7 @@ function countOverlap(words: string[], lookup: Set<string>): number {
   return hits;
 }
 
-function titleMatches(
+export function titleMatches(
   expected: string,
   parsed: string,
   parsedYear: number | null,
@@ -370,6 +411,19 @@ function titleMatches(
   if (expectedTokens.length <= 2 && parsedTokens.length - overlap > 2) {
     return false;
   }
+  return expectedRatio >= 0.5 || parsedRatio >= 0.5 || overlap >= 2;
+}
+
+export function titleTokensPresent(expected: string, parsed: string): boolean {
+  const expectedTokens = tokenize(expected);
+  const parsedTokens = tokenize(parsed);
+  if (expectedTokens.length === 0 || parsedTokens.length === 0) return true;
+  const expectedSet = new Set(expectedTokens);
+  const parsedSet = new Set(parsedTokens);
+  const overlap = countOverlap(expectedTokens, parsedSet);
+  const reverseOverlap = countOverlap(parsedTokens, expectedSet);
+  const expectedRatio = overlap / expectedTokens.length;
+  const parsedRatio = reverseOverlap / parsedTokens.length;
   return expectedRatio >= 0.5 || parsedRatio >= 0.5 || overlap >= 2;
 }
 

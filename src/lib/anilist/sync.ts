@@ -150,15 +150,20 @@ export async function syncAnimeProgress(
   harborId: string,
   episode: number | undefined,
   title: string,
+  absoluteEpisode?: number,
 ): Promise<void> {
   if (!isAuthenticated()) return;
   const ep = episode ?? 1;
   if (!Number.isFinite(ep) || ep < 1) return;
+  const abs =
+    absoluteEpisode != null && Number.isFinite(absoluteEpisode) && absoluteEpisode > ep
+      ? absoluteEpisode
+      : null;
 
   const sent = loadSent();
-  if ((sent[harborId] ?? 0) >= ep) return;
+  if ((sent[harborId] ?? 0) >= (abs ?? ep)) return;
 
-  const flightKey = `${harborId}|${ep}`;
+  const flightKey = `${harborId}|${ep}|${abs ?? ""}`;
   if (inflight.has(flightKey)) return;
   inflight.add(flightKey);
 
@@ -171,27 +176,32 @@ export async function syncAnimeProgress(
     if (!media) return;
 
     const current = media.mediaListEntry?.progress ?? 0;
-    if (ep <= current) {
-      sent[harborId] = current;
+    const total = media.episodes ?? 0;
+    let target = ep;
+    if (abs != null && total > 0 && abs <= total && ep <= current && abs > current) target = abs;
+    if (total > 0 && target > total) target = total;
+    if (target <= current) {
+      sent[harborId] = Math.max(sent[harborId] ?? 0, current);
       saveSent(sent);
       return;
     }
 
-    const total = media.episodes ?? 0;
-    const status = total > 0 && ep >= total ? "COMPLETED" : "CURRENT";
-    emit({ kind: "syncing", title, episode: ep });
+    const status = total > 0 && target >= total ? "COMPLETED" : "CURRENT";
+    emit({ kind: "syncing", title, episode: target });
 
     const saved = await anilistRequest<SaveResponse>(SAVE_MUTATION, {
       mediaId,
-      progress: ep,
+      progress: target,
       status,
     });
 
-    if (saved?.SaveMediaListEntry?.progress === ep) {
-      sent[harborId] = ep;
+    if (saved?.SaveMediaListEntry?.progress === target) {
+      sent[harborId] = target;
       saveSent(sent);
-      emit({ kind: "ok", title, episode: ep });
+      emit({ kind: "ok", title, episode: target });
     } else {
+      sent[harborId] = Math.max(sent[harborId] ?? 0, target);
+      saveSent(sent);
       emit({ kind: "error", title, message: "AniList did not confirm the update." });
     }
   } catch (e) {

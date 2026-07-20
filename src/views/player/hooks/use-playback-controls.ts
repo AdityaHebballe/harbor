@@ -4,6 +4,7 @@ import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition } from "@/lib/player/playback-clock";
 import { writePlayerPrefs } from "@/lib/player-prefs";
 import type { RoomCommand } from "@/lib/together/protocol";
+
 export function usePlaybackControls(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
   snapRef: RefObject<PlayerSnapshot>;
@@ -79,8 +80,6 @@ export function usePlaybackControls(params: {
     if (!b) return;
     if (snapRef.current.status === "playing") b.pause();
     else b.play().catch(() => {});
-
-
   };
 
   const seekStep = (delta: number) => {

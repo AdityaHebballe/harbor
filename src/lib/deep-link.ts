@@ -2,6 +2,7 @@ import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
 
 const EVENT = "harbor:deeplink-install";
 const OPEN_EVENT = "harbor:deeplink-open";
+const PROFILE_EDIT_EVENT = "harbor:deeplink-profile-edit";
 
 type DeepLinkDetail = { rawUrl: string };
 type DeepLinkOpen = { type: string; id: string; videoId?: string };
@@ -50,6 +51,20 @@ export function onDeepLinkOpen(handler: (open: DeepLinkOpen) => void): () => voi
   return () => window.removeEventListener(OPEN_EVENT, listener);
 }
 
+export function emitOpenProfileEdit(): void {
+  window.dispatchEvent(new CustomEvent(PROFILE_EDIT_EVENT));
+}
+
+export function onOpenProfileEdit(handler: () => void): () => void {
+  const listener = () => handler();
+  window.addEventListener(PROFILE_EDIT_EVENT, listener);
+  return () => window.removeEventListener(PROFILE_EDIT_EVENT, listener);
+}
+
+export function isProfileEditUrl(url: string): boolean {
+  return url.startsWith("harbor://profile");
+}
+
 const OPEN_FILE_EVENT = "harbor:open-local-file";
 
 export function emitOpenLocalFile(path: string): void {
@@ -86,6 +101,11 @@ export function parseStremioOpen(url: string): DeepLinkOpen | null {
   return null;
 }
 
+export function parseHarborOpen(url: string): DeepLinkOpen | null {
+  if (!url.startsWith("harbor://")) return null;
+  return parseDetailPath(url.slice("harbor://".length));
+}
+
 function shouldForward(url: string): boolean {
   if (url.startsWith("harbor://")) return true;
   if (url.startsWith("stremio://")) {
@@ -104,9 +124,13 @@ export async function startDeepLinkBridge(): Promise<() => void> {
     const handle = (urls: string[]) => {
       for (const u of urls) {
         if (typeof u !== "string" || u.length === 0) continue;
-        const open = parseStremioOpen(u);
+        const open = parseStremioOpen(u) || parseHarborOpen(u);
         if (open) {
           emitDeepLinkOpen(open);
+          continue;
+        }
+        if (isProfileEditUrl(u)) {
+          emitOpenProfileEdit();
           continue;
         }
         if (shouldForward(u)) emitDeepLinkInstall(u);
@@ -118,9 +142,13 @@ export async function startDeepLinkBridge(): Promise<() => void> {
       await listen<string>("harbor:stremio-deeplink", (e) => {
         const u = e.payload;
         if (typeof u !== "string" || !u) return;
-        const open = parseStremioOpen(u);
+        const open = parseStremioOpen(u) || parseHarborOpen(u);
         if (open) {
           emitDeepLinkOpen(open);
+          return;
+        }
+        if (isProfileEditUrl(u)) {
+          emitOpenProfileEdit();
           return;
         }
         if (shouldForward(u)) emitDeepLinkInstall(u);
@@ -131,9 +159,13 @@ export async function startDeepLinkBridge(): Promise<() => void> {
     const forwardLinuxBrowserInstall = async (e: { payload: string }) => {
       const u = e.payload;
       if (typeof u !== "string" || !u) return;
-      const open = parseStremioOpen(u);
+      const open = parseStremioOpen(u) || parseHarborOpen(u);
       if (open) {
         emitDeepLinkOpen(open);
+        return;
+      }
+      if (isProfileEditUrl(u)) {
+        emitOpenProfileEdit();
         return;
       }
       const now = Date.now();

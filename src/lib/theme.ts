@@ -922,6 +922,13 @@ main.absolute.inset-0 .rounded-xl.border.bg-elevated\\/70 {
 [data-scroll-anchor="hero"] .overflow-hidden {
   border-radius: 0 !important;
 }
+[data-scroll-anchor="hero"]:not(.harbor-anime-hero) img.object-cover,
+[data-scroll-anchor="hero"]:not(.harbor-anime-hero) .pointer-events-none.overflow-hidden {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+}
 [data-scroll-anchor="hero"].harbor-anime-hero {
   margin: 0 !important;
 }

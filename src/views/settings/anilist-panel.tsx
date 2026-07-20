@@ -6,6 +6,7 @@ import { useSettings } from "@/lib/settings";
 import { openUrl } from "@/lib/window";
 import { useT } from "@/lib/i18n";
 import { Section, ToggleRow } from "./shared";
+import { SyncIndicatorSetting } from "./sync-indicator-setting";
 
 export function AnilistPanel() {
   const t = useT();
@@ -141,6 +142,8 @@ export function AnilistPanel() {
           )}
         </Section>
       )}
+
+      {isConnected && <SyncIndicatorSetting />}
 
       {modalOpen && <AnilistConnectModal onClose={() => setModalOpen(false)} />}
     </>

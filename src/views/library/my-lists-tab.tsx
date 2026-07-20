@@ -1,5 +1,5 @@
 import { Layers, Plus } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { MAX_LISTS, reorderLists, useCustomLists } from "@/lib/custom-lists";
 import { useT } from "@/lib/i18n";
 import { CreateListModal } from "@/components/lists/create-list-modal";
@@ -12,18 +12,51 @@ export function MyListsTab() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
-  const [overId, setOverId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const dragRef = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null);
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const listsRef = useRef(lists);
+  listsRef.current = lists;
+  const suppressClick = useRef(false);
 
-  const dropOn = (targetId: string) => {
-    if (dragId && dragId !== targetId) {
-      const ids = lists.map((l) => l.id);
-      const to = ids.indexOf(targetId);
-      ids.splice(ids.indexOf(dragId), 1);
-      ids.splice(to, 0, dragId);
-      reorderLists(ids);
+  const onDown = (e: React.PointerEvent, id: string) => {
+    dragRef.current = { id, x: e.clientX, y: e.clientY, active: false };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (!d.active) {
+      if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 8) return;
+      d.active = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragId(d.id);
     }
+    let target: string | null = null;
+    for (const l of listsRef.current) {
+      if (l.id === d.id) continue;
+      const el = rowRefs.current.get(l.id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        target = l.id;
+        break;
+      }
+    }
+    setDropTarget(target);
+  };
+  const onUp = () => {
+    const d = dragRef.current;
+    if (d?.active) {
+      suppressClick.current = true;
+      if (dropTarget && dropTarget !== d.id) {
+        const ids = listsRef.current.map((l) => l.id).filter((x) => x !== d.id);
+        ids.splice(ids.indexOf(dropTarget), 0, d.id);
+        reorderLists(ids);
+      }
+    }
+    dragRef.current = null;
     setDragId(null);
-    setOverId(null);
+    setDropTarget(null);
   };
 
   if (selectedListId) {
@@ -61,27 +94,23 @@ export function MyListsTab() {
           {lists.map((l) => (
             <div
               key={l.id}
-              draggable
-              onMouseDown={(e) => e.stopPropagation()}
-              onDragStart={(e) => {
-                setDragId(l.id);
-                e.dataTransfer.effectAllowed = "move";
+              ref={(el) => {
+                if (el) rowRefs.current.set(l.id, el);
+                else rowRefs.current.delete(l.id);
               }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-                if (dragId && overId !== l.id) setOverId(l.id);
+              onPointerDown={(e) => onDown(e, l.id)}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              onClickCapture={(e) => {
+                if (suppressClick.current) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  suppressClick.current = false;
+                }
               }}
-              onDrop={(e) => {
-                e.preventDefault();
-                dropOn(l.id);
-              }}
-              onDragEnd={() => {
-                setDragId(null);
-                setOverId(null);
-              }}
-              className={`cursor-grab rounded-2xl transition-all active:cursor-grabbing ${dragId === l.id ? "opacity-40" : ""} ${
-                overId === l.id && dragId !== l.id ? "ring-2 ring-accent ring-offset-2 ring-offset-canvas" : ""
+              className={`cursor-grab touch-none rounded-2xl transition-[opacity,box-shadow] active:cursor-grabbing ${dragId === l.id ? "opacity-40" : ""} ${
+                dropTarget === l.id && dragId !== l.id ? "ring-2 ring-accent ring-offset-2 ring-offset-canvas" : ""
               }`}
             >
               <ListCard list={l} onOpen={setSelectedListId} />

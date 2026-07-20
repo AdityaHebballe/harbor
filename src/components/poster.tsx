@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { needsImdbForPoster, needsTmdbForPoster, rpdbPoster } from "@/lib/providers/rpdb";
+import { useTitlePoster } from "@/lib/title-poster";
 import {
   tmdbIdFromImdb,
   tmdbImdbId,
@@ -9,6 +10,7 @@ import {
 import { useSettings } from "@/lib/settings";
 import { externalToKitsu, kitsuToImdb, kitsuToTvdb } from "@/lib/providers/anime-mapping";
 import { tmdbLocalizedPoster } from "@/lib/providers/tmdb/tmdb-images";
+import { sizeImageUrl, qualityMultiplier } from "@/lib/img-size";
 import { shouldLocalizePosters } from "@/lib/providers/tmdb/tmdb-image-lang";
 
 type Ratio = "portrait" | "landscape" | "wide";
@@ -104,12 +106,14 @@ export function usePosterChain(
   const { altId, pending } = useRpdbAltId(rpdbKey, metaId, type);
   const { animeImdb, animeTvdb, animeTmdb } = useAnimeRpdbIds(rpdbKey, metaId);
   const localized = useLocalizedPoster(metaId);
+  const pinned = useTitlePoster(metaId);
   const candidates = useMemo(() => {
-    if (pending) return [];
+    if (pending && !pinned) return [];
     const base = localized ?? metaPoster;
     const out: string[] = [];
     const seen = new Set<string>();
     for (const u of [
+      pinned,
       animeImdb ? rpdbPoster(rpdbKey, animeImdb, base, animeTmdb) : undefined,
       animeTvdb ? rpdbPoster(rpdbKey, `tvdb:${animeTvdb}`, base) : undefined,
       rpdbPoster(rpdbKey, metaId, base, altId),
@@ -122,7 +126,7 @@ export function usePosterChain(
       }
     }
     return out;
-  }, [rpdbKey, metaId, altId, metaPoster, animeImdb, animeTvdb, animeTmdb, localized, pending]);
+  }, [rpdbKey, metaId, altId, metaPoster, animeImdb, animeTvdb, animeTmdb, localized, pending, pinned]);
   const sig = candidates.join("|");
   const failedRef = useRef<Set<string>>(new Set());
   const sigRef = useRef(sig);
@@ -172,12 +176,62 @@ export function Poster({
   className?: string;
   children?: React.ReactNode;
   onError?: () => void;
-  lazy?: boolean;
+  lazy?: boolean | "release";
   fallbacks?: Array<string | null | undefined>;
 }) {
   const { settings } = useSettings();
   const effect = settings.posterEffect;
-  const candidates = [src, ...(fallbacks ?? [])].filter((u): u is string => !!u);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(!lazy);
+  const [eager, setEager] = useState(!lazy);
+  const [targetPx, setTargetPx] = useState(0);
+  const qMult = qualityMultiplier(settings.posterQuality);
+  useEffect(() => {
+    if (inView) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const e = entries.find((x) => x.isIntersecting);
+        if (!e) return;
+        const r = e.boundingClientRect;
+        if (r.top < (window.innerHeight || 0) && r.bottom > 0) setEager(true);
+        setInView(true);
+        obs.disconnect();
+      },
+      { rootMargin: "1200px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [inView]);
+  useEffect(() => {
+    if (!lazy || eager || !inView) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((x) => x.isIntersecting)) {
+          setEager(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "150px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [lazy, eager, inView]);
+  useEffect(() => {
+    if (!inView || qMult === 0) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const w = el.clientWidth;
+    if (w <= 0) return;
+    const t = Math.ceil(w * (window.devicePixelRatio || 1) * qMult);
+    setTargetPx((prev) => (t > prev ? t : prev));
+  }, [inView, qMult]);
+  const rawCandidates = [src, ...(fallbacks ?? [])].filter((u): u is string => !!u);
+  const candidates =
+    qMult === 0 || targetPx <= 0 ? rawCandidates : rawCandidates.map((u) => sizeImageUrl(u, targetPx));
   const sig = candidates.join("|");
   const [idx, setIdx] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -196,10 +250,44 @@ export function Poster({
     firedRef.current = false;
   }, [sig]);
 
+  useEffect(() => {
+    if (lazy !== "release") return;
+    const el = rootRef.current;
+    if (!el) return;
+    let timer = 0;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const inside = entries.some((x) => x.isIntersecting);
+        if (inside) {
+          if (timer) {
+            window.clearTimeout(timer);
+            timer = 0;
+          }
+          return;
+        }
+        if (timer) return;
+        timer = window.setTimeout(() => {
+          timer = 0;
+          if (el.closest("a,button,[tabindex]") === document.activeElement) return;
+          setInView(false);
+          setEager(false);
+          setLoaded(false);
+          setDisplayed(undefined);
+        }, 1500);
+      },
+      { rootMargin: "2400px" },
+    );
+    obs.observe(el);
+    return () => {
+      obs.disconnect();
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [lazy]);
+
   let cursor = idx;
   while (cursor < candidates.length && failedRef.current.has(candidates[cursor])) cursor++;
   const current: string | undefined = candidates[cursor];
-  const exhausted = candidates.length > 0 && cursor >= candidates.length;
+  const exhausted = cursor >= candidates.length;
 
   useEffect(() => {
     if (exhausted && !firedRef.current) {
@@ -243,11 +331,24 @@ export function Poster({
   const handleImgRef = useCallback(
     (el: HTMLImageElement | null) => {
       imgElRef.current = el;
-      if (!el || !el.complete) return;
-      if (el.naturalWidth > 0) {
-        setLoaded(true);
-        setDisplayed(currentRef.current);
-      } else if (currentRef.current) fail(currentRef.current);
+      if (!el) return;
+      if (el.complete) {
+        if (el.naturalWidth > 0) {
+          setLoaded(true);
+          setDisplayed(currentRef.current);
+        } else if (currentRef.current) fail(currentRef.current);
+        return;
+      }
+      const target = currentRef.current;
+      el.decode().then(
+        () => {
+          if (imgElRef.current === el && currentRef.current === target && target) {
+            setLoaded(true);
+            setDisplayed(target);
+          }
+        },
+        () => {},
+      );
     },
     [fail],
   );
@@ -259,15 +360,19 @@ export function Poster({
       setDisplayed(current);
     }
   }, [loaded, current, sig]);
-  const showPlate = !displayed && (!current || !loaded);
+  const showShimmer = !displayed && !loaded && !exhausted;
+  const showPlate = !displayed && exhausted;
+  const hasBase = !!displayed && displayed !== current;
   const hue = hash(seed) % 360;
 
   return (
     <div
+      ref={rootRef}
       className={`harbor-poster your-card relative w-full overflow-hidden rounded-[var(--poster-radius,12px)] ${className}`}
       style={showPlate ? { background: gradient(hue) } : undefined}
     >
       <div aria-hidden style={{ paddingTop: ASPECT_PAD[ratio] }} />
+      {showShimmer && <span aria-hidden className="harbor-shimmer absolute inset-0" />}
       {displayed && displayed !== current && (
         <img
           src={displayed}
@@ -278,7 +383,7 @@ export function Poster({
           className="absolute inset-0 h-full w-full object-cover"
         />
       )}
-      {current && (
+      {current && inView && (qMult === 0 || targetPx > 0) && (
         <img
           key={current}
           ref={handleImgRef}
@@ -286,7 +391,7 @@ export function Poster({
           alt=""
           draggable={false}
           decoding="async"
-          loading={lazy ? "lazy" : undefined}
+          fetchPriority={eager ? "high" : undefined}
           onLoad={() => {
             setLoaded(true);
             setDisplayed(current);
@@ -296,7 +401,7 @@ export function Poster({
           style={
             effect === "off"
               ? { opacity: 1 }
-              : { opacity: loaded ? 1 : 0, transition: "opacity 300ms ease-out" }
+              : { opacity: loaded ? 1 : 0, transition: hasBase ? "opacity 300ms ease-out" : undefined }
           }
         />
       )}

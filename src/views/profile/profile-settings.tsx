@@ -1,0 +1,290 @@
+import { ArrowLeft, Check, Loader2, Palette } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth";
+import { useTogether } from "@/lib/together/provider";
+import { useProfiles } from "@/lib/profiles";
+import { nameEquals } from "@/lib/account/name-sync";
+import { setPrivate } from "@/lib/social/privacy";
+import { useSettings } from "@/lib/settings";
+import { saveSettings } from "./profile-api";
+import { MyListsPicker } from "./my-lists-picker";
+import { ProfileMedia } from "./profile-media";
+import { LocationSelect } from "./location-select";
+import { CustomizationPanel } from "./customization/customization-panel";
+import { AboutEditor } from "./customization/about-editor";
+import { useCustomUrlAvailability, type UrlStatus } from "./use-customurl-availability";
+import type { ProfileSettingsInput, ProfileSummary } from "./profile-types";
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[13px] font-medium text-ink">{label}</span>
+        {hint && <span className="text-[12px] text-ink-subtle">{hint}</span>}
+      </div>
+      {children}
+    </label>
+  );
+}
+
+function UrlStatusPill({ status }: { status: UrlStatus }) {
+  if (status === "checking")
+    return (
+      <span className="flex items-center gap-1 text-[12px] text-ink-subtle">
+        <Loader2 size={12} className="animate-spin" /> Checking
+      </span>
+    );
+  if (status === "available")
+    return (
+      <span className="flex items-center gap-1 text-[12px] font-medium text-success">
+        <Check size={12} strokeWidth={2.8} /> Available
+      </span>
+    );
+  if (status === "mine") return <span className="text-[12px] text-ink-subtle">Yours</span>;
+  if (status === "taken") return <span className="text-[12px] font-medium text-danger">Taken</span>;
+  if (status === "invalid") return <span className="text-[12px] text-danger">3-24 a-z 0-9 -</span>;
+  return null;
+}
+
+const inputCls =
+  "w-full min-h-11 rounded-[10px] bg-elevated px-3 text-[14px] text-ink outline-none ring-1 ring-edge-soft placeholder:text-ink-subtle focus:ring-edge";
+
+export function ProfileSettings({
+  summary,
+  onClose,
+  onSaved,
+}: {
+  summary: ProfileSummary;
+  onClose: () => void;
+  onSaved: (next: ProfileSummary) => void;
+}) {
+  const { authKey } = useAuth();
+  const { displayName, setDisplayName } = useTogether();
+  const { activeProfile, updateProfile } = useProfiles();
+  const { settings, update: updateSettings } = useSettings();
+  const [form, setForm] = useState<ProfileSettingsInput>({
+    alias: summary.alias,
+    description: summary.description ?? "",
+    location: summary.location ?? "",
+    customUrl: summary.customUrl ?? "",
+    slogan: summary.slogan ?? "",
+    shareActivity: summary.shareActivity ?? false,
+    private: summary.private ?? false,
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pickingLists, setPickingLists] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const urlStatus = useCustomUrlAvailability(form.customUrl, summary.handle, summary.customUrl ?? "");
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, []);
+
+  const set = <K extends keyof ProfileSettingsInput>(k: K, v: ProfileSettingsInput[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const urlBlocked = urlStatus === "taken" || urlStatus === "invalid";
+
+  const togglePrivate = async () => {
+    const next = !form.private;
+    set("private", next);
+    try {
+      const s = await setPrivate(next);
+      onSaved(s);
+    } catch {
+      set("private", !next);
+      setError("Could not update privacy. Try again.");
+    }
+  };
+
+  const save = async () => {
+    if (!authKey) return;
+    if (urlBlocked) return setError("That custom url is not available.");
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await saveSettings(form);
+      const trimmed = form.alias.trim();
+      if (trimmed && !nameEquals(trimmed, displayName)) setDisplayName(trimmed);
+      if (activeProfile && !activeProfile.kid && trimmed && trimmed !== activeProfile.name) {
+        updateProfile(activeProfile.id, { name: trimmed });
+      }
+      onSaved(next);
+      onClose();
+    } catch {
+      setError("Could not save. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (customizing) {
+    return <CustomizationPanel summary={summary} onClose={() => setCustomizing(false)} onSaved={onSaved} />;
+  }
+
+  return (
+    <>
+      <div className="flex h-full flex-col pt-20">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-edge-soft bg-canvas px-6 py-3 lg:px-10">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              onClick={onClose}
+              aria-label="Back"
+              className="flex h-11 w-11 items-center justify-center rounded-[10px] text-ink-muted transition-colors hover:bg-elevated"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="font-display text-[20px] text-ink">Edit profile</h2>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={onClose}
+              className="inline-flex min-h-11 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink-muted transition-colors hover:bg-elevated"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={saving || !form.alias.trim() || urlBlocked}
+              className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
+            >
+              <Check size={18} /> {saving ? "Saving" : "Save"}
+            </button>
+          </div>
+        </div>
+
+        <div ref={bodyRef} className="flex-1 overflow-y-auto">
+          <div className="mx-auto w-full max-w-2xl space-y-4 px-6 py-6 lg:px-10">
+            <ProfileMedia summary={summary} onSaved={onSaved} />
+
+            <Field label="Alias" hint={`${form.alias.length}/32`}>
+              <input value={form.alias} maxLength={32} onChange={(e) => set("alias", e.target.value)} className={inputCls} placeholder="Display name" />
+            </Field>
+
+            <Field label="Status" hint="Shows as a bubble on your profile">
+              <input value={form.slogan} maxLength={100} onChange={(e) => set("slogan", e.target.value)} className={inputCls} placeholder="Here for the late-night sci-fi" />
+            </Field>
+
+            <Field label="About">
+              <AboutEditor value={form.description} onChange={(v) => set("description", v)} />
+            </Field>
+
+            <Field label="Location">
+              <LocationSelect value={form.location} onChange={(c) => set("location", c)} />
+            </Field>
+
+            <Field label="Custom url" hint="harbor.site/u/">
+              <div className="relative">
+                <input
+                  value={form.customUrl}
+                  maxLength={24}
+                  onChange={(e) => set("customUrl", e.target.value.toLowerCase())}
+                  className={`${inputCls} pe-28 ${urlBlocked ? "ring-danger" : ""}`}
+                  placeholder="your-handle"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                />
+                <span className="pointer-events-none absolute inset-y-0 end-3 flex items-center">
+                  <UrlStatusPill status={urlStatus} />
+                </span>
+              </div>
+            </Field>
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-ink">Featured lists</div>
+                <div className="text-[12px] text-ink-subtle">Show up to 6 of your lists on your profile</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPickingLists(true)}
+                className="inline-flex min-h-11 shrink-0 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink ring-1 ring-edge-soft hover:bg-elevated"
+              >
+                Manage
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-ink">Customize profile</div>
+                <div className="text-[12px] text-ink-subtle">Custom font, page background, and a freeform HTML/CSS canvas</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCustomizing(true)}
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[10px] px-4 text-[14px] font-medium text-ink ring-1 ring-edge-soft hover:bg-elevated"
+              >
+                <Palette size={16} /> Customize
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-[10px] bg-elevated px-3 py-2.5 ring-1 ring-edge-soft">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-ink">Private profile</div>
+                <div className="text-[12px] text-ink-subtle">Only you can see your friends, badges, activity, and comments. Your name and avatar stay visible.</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.private}
+                aria-label="Private profile"
+                onClick={() => void togglePrivate()}
+                style={{ minHeight: 0 }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${form.private ? "bg-accent" : "bg-edge"}`}
+              >
+                <span
+                  className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${form.private ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-[10px] bg-elevated px-3 py-2.5 ring-1 ring-edge-soft">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-ink">Share watch activity</div>
+                <div className="text-[12px] text-ink-subtle">Off by default. Let visitors see what you have been watching</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.shareActivity}
+                aria-label="Share watch activity"
+                onClick={() => set("shareActivity", !form.shareActivity)}
+                style={{ minHeight: 0 }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${form.shareActivity ? "bg-accent" : "bg-edge"}`}
+              >
+                <span
+                  className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${form.shareActivity ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 rounded-[10px] bg-elevated px-3 py-2.5 ring-1 ring-edge-soft">
+              <div className="min-w-0">
+                <div className="text-[13px] font-medium text-ink">Share live watching status</div>
+                <div className="text-[12px] text-ink-subtle">Off by default. Show what you are watching right now, or your watch party, on your profile. Applies instantly</div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.shareWatchPresence}
+                aria-label="Share live watching status"
+                onClick={() => updateSettings({ shareWatchPresence: !settings.shareWatchPresence })}
+                style={{ minHeight: 0 }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${settings.shareWatchPresence ? "bg-accent" : "bg-edge"}`}
+              >
+                <span
+                  className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${settings.shareWatchPresence ? "translate-x-5" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+
+            {error && <p className="text-[13px] text-danger">{error}</p>}
+          </div>
+        </div>
+      </div>
+      {pickingLists && <MyListsPicker onClose={() => setPickingLists(false)} />}
+    </>
+  );
+}

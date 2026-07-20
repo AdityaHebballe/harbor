@@ -1,10 +1,11 @@
-import { Check, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import { ORIGIN_OPTIONS } from "@/lib/anime-filter";
 import { GENRE } from "@/lib/providers/jikan";
+import { GENRE_ICON } from "./anime-genre-picker/genre-icons";
 
 const OPTIONS: Array<{ id: number; label: string }> = [
   { id: GENRE.Action, label: "Action" },
@@ -39,6 +40,9 @@ export function AnimeGenrePicker({
   const [selected, setSelected] = useState<Set<number>>(() => new Set(initial));
   const [origins, setOrigins] = useState<Set<string>>(() => new Set(settings.animeExcludeOrigins));
   const [hideWatched, setHideWatched] = useState(settings.animeHideWatchedPicks);
+  const [filtersOpen, setFiltersOpen] = useState(
+    settings.animeExcludeOrigins.length > 0 || settings.animeHideWatchedPicks,
+  );
 
   useEffect(() => {
     const prev = document.body.style.overflow;
@@ -82,9 +86,9 @@ export function AnimeGenrePicker({
       <button
         aria-label={t("Close")}
         onClick={onClose}
-        className="absolute inset-0 -z-10 cursor-default bg-canvas/88"
+        className="animate-in fade-in absolute inset-0 -z-10 cursor-default bg-canvas/85 backdrop-blur-[3px] duration-200"
       />
-      <div className="relative flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-[26px] border border-edge-soft/70 bg-elevated shadow-[0_40px_120px_-30px_rgba(0,0,0,0.85)]">
+      <div className="animate-in fade-in zoom-in-95 relative flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-[26px] border border-edge-soft/70 bg-elevated shadow-[0_40px_120px_-30px_rgba(0,0,0,0.85)] duration-200 ease-[cubic-bezier(0.32,0.72,0.24,1)]">
         <button
           type="button"
           aria-label={t("Close")}
@@ -111,7 +115,7 @@ export function AnimeGenrePicker({
             <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">
               {t("Genres you want more of")}
             </span>
-            <div className="flex flex-wrap gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {OPTIONS.map((opt) => {
                 const on = selected.has(opt.id);
                 return (
@@ -119,57 +123,100 @@ export function AnimeGenrePicker({
                     key={opt.id}
                     type="button"
                     onClick={() => toggle(opt.id)}
-                    className={`h-11 rounded-full px-5 text-[14px] font-semibold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.97] ${
+                    aria-pressed={on}
+                    className={`group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-start transition-[background-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.32,0.72,0.24,1)] active:scale-[0.97] motion-reduce:active:scale-100 ${
                       on
-                        ? "bg-ink text-canvas shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]"
-                        : "bg-canvas/50 text-ink-muted ring-1 ring-edge-soft hover:text-ink hover:ring-edge"
+                        ? "bg-accent/[0.12] ring-2 ring-accent"
+                        : "bg-canvas/50 ring-1 ring-edge-soft hover:bg-canvas/70 hover:ring-edge"
                     }`}
                   >
-                    {opt.label}
+                    <span
+                      className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl transition-[background-color,transform] duration-200 ease-[cubic-bezier(0.32,0.72,0.24,1)] group-hover:scale-[1.06] group-active:scale-95 motion-reduce:transform-none ${
+                        on ? "bg-accent/20" : "bg-elevated/70"
+                      }`}
+                    >
+                      <img src={GENRE_ICON[opt.id]} alt="" draggable={false} className="h-[26px] w-[26px]" />
+                    </span>
+                    <span
+                      className={`min-w-0 flex-1 truncate text-[14px] font-semibold transition-colors ${
+                        on ? "text-ink" : "text-ink-muted"
+                      }`}
+                    >
+                      {opt.label}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
-          <div className="flex flex-col gap-3 border-t border-edge-soft/45 pt-6">
-            <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle">
-              {t("Hide from your picks")}
-            </span>
-            <div className="flex flex-wrap gap-2.5">
-              {ORIGIN_OPTIONS.map((opt) => {
-                const on = origins.has(opt.code);
-                return (
-                  <button
-                    key={opt.code}
-                    type="button"
-                    onClick={() => toggleOrigin(opt.code)}
-                    className={`h-11 rounded-full px-5 text-[14px] font-semibold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.97] ${
-                      on
-                        ? "bg-danger text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]"
-                        : "bg-canvas/50 text-ink-muted ring-1 ring-edge-soft hover:text-ink hover:ring-edge"
-                    }`}
-                  >
-                    {t(opt.label)}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="border-t border-edge-soft/45 pt-4">
             <button
               type="button"
-              onClick={() => setHideWatched((v) => !v)}
-              className="mt-1 flex items-center gap-3 self-start rounded-xl py-1 text-start"
+              onClick={() => setFiltersOpen((v) => !v)}
+              aria-expanded={filtersOpen}
+              className="group flex w-full items-center justify-between rounded-xl px-1 py-1.5 text-start"
             >
-              <span
-                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
-                  hideWatched ? "border-accent bg-accent text-canvas" : "border-edge text-transparent"
+              <span className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.2em] text-ink-subtle transition-colors group-hover:text-ink-muted">
+                {t("Hide from your picks")}
+                {origins.size + (hideWatched ? 1 : 0) > 0 && (
+                  <span className="rounded-full bg-danger/15 px-2 py-[2px] text-[10px] font-bold tracking-normal text-danger">
+                    {origins.size + (hideWatched ? 1 : 0)}
+                  </span>
+                )}
+              </span>
+              <ChevronDown
+                size={18}
+                strokeWidth={2.2}
+                className={`shrink-0 text-ink-subtle transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0.24,1)] ${
+                  filtersOpen ? "rotate-180 text-ink-muted" : ""
                 }`}
-              >
-                <Check size={13} strokeWidth={3} />
-              </span>
-              <span className="text-[14px] font-medium text-ink">
-                {t("Hide anime I've already watched")}
-              </span>
+              />
             </button>
+            <div
+              className={`grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.32,0.72,0.24,1)] ${
+                filtersOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+              }`}
+            >
+              <div className="overflow-hidden">
+                <div className="flex flex-col gap-3 pt-4">
+                  <div className="flex flex-wrap gap-2.5">
+                    {ORIGIN_OPTIONS.map((opt) => {
+                      const on = origins.has(opt.code);
+                      return (
+                        <button
+                          key={opt.code}
+                          type="button"
+                          onClick={() => toggleOrigin(opt.code)}
+                          className={`h-11 rounded-full px-5 text-[14px] font-semibold transition-[background-color,color,box-shadow,transform] duration-150 active:scale-[0.97] ${
+                            on
+                              ? "bg-danger text-white shadow-[0_6px_18px_-8px_rgba(0,0,0,0.55)]"
+                              : "bg-canvas/50 text-ink-muted ring-1 ring-edge-soft hover:text-ink hover:ring-edge"
+                          }`}
+                        >
+                          {t(opt.label)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHideWatched((v) => !v)}
+                    className="mt-1 flex items-center gap-3 self-start rounded-xl py-1 text-start"
+                  >
+                    <span
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                        hideWatched ? "border-accent bg-accent text-canvas" : "border-edge text-transparent"
+                      }`}
+                    >
+                      <Check size={13} strokeWidth={3} />
+                    </span>
+                    <span className="text-[14px] font-medium text-ink">
+                      {t("Hide anime I've already watched")}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 

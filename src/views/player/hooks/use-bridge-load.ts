@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { PlayerBridge } from "@/lib/player/bridge";
-import { readResumeMs, saveResumeMs } from "@/lib/resume";
+import { readResumeEntry, saveResumeBatch } from "@/lib/resume";
 import { cloudWriteId, episodeFromVideoId, libraryGetOne } from "@/lib/stremio";
 import type { PlayerSrc } from "@/lib/view";
 import { videoIdFor } from "./use-stremio-sync";
@@ -183,7 +183,8 @@ async function resolveStartMs(
   imdbVerified: boolean,
   openingVid: string | null,
 ): Promise<{ ms: number; fromRemote: boolean; finished: boolean }> {
-  const local = readResumeMs(metaId, season, episode);
+  const localEntry = readResumeEntry(metaId, season, episode);
+  const local = localEntry?.ms ?? 0;
   const isEpisode = typeof season === "number" && typeof episode === "number";
   if (!authKey) return { ms: local, fromRemote: false, finished: false };
   const matchesEpisode = (
@@ -212,8 +213,19 @@ async function resolveStartMs(
     const finished =
       isEpisode &&
       (flaggedWatched || (remoteDuration > 0 && remoteMs / remoteDuration >= RESTART_THRESHOLD));
-    if (remoteMs >= local) {
-      if (remoteMs > local) saveResumeMs(metaId, remoteMs, season, episode);
+    const rawMt = (remote as { _mtime?: unknown })._mtime;
+    const remoteMtime = typeof rawMt === "number" ? rawMt : Date.parse(String(rawMt ?? ""));
+    const remoteIsNewer = Number.isFinite(remoteMtime) && (!localEntry || remoteMtime > localEntry.t);
+    if (remoteIsNewer || remoteMs >= local) {
+      saveResumeBatch([
+        {
+          id: metaId,
+          ms: remoteMs,
+          season,
+          episode,
+          t: Number.isFinite(remoteMtime) ? remoteMtime : undefined,
+        },
+      ]);
       return { ms: remoteMs, fromRemote: true, finished };
     }
     return { ms: local, fromRemote: false, finished };

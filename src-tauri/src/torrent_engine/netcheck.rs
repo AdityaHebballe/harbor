@@ -132,13 +132,14 @@ async fn udp_tracker_reachable(host_port: &str) -> bool {
 
 fn https_client() -> Option<&'static reqwest::Client> {
     static CLIENT: OnceLock<Option<reqwest::Client>> = OnceLock::new();
-    CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(6))
-            .build()
-            .ok()
-    })
-    .as_ref()
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .timeout(Duration::from_secs(6))
+                .build()
+                .ok()
+        })
+        .as_ref()
 }
 
 async fn https_step() -> NetStep {

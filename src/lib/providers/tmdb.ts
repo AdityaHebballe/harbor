@@ -9,6 +9,8 @@ export {
   tmdbIdFromImdb,
 } from "./tmdb/tmdb-imdb-resolve";
 
+export { useTmdbVote } from "./tmdb/tmdb-vote";
+
 export {
   tmdbPersonIdCached,
   tmdbPersonIdByName,
@@ -24,6 +26,8 @@ export {
   tmdbKeywordIdByName,
   tmdbResolveKeywordIds,
 } from "./tmdb/tmdb-keywords";
+
+export { tmdbCompanyIdByName } from "./tmdb/tmdb-companies";
 
 export {
   tmdbMovieRow,

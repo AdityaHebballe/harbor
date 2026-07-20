@@ -8,7 +8,7 @@ export function BetaThemesCard({ count, onClick }: { count: number; onClick: () 
     <button
       type="button"
       onClick={onClick}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-edge-soft bg-surface text-start transition-all hover:border-edge"
+      className="group flex flex-col overflow-hidden rounded-[4px] border border-edge-soft bg-surface text-start transition-all hover:border-edge"
     >
       <div className="relative flex h-40 w-full items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_60%_at_28%_18%,#3574fc_0%,transparent_55%),radial-gradient(ellipse_70%_60%_at_82%_92%,#775bf4_0%,transparent_60%),linear-gradient(135deg,#0c0c0c,#111827)]" />
@@ -119,7 +119,7 @@ function BetaCard({
   const bg = theme.background?.image ?? `linear-gradient(135deg, ${theme.swatch[0]}, ${theme.swatch[1]})`;
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-2xl border transition-all ${
+      className={`flex flex-col overflow-hidden rounded-[4px] border transition-all ${
         active
           ? "border-accent shadow-[0_0_0_2px_var(--color-accent-soft),0_18px_40px_-22px_rgba(0,0,0,0.35)]"
           : "border-edge-soft bg-surface hover:border-edge"
@@ -161,7 +161,7 @@ function BetaCard({
           type="button"
           onClick={onActivate}
           disabled={active}
-          className={`h-10 rounded-xl text-[13px] font-semibold transition-opacity ${
+          className={`h-10 rounded-[6px] text-[13px] font-semibold transition-opacity ${
             active ? "bg-elevated/70 text-ink ring-1 ring-edge" : "bg-ink text-canvas hover:opacity-90"
           }`}
         >

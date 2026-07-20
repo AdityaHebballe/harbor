@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { ffmpegInstallStep } from "@/lib/ffmpeg-install";
 import {
   castLoad,
   castPause,
@@ -11,7 +12,6 @@ import {
   type CastSubStyle,
   type TranscodeProfile,
 } from "@/lib/cast";
-import { ffmpegInstallStep } from "@/lib/ffmpeg-install";
 import type { PlayerBridge } from "@/lib/player/bridge";
 import type { CastErrorInfo } from "../cast-error-modal";
 

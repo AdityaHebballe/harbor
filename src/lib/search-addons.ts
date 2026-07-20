@@ -1,4 +1,4 @@
-import type { Addon } from "./addons";
+import { isCollectionCatalog, type Addon } from "./addons";
 import type { Meta } from "./cinemeta";
 import { safeFetch } from "./safe-fetch";
 
@@ -21,13 +21,13 @@ export async function searchAddonCatalogs(
   const q = query.trim();
   if (!q) return { movies: [], series: [] };
 
-  const targets: Array<{ addon: Addon; type: string; id: string }> = [];
+  const targets: Array<{ addon: Addon; type: string; id: string; collection: boolean }> = [];
   for (const addon of addons) {
     for (const c of addon.manifest.catalogs ?? []) {
       if (!c?.type || !c?.id) continue;
       if (c.type !== "movie" && c.type !== "series") continue;
       if (!c.extra?.some((e) => e.name === "search")) continue;
-      targets.push({ addon, type: c.type, id: c.id });
+      targets.push({ addon, type: c.type, id: c.id, collection: isCollectionCatalog(c) });
       if (targets.length >= MAX_CATALOGS) break;
     }
     if (targets.length >= MAX_CATALOGS) break;
@@ -35,13 +35,18 @@ export async function searchAddonCatalogs(
   if (targets.length === 0) return { movies: [], series: [] };
 
   const settled = await Promise.allSettled(
-    targets.map(async ({ addon, type, id }) => {
+    targets.map(async ({ addon, type, id, collection }) => {
       const base = addon.transportUrl.replace(/\/manifest\.json$/, "");
       const url = `${base}/catalog/${type}/${id}/search=${encodeURIComponent(q)}.json`;
       const res = await safeFetch(url, { headers: { Accept: "application/json" } });
-      if (!res.ok) return { type, metas: [] as Meta[], origin: addonOrigin(addon) };
+      if (!res.ok) return { type, collection, metas: [] as Meta[], origin: addonOrigin(addon) };
       const json = (await res.json()) as { metas?: Meta[] };
-      return { type, metas: (json.metas ?? []).slice(0, CAP_PER_CATALOG), origin: addonOrigin(addon) };
+      return {
+        type,
+        collection,
+        metas: (json.metas ?? []).slice(0, CAP_PER_CATALOG),
+        origin: addonOrigin(addon),
+      };
     }),
   );
 
@@ -53,7 +58,11 @@ export async function searchAddonCatalogs(
     for (const m of r.value.metas) {
       if (!m?.id || seen.has(m.id)) continue;
       seen.add(m.id);
-      const tagged = { ...m, addonOrigin: r.value.origin };
+      const tagged = {
+        ...m,
+        addonOrigin: r.value.origin,
+        ...(r.value.collection ? { isCollection: true } : null),
+      };
       if (r.value.type === "series" || m.type === "series") series.push(tagged);
       else movies.push(tagged);
     }
@@ -86,7 +95,10 @@ export async function searchAddonGroups(addons: Addon[], query: string): Promise
   const q = query.trim();
   if (!q) return [];
 
-  const byAddon = new Map<string, { addon: Addon; targets: Array<{ type: string; id: string }> }>();
+  const byAddon = new Map<
+    string,
+    { addon: Addon; targets: Array<{ type: string; id: string; collection: boolean }> }
+  >();
   for (const addon of addons) {
     for (const c of addon.manifest.catalogs ?? []) {
       if (!c?.type || !c?.id) continue;
@@ -94,7 +106,7 @@ export async function searchAddonGroups(addons: Addon[], query: string): Promise
       if (!c.extra?.some((e) => e.name === "search")) continue;
       const entry = byAddon.get(addon.manifest.id) ?? { addon, targets: [] };
       if (entry.targets.length >= 6) continue;
-      entry.targets.push({ type: c.type, id: c.id });
+      entry.targets.push({ type: c.type, id: c.id, collection: isCollectionCatalog(c) });
       byAddon.set(addon.manifest.id, entry);
     }
   }
@@ -106,22 +118,26 @@ export async function searchAddonGroups(addons: Addon[], query: string): Promise
       const origin = addonOrigin(addon);
       const base = origin.base;
       const settled = await Promise.allSettled(
-        targets.map(async ({ type, id }) => {
+        targets.map(async ({ type, id, collection }) => {
           const url = `${base}/catalog/${type}/${id}/search=${encodeURIComponent(q)}.json`;
           const res = await safeFetch(url, { headers: { Accept: "application/json" } });
-          if (!res.ok) return [] as Meta[];
+          if (!res.ok) return { collection, metas: [] as Meta[] };
           const json = (await res.json()) as { metas?: Meta[] };
-          return (json.metas ?? []).slice(0, CAP_PER_GROUP);
+          return { collection, metas: (json.metas ?? []).slice(0, CAP_PER_GROUP) };
         }),
       );
       const seen = new Set<string>();
       const metas: Meta[] = [];
       for (const r of settled) {
         if (r.status !== "fulfilled") continue;
-        for (const m of r.value) {
+        for (const m of r.value.metas) {
           if (!m?.id || seen.has(m.id)) continue;
           seen.add(m.id);
-          metas.push({ ...m, addonOrigin: origin });
+          metas.push({
+            ...m,
+            addonOrigin: origin,
+            ...(r.value.collection ? { isCollection: true } : null),
+          });
           if (metas.length >= CAP_PER_GROUP) break;
         }
       }

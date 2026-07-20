@@ -7,6 +7,8 @@ import { Check, RotateCcw, Type, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/lib/i18n";
 import { closeSyncBar, useSyncBarOpen } from "@/lib/player/sub-sync";
+import { AutosyncPopover } from "./autosync/autosync-popover";
+import { useAutoSyncHandle } from "./autosync/autosync-store";
 
 const IDLE_MS = 12000;
 const round = (v: number) => Math.round(v * 100) / 100;
@@ -22,6 +24,7 @@ export function SubSyncBar({ delaySec, onDelay, onEnterSync, syncAvailable }: Pr
 
   const t = useT();
   const open = useSyncBarOpen();
+  const autoSyncHandle = useAutoSyncHandle();
   const [localDelay, setLocalDelay] = useState(delaySec);
   const savedRef = useRef(delaySec);
 
@@ -84,7 +87,9 @@ export function SubSyncBar({ delaySec, onDelay, onEnterSync, syncAvailable }: Pr
   const isDirty = round(localDelay) !== round(savedRef.current);
   const isNonZero = localDelay !== 0;
 
-  if (!open) return null;
+  const popover = autoSyncHandle ? <AutosyncPopover handle={autoSyncHandle} /> : null;
+
+  if (!open) return popover;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-6 pt-[68px] animate-in fade-in slide-in-from-top-2 duration-300">
@@ -240,3 +245,4 @@ function DelayDisplay({
     </div>
   );
 }
+

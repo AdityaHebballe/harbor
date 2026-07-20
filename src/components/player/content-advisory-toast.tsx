@@ -25,8 +25,18 @@ function metaFor(category: string): { Icon: typeof Info; label: string } {
 
 const HOLD_MS = 10000;
 const HOVER_TAIL_MS = 2500;
+const CARD_CLASS =
+  "w-[266px] rounded-2xl border border-edge-soft/70 bg-canvas/85 px-4 py-3.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.72)] backdrop-blur-xl";
 
-export function ContentAdvisoryToast({ categories, playKey }: { categories: Advisory[]; playKey: string }) {
+export function ContentAdvisoryToast({
+  categories,
+  playKey,
+  preview = false,
+}: {
+  categories: Advisory[];
+  playKey: string;
+  preview?: boolean;
+}) {
   const t = useT();
   const rated = useMemo(
     () =>
@@ -35,29 +45,37 @@ export function ContentAdvisoryToast({ categories, playKey }: { categories: Advi
         .sort((a, b) => (SEV_RANK[b.severity] ?? 0) - (SEV_RANK[a.severity] ?? 0)),
     [categories],
   );
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(preview);
   const timerRef = useRef(0);
 
   useEffect(() => {
-    if (rated.length === 0 || !playKey) return;
+    if (preview || rated.length === 0 || !playKey) return;
     setVisible(true);
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => setVisible(false), HOLD_MS);
     return () => window.clearTimeout(timerRef.current);
-  }, [playKey, rated.length]);
+  }, [playKey, rated.length, preview]);
 
   if (rated.length === 0) return null;
 
   return (
     <div
-      onMouseEnter={() => window.clearTimeout(timerRef.current)}
-      onMouseLeave={() => {
-        window.clearTimeout(timerRef.current);
-        timerRef.current = window.setTimeout(() => setVisible(false), HOVER_TAIL_MS);
-      }}
-      className={`pointer-events-auto absolute start-6 top-20 z-30 w-[266px] rounded-2xl border border-edge-soft/70 bg-canvas/85 px-4 py-3.5 shadow-[0_18px_50px_-16px_rgba(0,0,0,0.72)] backdrop-blur-xl transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${
-        visible ? "translate-y-0 opacity-100" : "-translate-y-1.5 opacity-0"
-      }`}
+      onMouseEnter={preview ? undefined : () => window.clearTimeout(timerRef.current)}
+      onMouseLeave={
+        preview
+          ? undefined
+          : () => {
+              window.clearTimeout(timerRef.current);
+              timerRef.current = window.setTimeout(() => setVisible(false), HOVER_TAIL_MS);
+            }
+      }
+      className={
+        preview
+          ? CARD_CLASS
+          : `pointer-events-auto absolute start-6 top-20 z-30 transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${CARD_CLASS} ${
+              visible ? "translate-y-0 opacity-100" : "-translate-y-1.5 opacity-0"
+            }`
+      }
     >
       <div className="mb-2.5 flex items-center gap-1.5 text-ink-subtle">
         <ShieldAlert size={12} strokeWidth={2.2} />

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { useSettings } from "@/lib/settings";
 import { listLocalCw, subscribeLocalCw } from "@/lib/local-cw";
 import {
   cwSortKey,
@@ -77,6 +78,8 @@ function toCard(i: LibraryItem): CwCard {
 
 export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
   const { authKey } = useAuth();
+  const { settings } = useSettings();
+  const cwPerProfile = settings.cwPerProfile;
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [localVersion, setLocalVersion] = useState(0);
 
@@ -100,7 +103,8 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
 
   return useMemo(() => {
     void localVersion;
-    const merged = [...items, ...listLocalCw().map(localToLibraryItem)]
+    const base = cwPerProfile ? [] : items;
+    const merged = [...base, ...listLocalCw().map(localToLibraryItem)]
       .filter((i) => (i.type as string) !== "other" && !i._id.startsWith("iptv:") && isCwMember(i))
       .map((i) => ({ i, k: cwSortKey(i) }))
       .sort((a, b) => b.k - a.k)
@@ -114,5 +118,5 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
       if (out.length >= limit) break;
     }
     return out;
-  }, [items, localVersion, excludeId, limit]);
+  }, [items, localVersion, excludeId, limit, cwPerProfile]);
 }

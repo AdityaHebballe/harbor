@@ -1,46 +1,38 @@
-import { AlertTriangle, CheckSquare, FolderPlus, HardDrive, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, CheckSquare, FolderOpen, FolderPlus, HardDrive, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  addLocalEntries,
   localEntryToMeta,
-  parseFilename,
   removeLocalEntry,
   updateLocalEntries,
-  updateLocalEntry,
   useLocalLibrary,
   type LocalEntry,
 } from "@/lib/local-library";
-import { clearSidecarCache, countNfoFor } from "@/lib/local-library/sidecars";
-import { exportMovie, exportSeries, type ExportSizes } from "@/lib/local-library/export";
 import { confirmDialog } from "@/lib/dialog";
-import { useSettings } from "@/lib/settings";
 import { useView } from "@/lib/view";
 import { useT } from "@/lib/i18n";
 import { FilterBar, Grid, type TypeKey } from "./shared";
 import { groupLocal, ShowGroupCard } from "./local-tab/show-group";
-import { ScanModeModal, type ScanMode } from "./local-tab/scan-mode-modal";
+import { ScanModeModal } from "./local-tab/scan-mode-modal";
 import { IdentifyModal, type IdentifyResolution } from "./local-tab/identify-modal";
 import { type LocalCardProps } from "./local-tab/card-actions";
 import { OwnedCard } from "./local-tab/movie-card";
 import { BulkBar, SortMenu, sortGroups, type LocalSortKey, type SortDir } from "./local-tab/toolbar";
-import { buildNfoEntry, buildTmdbEntry, type ScannedFile } from "./local-tab/scan";
+import { FoldersModal } from "./local-tab/folders-modal";
+import { useLocalExport } from "./local-tab/use-local-export";
+import { useLocalScan } from "./local-tab/use-local-scan";
 
-type PendingScan = { folder: string; files: ScannedFile[]; nfoCount: number };
 type Tr = (key: string, vars?: Record<string, string | number>) => string;
 
 export function LocalTab() {
   const t = useT();
   const { openMeta } = useView();
   const items = useLocalLibrary();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ found: number; total: number } | null>(null);
-  const [pending, setPending] = useState<PendingScan | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [identify, setIdentify] = useState<LocalEntry[] | null>(null);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<string | null>(null);
-  const { settings } = useSettings();
+  const [showFolders, setShowFolders] = useState(false);
+  const anchorRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -48,84 +40,8 @@ export function LocalTab() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const exportSizes: ExportSizes = useMemo(
-    () => ({
-      poster: settings.nfoPosterSize,
-      backdrop: settings.nfoBackdropSize,
-      logo: settings.nfoLogoSize,
-    }),
-    [settings.nfoPosterSize, settings.nfoBackdropSize, settings.nfoLogoSize],
-  );
-
-  const onAddFolder = useCallback(async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const { open } = await import("@tauri-apps/plugin-dialog");
-      const folder = await open({ directory: true, multiple: false });
-      if (typeof folder !== "string") {
-        setBusy(false);
-        return;
-      }
-      const { invoke } = await import("@tauri-apps/api/core");
-      const scanned = (await invoke("harbor_scan_folder", {
-        folder,
-        minSizeMb: Math.max(0, Math.round(settings.localMinFileSizeMb ?? 50)),
-      })) as ScannedFile[];
-      if (scanned.length === 0) {
-        setError(t("No video files found in that folder."));
-        setBusy(false);
-        return;
-      }
-      clearSidecarCache();
-      const nfoCount = await countNfoFor(scanned.map((f) => f.path));
-      setBusy(false);
-      setPending({ folder, files: scanned, nfoCount });
-    } catch (e) {
-      console.warn("[library] folder scan failed", e);
-      setError(e instanceof Error ? e.message : t("Couldn't scan that folder."));
-      setBusy(false);
-    }
-  }, [t, settings.localMinFileSizeMb]);
-
-  const runScan = useCallback(
-    async (files: ScannedFile[], mode: ScanMode) => {
-      setBusy(true);
-      setError(null);
-      setProgress({ found: 0, total: files.length });
-      const tmdbKey = settings.tmdbKey?.trim() || null;
-      const entries: LocalEntry[] = [];
-      try {
-        for (let i = 0; i < files.length; i++) {
-          const f = files[i];
-          const parsed = parseFilename(f.filename);
-          const built =
-            mode === "nfo"
-              ? await buildNfoEntry(f, parsed, tmdbKey)
-              : await buildTmdbEntry(f, parsed, tmdbKey);
-          entries.push(built);
-          setProgress({ found: i + 1, total: files.length });
-        }
-        addLocalEntries(entries);
-      } catch (e) {
-        console.warn("[library] scan failed", e);
-        setError(e instanceof Error ? e.message : t("Couldn't scan that folder."));
-      } finally {
-        setProgress(null);
-        setBusy(false);
-      }
-    },
-    [settings.tmdbKey, t],
-  );
-
-  const onPickMode = useCallback(
-    (mode: ScanMode) => {
-      const files = pending?.files ?? [];
-      setPending(null);
-      if (files.length) void runScan(files, mode);
-    },
-    [pending, runScan],
-  );
+  const scan = useLocalScan({ items, setToast });
+  const { runExport, onExportOne } = useLocalExport(setToast);
 
   const onResolveIdentify = useCallback((ids: string[], res: IdentifyResolution) => {
     updateLocalEntries(ids, {
@@ -138,78 +54,6 @@ export function LocalTab() {
       needsReview: false,
     });
   }, []);
-
-  const runExport = useCallback(
-    async (entries: LocalEntry[]): Promise<{ ok: number; fail: number; reason?: string }> => {
-      const key = settings.tmdbKey?.trim();
-      if (!key) {
-        setToast(t("Add a TMDB key to export metadata."));
-        return { ok: 0, fail: 0 };
-      }
-      const movies = entries.filter((e) => e.type === "movie" && e.tmdbId != null);
-      const showGroups = new Map<string, LocalEntry[]>();
-      for (const e of entries) {
-        if (e.type !== "show" || e.tmdbId == null) continue;
-        const gk = `t${e.tmdbId}`;
-        let arr = showGroups.get(gk);
-        if (!arr) {
-          arr = [];
-          showGroups.set(gk, arr);
-        }
-        arr.push(e);
-      }
-      const total = movies.length + showGroups.size;
-      let ok = 0;
-      let fail = 0;
-      let done = 0;
-      let reason: string | undefined;
-      for (const m of movies) {
-        setToast(t("Exporting {done}/{total}…", { done: ++done, total }));
-        const res = await exportMovie(key, m, exportSizes);
-        if (res.ok) {
-          ok += 1;
-          if (res.localArt) updateLocalEntry(m.id, { localArt: res.localArt });
-        } else {
-          fail += 1;
-          reason = reason ?? res.reason;
-        }
-      }
-      for (const eps of showGroups.values()) {
-        setToast(t("Exporting {done}/{total}…", { done: ++done, total }));
-        const res = await exportSeries(key, eps, exportSizes);
-        if (res.ok) {
-          ok += 1;
-          if (res.localArt) updateLocalEntries(eps.map((e) => e.id), { localArt: res.localArt });
-        } else {
-          fail += 1;
-          reason = reason ?? res.reason;
-        }
-      }
-      return { ok, fail, reason };
-    },
-    [settings.tmdbKey, exportSizes, t],
-  );
-
-  const onExportOne = useCallback(
-    async (entryOrList: LocalEntry | LocalEntry[]) => {
-      const list = (Array.isArray(entryOrList) ? entryOrList : [entryOrList]).filter(
-        (e) => e.tmdbId != null,
-      );
-      if (list.length === 0) {
-        setToast(t("Identify this title before exporting."));
-        return;
-      }
-      const { ok, fail, reason } = await runExport(list);
-      setToast(
-        fail === 0
-          ? t("Saved .nfo and artwork")
-          : ok === 0
-            ? t("Export failed: {reason}", { reason: reason ?? t("unknown error") })
-            : t("Exported {ok}, {fail} failed", { ok, fail }),
-      );
-    },
-    [runExport, t],
-  );
 
   const toggleSelect = useCallback((ids: string[]) => {
     setSelected((prev) => {
@@ -224,6 +68,7 @@ export function LocalTab() {
   const exitSelect = useCallback(() => {
     setSelectMode(false);
     setSelected(new Set());
+    anchorRef.current = null;
   }, []);
 
   const bulkDelete = useCallback(async () => {
@@ -287,6 +132,31 @@ export function LocalTab() {
     () => sortGroups(groupLocal(visible), sortKey, sortDir),
     [visible, sortKey, sortDir],
   );
+  const selectItems = useCallback(
+    (ids: string[], range?: boolean) => {
+      const key = ids[0];
+      if (!key) return;
+      if (range && anchorRef.current && anchorRef.current !== key) {
+        const units = groups.map((g) =>
+          g.kind === "movie" ? [g.entry.id] : g.episodes.map((e) => e.id),
+        );
+        const a = units.findIndex((u) => u.includes(anchorRef.current!));
+        const b = units.findIndex((u) => u.includes(key));
+        if (a !== -1 && b !== -1) {
+          const [lo, hi] = a <= b ? [a, b] : [b, a];
+          setSelected((prev) => {
+            const next = new Set(prev);
+            for (let i = lo; i <= hi; i++) units[i].forEach((id) => next.add(id));
+            return next;
+          });
+          return;
+        }
+      }
+      anchorRef.current = key;
+      toggleSelect(ids);
+    },
+    [groups, toggleSelect],
+  );
 
   const openFirstReview = useCallback(() => {
     if (reviewGroups[0]) setIdentify(reviewGroups[0]);
@@ -314,15 +184,32 @@ export function LocalTab() {
     });
   }, [visible]);
 
+  const openAddFolder = useCallback(() => {
+    setShowFolders(false);
+    void scan.onAddFolder();
+  }, [scan]);
+
   const modals = (
     <>
       <ScanModeModal
-        isOpen={pending != null}
-        nfoCount={pending?.nfoCount ?? 0}
-        onPick={onPickMode}
-        onClose={() => setPending(null)}
+        isOpen={scan.pending != null}
+        nfoCount={scan.pending?.nfoCount ?? 0}
+        onPick={scan.onPickMode}
+        onClose={() => scan.setPending(null)}
       />
       <IdentifyModal target={identify} onClose={() => setIdentify(null)} onResolved={onResolveIdentify} />
+      <FoldersModal
+        isOpen={showFolders}
+        folders={scan.folders}
+        busy={scan.busy}
+        onClose={() => setShowFolders(false)}
+        onAddFolder={openAddFolder}
+        onRescan={(path) => {
+          setShowFolders(false);
+          void scan.rescanFolder(path);
+        }}
+        onRemove={scan.removeFolder}
+      />
       {toast && (
         <div className="pointer-events-none fixed bottom-6 left-1/2 z-[130] -translate-x-1/2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-canvas shadow-[0_10px_30px_-8px_rgba(0,0,0,0.6)] animate-in fade-in slide-in-from-bottom-2 duration-200">
           {toast}
@@ -335,7 +222,7 @@ export function LocalTab() {
     return (
       <>
         {modals}
-        <EmptyOwned onAddFolder={onAddFolder} busy={busy} error={error} progress={progress} />
+        <EmptyOwned onAddFolder={scan.onAddFolder} busy={scan.busy} error={scan.error} progress={scan.progress} />
       </>
     );
   }
@@ -343,7 +230,7 @@ export function LocalTab() {
   const cardProps: LocalCardProps = {
     selectMode,
     selected,
-    onToggleSelect: toggleSelect,
+    onToggleSelect: selectItems,
     onFixMatch: (e) => setIdentify(Array.isArray(e) ? e : [e]),
     onExport: onExportOne,
     onOpenDetail: (e) => {
@@ -369,6 +256,16 @@ export function LocalTab() {
               sortDir={sortDir}
               setSortDir={setSortDir}
             />
+            {scan.folders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowFolders(true)}
+                className="flex h-9 items-center gap-1.5 rounded-full bg-raised px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
+              >
+                <FolderOpen size={13} strokeWidth={2.2} />
+                {t("Folders")}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => (selectMode ? exitSelect() : setSelectMode(true))}
@@ -383,16 +280,16 @@ export function LocalTab() {
             </button>
             <button
               type="button"
-              onClick={onAddFolder}
-              disabled={busy}
+              onClick={scan.onAddFolder}
+              disabled={scan.busy}
               className="flex h-9 items-center gap-1.5 rounded-full bg-raised px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:bg-elevated hover:text-ink disabled:cursor-wait disabled:opacity-60"
             >
-              {busy ? (
+              {scan.busy ? (
                 <Loader2 size={13} className="animate-spin" />
               ) : (
                 <FolderPlus size={13} strokeWidth={2.2} />
               )}
-              {busy ? scanLabel(progress, t) : t("Add folder")}
+              {scan.busy ? scanLabel(scan.progress, t) : t("Add folder")}
             </button>
           </div>
         }
@@ -429,9 +326,9 @@ export function LocalTab() {
           ? t("{shown} of {total} file from your computer", { shown: visible.length, total: items.length })
           : t("{shown} of {total} files from your computer", { shown: visible.length, total: items.length })}
       </span>
-      {error && (
+      {scan.error && (
         <p className="rounded-lg bg-danger/15 px-3 py-2 text-[12px] text-danger ring-1 ring-danger/30">
-          {error}
+          {scan.error}
         </p>
       )}
       {groups.length === 0 ? (

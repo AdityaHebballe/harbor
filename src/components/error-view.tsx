@@ -30,8 +30,11 @@ function isNoisyError(reason: unknown, message?: string): boolean {
   if (m.includes("the message port closed before a response was received")) return true;
   if (m.includes("script error")) return true;
   if (m.includes("network request failed")) return true;
+  if (m.includes("failed to fetch")) return true;
+  if (m.includes("could not be decoded") || m.includes("cannot be decoded")) return true;
   if (m.includes("load failed") && m.length < 30) return true;
-  if (r?.name === "AbortError") return true;
+  if (m.includes("request cancelled") || m.includes("request canceled")) return true;
+  if (r?.name === "AbortError" || r?.name === "TimeoutError") return true;
   if (r?.name === "NetworkError") return true;
   return false;
 }

@@ -6,8 +6,11 @@ import {
   installUpdate,
   dismissUpdate,
   checkForUpdate,
+  openManualDownload,
   useUpdate,
 } from "@/lib/updater/use-update";
+import { releaseNote, type ReleaseNote } from "@/lib/updater/release-notes";
+import { RichNote } from "./rich-notes";
 
 function mb(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -16,10 +19,22 @@ function mb(bytes: number): string {
 export function UpdateCard() {
   const u = useUpdate();
   const [shown, setShown] = useState(false);
+  const [rich, setRich] = useState<ReleaseNote | null>(null);
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(id);
   }, []);
+  useEffect(() => {
+    let ok = true;
+    if (u.status === "available" && u.version) {
+      releaseNote(u.version).then((n) => ok && setRich(n));
+    } else {
+      setRich(null);
+    }
+    return () => {
+      ok = false;
+    };
+  }, [u.status, u.version]);
 
   const pct = Math.round(u.progress * 100);
   const determinate = u.totalBytes > 0;
@@ -48,7 +63,9 @@ export function UpdateCard() {
                   : u.status === "downloading"
                     ? "Downloading update"
                     : u.status === "error"
-                      ? "Update failed"
+                      ? u.installFailed
+                        ? "Finish updating Harbor"
+                        : "Update failed"
                       : "Update available"}
             </span>
             {u.version && (
@@ -66,9 +83,15 @@ export function UpdateCard() {
           )}
         </div>
 
-        {u.status === "available" && u.notes && (
-          <div className="mx-5 mb-1 max-h-40 overflow-y-auto rounded-xl border border-edge-soft/60 bg-canvas/40 px-3.5 py-3 text-[12.5px] leading-relaxed whitespace-pre-line text-ink-muted">
-            {u.notes.trim()}
+        {u.status === "available" && (rich || u.notes) && (
+          <div className="mx-5 mb-1 max-h-[248px] overflow-y-auto rounded-xl border border-edge-soft/60 bg-canvas/40 px-3.5 py-3">
+            {rich ? (
+              <RichNote note={rich} />
+            ) : (
+              <p className="whitespace-pre-line text-[12.5px] leading-relaxed text-ink-muted">
+                {u.notes?.trim()}
+              </p>
+            )}
           </div>
         )}
 
@@ -98,6 +121,11 @@ export function UpdateCard() {
         {u.status === "error" && (
           <div className="mx-5 mb-1 rounded-xl border border-danger/40 bg-danger/10 px-3.5 py-3 text-[12.5px] leading-relaxed text-ink-muted">
             {u.error ?? "Something went wrong reaching the update server."}
+            {u.installFailed && (
+              <span className="mt-1.5 block text-ink-subtle">
+                Download and run the installer to finish updating. If it keeps failing, run it as administrator once.
+              </span>
+            )}
           </div>
         )}
 
@@ -124,9 +152,15 @@ export function UpdateCard() {
           {u.status === "error" && (
             <>
               <GhostButton onClick={closeUpdatePanel}>Close</GhostButton>
-              <PrimaryButton onClick={() => void checkForUpdate(true)}>
-                <RefreshCw size={16} strokeWidth={2.2} /> Try again
-              </PrimaryButton>
+              {u.installFailed ? (
+                <PrimaryButton onClick={() => void openManualDownload()}>
+                  <Download size={16} strokeWidth={2.2} /> Download installer
+                </PrimaryButton>
+              ) : (
+                <PrimaryButton onClick={() => void checkForUpdate(true)}>
+                  <RefreshCw size={16} strokeWidth={2.2} /> Try again
+                </PrimaryButton>
+              )}
             </>
           )}
           {u.status === "downloading" && (

@@ -6,9 +6,11 @@ import {
   type AwardSourceId,
   type AwardWin,
 } from "@/lib/anime-awards";
+import { resolveAwardIcon, useAwardPacks } from "@/lib/award-icons";
 import { useView } from "@/lib/view";
 
 export function AnimeAwardsBlock({ name, year }: { name: string; year?: number }) {
+  useAwardPacks();
   const wins = findAnyAwardWins(name, year);
   if (wins.length === 0) return null;
   const groups = groupWinsBySource(name, year);
@@ -36,9 +38,11 @@ function SourceGroup({ source, wins }: { source: AwardSourceId; wins: AwardWin[]
   const { openAnimeAward } = useView();
   const meta = awardSourceMeta(source);
   const years = uniqueYears(wins);
+  const customLogo = resolveAwardIcon(`${source}_logo`) ?? resolveAwardIcon(source);
+  const iconSrc = customLogo ?? meta.icon;
   const logoClass = `h-auto max-h-12 w-auto max-w-[180px] shrink-0 ${
-    source === "taaf" || source === "crunchyroll" ? "invert hue-rotate-180" : ""
-  } ${source === "animation_kobe" ? "brightness-0 invert max-h-14" : ""}`;
+    source === "animation_kobe" ? (customLogo ? "max-h-14" : "brightness-0 invert max-h-14") : ""
+  }`;
   return (
     <section className="grid gap-7 lg:grid-cols-[240px_1fr] lg:gap-14">
       <header className="flex flex-row items-center gap-5 lg:flex-col lg:items-start lg:gap-5">
@@ -48,7 +52,7 @@ function SourceGroup({ source, wins }: { source: AwardSourceId; wins: AwardWin[]
           className="shrink-0 rounded-md transition-opacity hover:opacity-80"
           aria-label={`Open ${meta.name} winners`}
         >
-          <img src={meta.icon} alt={meta.name} className={logoClass} draggable={false} />
+          <img src={iconSrc} alt={meta.name} className={logoClass} draggable={false} />
         </button>
         <div className="flex flex-col gap-1.5">
           <button

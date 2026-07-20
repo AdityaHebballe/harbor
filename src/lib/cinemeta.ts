@@ -2,7 +2,7 @@ import { safeFetch as fetch } from "@/lib/safe-fetch";
 
 const CINEMETA = "https://v3-cinemeta.strem.io";
 
-export type MetaType = "movie" | "series" | "channel" | "tv" | "anime" | "other";
+export type MetaType = "movie" | "series" | "channel" | "tv" | "anime" | "other" | "manga";
 
 export function narrowMediaType(t: MetaType | string | undefined): "movie" | "series" {
   return t === "series" ? "series" : "movie";
@@ -34,6 +34,7 @@ export type Meta = {
   trailerStreams?: Array<{ ytId?: string; title?: string }>;
   links?: Array<{ name: string; category: string; url: string }>;
   addonOrigin?: { id: string; name: string; logo?: string; base?: string };
+  isCollection?: boolean;
   behaviorHints?: { defaultVideoId?: string | null };
   videos?: Array<{
     id?: string;
@@ -56,7 +57,10 @@ export function isAddonNativeMeta(meta: Meta): boolean {
   if (!meta.addonOrigin) return false;
   const id = meta.id || "";
   const resolvable =
-    /^tt\d/.test(id) || id.startsWith("tmdb:") || id.startsWith("kitsu:") || id.startsWith("mal:");
+    /^tt\d/.test(id) ||
+    id.startsWith("tmdb:") ||
+    id.startsWith("kitsu:") ||
+    id.startsWith("mal:");
   return !resolvable;
 }
 

@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { emptySnapshot, type PlayerBridge, type PlayerSnapshot } from "@/lib/player/bridge";
 import { probeMpv } from "@/lib/player/mpv";
 import { mergeMpvOptions } from "@/lib/player/mpv-tuning";
+import { metaIsAnime } from "@/lib/player/anime-src";
 import { anime4kShadersFor, type Anime4kChoice } from "./use-anime4k";
 import type { PlayerSrc } from "@/lib/view";
 import type { Settings } from "@/lib/settings";
 import { setPlaybackClock } from "@/lib/player/playback-clock";
 import { isWindowsDesktop } from "@/lib/platform";
 import { svpEnsureRunning } from "@/lib/svp";
-import { isAnimeMedia, isSvpActiveForMedia } from "@/lib/player/svp-policy";
 import { pickBridge } from "../player-utils";
 
 function snapChangedIgnoringClock(a: PlayerSnapshot, b: PlayerSnapshot): boolean {
@@ -49,16 +49,18 @@ export function usePlayerBridge(params: {
 
   const hdrOpaqueWindow = isWindowsDesktop() && settings.playerHdrOpaqueWindow;
   const embedActive = settings.playerMpvEmbed && !hdrOpaqueWindow;
-  const isAnimeSrc = isAnimeMedia(src.meta);
+  const isAnimeSrc = metaIsAnime(src.meta) || !!src.isAnime;
   const anime4kOn = settings.playerAnime4k && (!settings.playerAnime4kAnimeOnly || isAnimeSrc);
-  const svpOn = isSvpActiveForMedia(settings, src.meta);
+  const svpOn =
+    settings.playerSvp &&
+    !!settings.svpVpyPath &&
+    (settings.svpScope === "all" || (settings.svpScope === "anime" ? isAnimeSrc : !isAnimeSrc));
   useEffect(() => {
     if (svpOn) void svpEnsureRunning().catch(() => {});
   }, [svpOn]);
   const isLiveLike =
     !!src.meta.id?.startsWith("iptv:") ||
-    (!!src.meta.type &&
-      !["movie", "series", "anime"].includes(String(src.meta.type).toLowerCase()));
+    (!!src.meta.type && !["movie", "series", "anime"].includes(String(src.meta.type).toLowerCase()));
   const chosenEngine =
     isLiveLike && !src.notWebReady ? "html5" : autoFallbackTried ? "mpv" : settings.playerEngine;
   const bridgeKey = `${chosenEngine}|${anime4kOn}|${embedActive}|${anime4kOn ? settings.playerAnime4kShaders.join(",") : ""}|${svpOn}|${svpOn ? settings.svpVpyPath : ""}`;
@@ -100,10 +102,7 @@ export function usePlayerBridge(params: {
         extraOptions: mergeMpvOptions(settings, svpOn),
         getEmbedRect,
       });
-      if (cancelled) {
-        choose.destroy();
-        return;
-      }
+      if (cancelled) return;
       bridge = choose;
       bridge.attach(host);
       bridgeRef.current = bridge;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { EpisodeJumper } from "@/components/episode-jumper";
 import { providerForModel } from "@/lib/ai-models";
 import { CrossSeasonResults } from "./series-episodes/cross-season-results";
@@ -6,7 +7,8 @@ import { CinemetaFallback } from "./series-episodes/cinemeta-fallback";
 import { EpisodeAiMode } from "./series-episodes/episode-ai-mode";
 import { EpisodeSearchBar, EpisodeSearchToggle } from "./series-episodes/episode-search-controls";
 import { EpisodeWatchedMenu, type WatchedMenuTarget } from "@/components/episode-watched-menu";
-import { manualWatchedVersion, subscribeManualWatched } from "@/lib/manual-watched";
+import { manualEpisodeKeys, manualWatchedVersion, subscribeManualWatched } from "@/lib/manual-watched";
+import { useHiddenEpisodes } from "@/lib/hidden-episodes";
 import type { Meta } from "@/lib/cinemeta";
 import { getEpisodeProgress, resumeDefaultSeason } from "@/lib/episode-progress";
 import { scrollToDataEp } from "@/lib/episode-scroll";
@@ -21,6 +23,7 @@ import { EpisodeRow } from "./series-episode-row";
 import { EpisodeGridSkeleton } from "./episode-grid-skeleton";
 import { EpisodeStrip } from "./episode-strip";
 import { RandomEpisodeButton } from "./random-episode-button";
+import { EpisodeDownloadsMenu } from "./episode-downloads-menu";
 import { SeasonArcPicker } from "./series-episodes/season-arc-picker";
 import { useSeasonArcPicker } from "./series-episodes/use-season-arc-picker";
 import { useMarkSeason } from "./series-episodes/use-mark-season";
@@ -66,6 +69,7 @@ export function SeriesEpisodes({
   const [epSearch, setEpSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [aiMode, setAiMode] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const aiProvider = providerForModel(settings.aiSearchModel);
   const searching = epSearch.trim().length > 0;
   const openWatchedMenu = (
@@ -98,8 +102,11 @@ export function SeriesEpisodes({
       const se = e > 0 ? k.lastIndexOf(":", e - 1) : -1;
       if (se >= 0) s.add(k.slice(se + 1));
     }
+    const manual = manualEpisodeKeys(meta.id);
+    for (const k of manual.watched) s.add(k);
+    for (const k of manual.unwatched) s.delete(k);
     return s;
-  }, [stremioWatched, simklWatched, traktWatched]);
+  }, [stremioWatched, simklWatched, traktWatched, meta.id, mwVersion]);
   const cache = useRef<Map<number, Episode[]>>(new Map());
 
   const traktKey = imdbId ?? meta.id;
@@ -154,7 +161,7 @@ export function SeriesEpisodes({
     };
   }, [tvId, active, settings.tmdbKey]);
 
-  const enrichedBase = useEpisodeEnrich({
+  const { episodes: enrichedBase, imdbRatings } = useEpisodeEnrich({
     episodes,
     active,
     imdbId,
@@ -171,6 +178,16 @@ export function SeriesEpisodes({
     });
   }, [enrichedBase, tvdbStills]);
 
+  const hiddenSet = useHiddenEpisodes(meta.id);
+  const hideActive = settings.episodeHiding && !showHidden;
+  const visibleEpisodes = useMemo(
+    () =>
+      hideActive && hiddenSet.size > 0
+        ? enrichedEpisodes.filter((ep) => !hiddenSet.has(`${ep.seasonNumber}:${ep.episodeNumber}`))
+        : enrichedEpisodes,
+    [enrichedEpisodes, hideActive, hiddenSet],
+  );
+
   const [mode, setMode] = useState<"seasons" | "arcs">("seasons");
   const arc = useArcGroups({ tvId, tmdbKey: settings.tmdbKey, enabled: settings.episodeArcGroups });
   const arcActive = settings.episodeArcGroups && arc.hasArcs && mode === "arcs";
@@ -182,18 +199,17 @@ export function SeriesEpisodes({
     settings.tvdbSeasonType,
     settings.tvdbKey,
   );
-  const orderTypes = useTvdbSeasonTypes(
-    imdbId,
-    meta.id,
-    settings.tvdbKey,
-    settings.tvdbOrderPanel && ordering != null,
-  );
+  const orderTypes = useTvdbSeasonTypes(imdbId, meta.id, settings.tvdbKey, settings.tvdbOrderPanel);
+  const orderTypesEff =
+    settings.tmdbKey && orderTypes.length > 0
+      ? [...orderTypes, { value: "tmdb", label: "TMDB" }]
+      : orderTypes;
   const [orderSeason, setOrderSeason] = useState<number>(-1);
   useEffect(() => {
     setOrderSeason(-1);
   }, [meta.id]);
   const orderActive = !arcActive && ordering != null;
-  const panelActive = settings.tvdbOrderPanel && orderActive;
+  const panelActive = settings.tvdbOrderPanel && (orderActive || orderTypes.length > 0);
   const altActive = arcActive || orderActive;
   const orderSeasonEff =
     ordering && !ordering.seasons.some((s) => s.seasonNumber === orderSeason)
@@ -214,11 +230,26 @@ export function SeriesEpisodes({
     setOrderSeason,
     userPickedRef,
   });
-  const orderedEps = arcActive
+  const orderedEpsRaw = arcActive
     ? arc.episodes
     : ordering
       ? ordering.bySeason.get(orderSeasonEff) ?? []
       : [];
+  const orderedEps = useMemo(() => {
+    if (imdbRatings.size === 0) return orderedEpsRaw;
+    return orderedEpsRaw.map((ep) => {
+      if (ep.imdbRating != null) return ep;
+      const r = imdbRatings.get(`${ep.seasonNumber}:${ep.episodeNumber}`);
+      return r != null && r > 0 ? { ...ep, imdbRating: r } : ep;
+    });
+  }, [orderedEpsRaw, imdbRatings]);
+  const visibleOrderedEps = useMemo(
+    () =>
+      hideActive && hiddenSet.size > 0
+        ? orderedEps.filter((ep) => !hiddenSet.has(`${ep.seasonNumber}:${ep.episodeNumber}`))
+        : orderedEps,
+    [orderedEps, hideActive, hiddenSet],
+  );
   const orderedLoading = arcActive && arc.loading;
 
   const activeSeason = seasons.find((s) => s.seasonNumber === active);
@@ -242,17 +273,44 @@ export function SeriesEpisodes({
     settings,
   });
   const markSeason = useMarkSeason({ meta, active, enrichedEpisodes, simklConnected });
+  const downloadEpisodes = useMemo(
+    () =>
+      enrichedEpisodes.map((ep) => ({
+        season: ep.seasonNumber,
+        episode: ep.episodeNumber,
+        name: ep.name || undefined,
+        runtime: ep.runtime ?? undefined,
+      })),
+    [enrichedEpisodes],
+  );
 
   return (
     <div data-episodes className="flex scroll-mt-24 flex-col gap-6">
-      <div className="flex items-end justify-between gap-6">
-        <h3 className="text-[22px] font-medium tracking-tight text-ink">{t("Episodes")}</h3>
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-start justify-between gap-4">
+        <h3 className="shrink-0 pt-1 text-[22px] font-medium tracking-tight text-ink">{t("Episodes")}</h3>
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 xl:gap-2.5">
+          <EpisodeDownloadsMenu meta={meta} episodes={downloadEpisodes} />
           <RandomEpisodeButton meta={meta} seasons={seasons} />
           <EpisodeLayoutToggle
             value={settings.episodeLayout}
             onChange={(v) => update({ episodeLayout: v })}
           />
+          {settings.episodeHiding && hiddenSet.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowHidden((v) => !v)}
+              aria-pressed={showHidden}
+              title={showHidden ? t("Hide hidden episodes") : t("Show hidden episodes")}
+              className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold tabular-nums transition-colors ${
+                showHidden
+                  ? "bg-ink text-canvas"
+                  : "border border-edge-soft text-ink-muted hover:border-edge hover:text-ink"
+              }`}
+            >
+              {showHidden ? <Eye size={14} strokeWidth={2.2} /> : <EyeOff size={14} strokeWidth={2.2} />}
+              {hiddenSet.size}
+            </button>
+          )}
           {!altActive && (
             <EpisodeGridControls
               sort={settings.episodeSort}
@@ -264,7 +322,7 @@ export function SeriesEpisodes({
           <EpisodeSearchToggle
             searchActive={searchOpen || searching}
             aiMode={aiMode}
-            aiEnabled={!!settings.aiSearchKey.trim()}
+            aiEnabled={!!(settings.aiSearchKey.trim() || settings.aiGroqKey.trim())}
             aiProvider={aiProvider}
             onSearch={() => {
               setSearchOpen((v) => !v);
@@ -280,9 +338,9 @@ export function SeriesEpisodes({
               items={picker.items}
               activeKey={picker.activeKey}
               onSelect={picker.onSelect}
-              orderTypes={orderTypes}
+              orderTypes={orderTypesEff}
               activeType={settings.tvdbSeasonType}
-              onSelectType={(v) => update({ tvdbSeasonType: v })}
+              onSelectType={(v) => update({ tvdbSeasonType: v as typeof settings.tvdbSeasonType })}
             />
           ) : (
             (picker.items.length > 1 || arcAvailable) && (
@@ -310,7 +368,7 @@ export function SeriesEpisodes({
       {altActive && (
         <OrderedEpisodes
           meta={meta}
-          episodes={orderedEps}
+          episodes={visibleOrderedEps}
           loading={orderedLoading}
           traktKey={traktKey}
           traktWatched={traktWatched}
@@ -345,7 +403,7 @@ export function SeriesEpisodes({
               meta={meta}
               seriesImdbId={imdbId}
               cinemetaVideos={cinemetaVideos}
-              episodes={enrichedEpisodes}
+              episodes={visibleEpisodes}
               progressFor={(ep) =>
                 getEpisodeProgress(
                   meta.id,
@@ -369,7 +427,7 @@ export function SeriesEpisodes({
             />
           ) : (
             <div className="flex flex-col gap-1">
-              {enrichedEpisodes.map((ep) => (
+              {visibleEpisodes.map((ep) => (
                 <EpisodeRow
                   key={ep.id}
                   meta={meta}
@@ -391,7 +449,7 @@ export function SeriesEpisodes({
         </div>
       )}
       {!altActive && settings.episodeLayout === "list" && (
-        <EpisodeJumper scrollRef={scrollRef} totalEpisodes={enrichedEpisodes.length} />
+        <EpisodeJumper scrollRef={scrollRef} totalEpisodes={visibleEpisodes.length} />
       )}
       </>
       )}
@@ -400,6 +458,11 @@ export function SeriesEpisodes({
           metaId={meta.id}
           meta={{ type: "series", name: meta.name, poster: meta.poster, background: meta.background }}
           target={watchedMenu}
+          allEpisodes={enrichedEpisodes.map((ep) => ({
+            season: ep.seasonNumber,
+            episode: ep.episodeNumber,
+            released: ep.airDate ?? null,
+          }))}
           onClose={() => setWatchedMenu(null)}
         />
       )}

@@ -2,12 +2,21 @@ import { safeFetch } from "@/lib/safe-fetch";
 
 const ENDPOINT = "https://api.ani.zip/mappings";
 const GAP_MS = 90;
+const NEG_TTL_MS = 120000;
 const cache = new Map<string, AniZipMapping | null>();
+const negCache = new Map<string, number>();
 const inflight = new Map<string, Promise<AniZipMapping | null>>();
 
 let queue: Promise<unknown> = Promise.resolve();
-function throttled(url: string, signal: AbortSignal): Promise<Response> {
-  const run = queue.then(() => safeFetch(url, { signal }));
+function throttled(url: string, ac: AbortController): Promise<Response> {
+  const run = queue.then(async () => {
+    const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+    try {
+      return await safeFetch(url, { signal: ac.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  });
   const settled = run.then(
     () => undefined,
     () => undefined,
@@ -45,7 +54,7 @@ export type AniZipMapping = {
     mal_id?: number;
     anidb_id?: number;
     thetvdb_id?: number;
-    themoviedb_id?: number;
+    themoviedb_id?: number | string;
     imdb_id?: string;
   };
 };
@@ -78,25 +87,27 @@ const TIMEOUT_MS = 4000;
 
 async function get(query: string): Promise<AniZipMapping | null> {
   if (cache.has(query)) return cache.get(query) ?? null;
+  const negAt = negCache.get(query);
+  if (negAt != null && Date.now() - negAt < NEG_TTL_MS) return null;
   const existing = inflight.get(query);
   if (existing) return existing;
   const p = (async () => {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
     try {
-      const res = await throttled(`${ENDPOINT}?${query}`, ac.signal);
+      const res = await throttled(`${ENDPOINT}?${query}`, ac);
       if (!res.ok) {
-        cache.set(query, null);
+        if (res.status === 404) cache.set(query, null);
+        else negCache.set(query, Date.now());
         return null;
       }
       const json = (await res.json()) as AniZipMapping;
       cache.set(query, json);
+      negCache.delete(query);
       return json;
     } catch {
-      cache.set(query, null);
+      negCache.set(query, Date.now());
       return null;
     } finally {
-      clearTimeout(timer);
       inflight.delete(query);
     }
   })();

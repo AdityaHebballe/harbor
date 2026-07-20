@@ -12,7 +12,6 @@ if (typeof window !== "undefined" && isTauri()) {
   void listen("modal://closed", () => {
     overlayOpen = false;
   });
-
   void listen("modal://show", () => {
     overlayOpen = true;
   });

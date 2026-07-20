@@ -1,6 +1,6 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useT } from "@/lib/i18n";
+import { NavArrow } from "./nav-arrow";
 
 type DragState = {
   active: boolean;
@@ -143,20 +143,14 @@ function Arrow({
 }) {
   const t = useT();
   return (
-    <button
-      type="button"
+    <NavArrow
+      dir={side}
       onClick={onClick}
-      aria-label={t(side === "left" ? "Scroll left" : "Scroll right")}
-      tabIndex={visible ? 0 : -1}
-      className={`absolute top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-edge bg-canvas/95 text-ink shadow-[0_8px_24px_-6px_rgba(0,0,0,0.5)] backdrop-blur-md transition-all hover:scale-105 hover:bg-canvas active:scale-95 ${
+      label={t(side === "left" ? "Scroll left" : "Scroll right")}
+      size={28}
+      className={`absolute top-1/2 z-20 h-11 w-11 -translate-y-1/2 transition-opacity ${
         side === "left" ? "start-1" : "end-1"
       } ${visible ? "opacity-100" : "pointer-events-none opacity-0"}`}
-    >
-      {side === "left" ? (
-        <ChevronLeft size={20} strokeWidth={2.4} className="dir-icon" />
-      ) : (
-        <ChevronRight size={20} strokeWidth={2.4} className="dir-icon" />
-      )}
-    </button>
+    />
   );
 }

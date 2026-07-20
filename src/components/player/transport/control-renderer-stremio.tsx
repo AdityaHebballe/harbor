@@ -12,17 +12,11 @@ import {
   SkipForward,
   Tv,
 } from "lucide-react";
-import { realQualityLabel } from "@/lib/player/resolution-label";
+import { hdrFormatLabel, realQualityLabel } from "@/lib/player/resolution-label";
 import type { PlayerCapabilities, PlayerSnapshot } from "@/lib/player/bridge";
 import type { SubtitleAddHandler } from "@/lib/player/subtitle-load";
 import type { Meta } from "@/lib/cinemeta";
-import {
-  getCustomIcon,
-  type CustomIconMap,
-  type PlayerControlId,
-  type TimeFormat,
-  type VolumeStyle,
-} from "@/lib/player-chrome";
+import { getCustomIcon, type CustomIconMap, type PlayerControlId, type TimeFormat, type VolumeStyle } from "@/lib/player-chrome";
 import type { DownloadStatus } from "@/views/player/hooks/use-video-download";
 import { useT } from "@/lib/i18n";
 import { SubtitleMenu } from "../subtitle-menu";
@@ -47,10 +41,8 @@ import { IdentifySongButton } from "@/components/identify-song-button";
 
 function qualityInfoOn(): boolean {
   try {
-    return (
-      (JSON.parse(localStorage.getItem("harbor.settings") ?? "{}") as { showQualityInfo?: boolean })
-        .showQualityInfo === true
-    );
+    return (JSON.parse(localStorage.getItem("harbor.settings") ?? "{}") as { showQualityInfo?: boolean })
+      .showQualityInfo === true;
   } catch {
     return false;
   }
@@ -84,6 +76,7 @@ export type StremioRenderCtx = {
   subtitle?: string;
   resolution?: string | null;
   quality?: string | null;
+  releaseName?: string | null;
   titleClickable?: boolean;
   onBack?: () => void;
   onFullscreen?: () => void;
@@ -183,6 +176,7 @@ export function RenderedStremioControl({
       if (!ctx.title) return null;
       const showQuality = qualityInfoOn() && !!ctx.quality;
       const res = realQualityLabel(ctx.snap.videoWidth, ctx.snap.videoHeight) ?? ctx.resolution;
+      const hdr = hdrFormatLabel(ctx.snap.hdrGamma, ctx.quality, ctx.releaseName);
       if (ctx.titleClickable && ctx.onTitleClick) {
         return (
           <button
@@ -194,27 +188,24 @@ export function RenderedStremioControl({
               <span className="flex min-w-0 items-center gap-2 truncate">
                 <h1 className="truncate text-[19px] font-medium leading-tight">{ctx.title}</h1>
                 {ctx.subtitle && (
-                  <span className="shrink-0 text-[13px] font-normal text-white/55">
-                    {ctx.subtitle}
-                  </span>
+                  <span className="shrink-0 text-[13px] font-normal text-white/55">{ctx.subtitle}</span>
                 )}
                 {!showQuality && res && (
                   <span className="shrink-0 rounded-md bg-white/15 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-white/80">
                     {res}
                   </span>
                 )}
+                {!showQuality && hdr && (
+                  <span className="shrink-0 rounded-md bg-amber-400/20 px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-wide text-amber-200">
+                    {hdr}
+                  </span>
+                )}
               </span>
               {showQuality && (
-                <span className="truncate text-[12px] font-normal tabular-nums text-white/55">
-                  {ctx.quality}
-                </span>
+                <span className="truncate text-[12px] font-normal tabular-nums text-white/55">{ctx.quality}</span>
               )}
             </span>
-            <Info
-              size={13}
-              strokeWidth={2.1}
-              className="shrink-0 opacity-40 transition-opacity group-hover:opacity-90"
-            />
+            <Info size={13} strokeWidth={2.1} className="shrink-0 opacity-40 transition-opacity group-hover:opacity-90" />
           </button>
         );
       }
@@ -235,6 +226,11 @@ export function RenderedStremioControl({
                     {res}
                   </span>
                 )}
+                {hdr && (
+                  <span className="shrink-0 rounded-md bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-200">
+                    {hdr}
+                  </span>
+                )}
               </p>
             )
           )}
@@ -244,11 +240,7 @@ export function RenderedStremioControl({
     case "play-pause":
       return (
         <Tooltip label={ctx.playing ? tr("Pause") : tr("Play")}>
-          <StremioBtn
-            onClick={ctx.onPlayPause}
-            ariaLabel={ctx.playing ? tr("Pause") : tr("Play")}
-            playPause
-          >
+          <StremioBtn onClick={ctx.onPlayPause} ariaLabel={ctx.playing ? tr("Pause") : tr("Play")}>
             {ctx.playing ? (
               <Pause size={32} strokeWidth={2} fill="currentColor" />
             ) : (
@@ -261,11 +253,7 @@ export function RenderedStremioControl({
       if (!ctx.showEpisodeNav) return null;
       return (
         <Tooltip label={tr("Previous episode")}>
-          <StremioBtn
-            onClick={ctx.onPrevEp}
-            ariaLabel={tr("Previous episode")}
-            disabled={!ctx.hasPrevEp}
-          >
+          <StremioBtn onClick={ctx.onPrevEp} ariaLabel={tr("Previous episode")} disabled={!ctx.hasPrevEp}>
             <SkipBack size={26} strokeWidth={2} fill="currentColor" />
           </StremioBtn>
         </Tooltip>
@@ -274,11 +262,7 @@ export function RenderedStremioControl({
       if (!ctx.showEpisodeNav) return null;
       return (
         <Tooltip label={tr("Next episode")}>
-          <StremioBtn
-            onClick={ctx.onNextEp}
-            ariaLabel={tr("Next episode")}
-            disabled={!ctx.hasNextEp}
-          >
+          <StremioBtn onClick={ctx.onNextEp} ariaLabel={tr("Next episode")} disabled={!ctx.hasNextEp}>
             <SkipForward size={26} strokeWidth={2} fill="currentColor" />
           </StremioBtn>
         </Tooltip>
@@ -318,11 +302,7 @@ export function RenderedStremioControl({
             onClick={ctx.onPickAnother}
             ariaLabel={ctx.isLiveChannel ? tr("TV Guide") : tr("Switch stream")}
           >
-            {ctx.isLiveChannel ? (
-              <Tv size={26} strokeWidth={1.9} />
-            ) : (
-              <Replace size={26} strokeWidth={1.9} />
-            )}
+            {ctx.isLiveChannel ? <Tv size={26} strokeWidth={1.9} /> : <Replace size={26} strokeWidth={1.9} />}
           </StremioBtn>
         </Tooltip>
       );
@@ -331,14 +311,7 @@ export function RenderedStremioControl({
       return <DvrButton channelName={ctx.meta?.name ?? tr("Live")} onClick={ctx.onOpenDvr} />;
     case "download":
       if (ctx.isLiveChannel) return null;
-      if (
-        !ctx.download ||
-        !ctx.onDownloadStart ||
-        !ctx.onDownloadCancel ||
-        !ctx.onDownloadReveal ||
-        !ctx.onDownloadReset
-      )
-        return null;
+      if (!ctx.download || !ctx.onDownloadStart || !ctx.onDownloadCancel || !ctx.onDownloadReveal || !ctx.onDownloadReset) return null;
       return (
         <DownloadButton
           status={ctx.download}
@@ -453,11 +426,7 @@ export function RenderedStremioControl({
       return (
         <Tooltip label={ctx.fullscreen ? tr("Exit fullscreen") : tr("Fullscreen")} side="bottom">
           <StremioBtn onClick={ctx.onFullscreen} ariaLabel={tr("Fullscreen")}>
-            {ctx.fullscreen ? (
-              <Minimize size={28} strokeWidth={2} />
-            ) : (
-              <Maximize size={28} strokeWidth={2} />
-            )}
+            {ctx.fullscreen ? <Minimize size={28} strokeWidth={2} /> : <Maximize size={28} strokeWidth={2} />}
           </StremioBtn>
         </Tooltip>
       );

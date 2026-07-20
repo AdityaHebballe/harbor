@@ -1,7 +1,8 @@
 import { ChevronDown, Play, Zap } from "lucide-react";
 import { AddonLogo } from "@/components/addon-logo";
 import { FormatBadge, type BadgeKind } from "@/components/format-badge";
-import previewPoster from "@/assets/preview/poster1.webp";
+import { useHydratedPoster } from "@/lib/sample-artwork";
+import poster1 from "@/assets/preview/poster1.webp";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -16,13 +17,14 @@ export function PickerLayoutPreview({ value }: { value: "condensed" | "stremio" 
 }
 
 function CondensedMock() {
+  const poster = useHydratedPoster("tt15239678", poster1);
   return (
     <>
       <section className="relative overflow-hidden rounded-[20px] border border-edge-soft/70 bg-canvas/85">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-ink/12 to-transparent" />
         <div className="grid grid-cols-[110px_1fr] gap-4 p-4">
           <div className="relative aspect-[2/3] overflow-hidden rounded-[12px] ring-1 ring-edge-soft/60">
-            <img src={previewPoster} alt="" draggable={false} className="h-full w-full object-cover" />
+            <img src={poster} alt="" draggable={false} className="h-full w-full object-cover" />
             <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/65 to-transparent" />
             <div className="absolute end-1.5 top-1.5 flex flex-col items-end gap-1">
               <FormatBadge kind="4k-uhd" size="sm" />
@@ -61,16 +63,16 @@ function CondensedMock() {
 
       <div className="flex flex-col gap-2.5">
         <p className="text-[11px] font-bold uppercase tracking-[0.32em] text-ink-subtle">Switch quality</p>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {TIERS.map((tier, i) => (
             <div
               key={tier.label}
-              className={`flex min-h-[48px] items-center gap-2.5 rounded-[12px] border px-3 py-2 ${
+              className={`flex min-h-[48px] min-w-0 items-center gap-2 rounded-[12px] border px-2.5 py-2 ${
                 i === 0 ? "border-ink/35 bg-ink/[0.05]" : "border-edge-soft"
               } ${tier.dim ? "opacity-65" : ""}`}
             >
               <FormatBadge kind={tier.badge} size="md" />
-              <div className="flex flex-col items-start gap-0.5">
+              <div className="flex min-w-0 flex-col items-start gap-0.5">
                 <span className="text-[11.5px] font-bold uppercase tracking-[0.16em] text-ink">{tier.label}</span>
                 <span className="flex items-center gap-1 text-[10.5px] font-semibold tracking-[0.04em] text-ink-subtle">
                   {tier.instant ? (

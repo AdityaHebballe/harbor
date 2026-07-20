@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { HarborLoader } from "@/components/harbor-loader";
 import type { Meta } from "@/lib/cinemeta";
 import { consumeRecentStubEvent } from "@/lib/dead-streams";
-import { useT } from "@/lib/i18n";
 import { useActiveKid } from "@/lib/profiles";
 import { type PlayEpisode } from "@/lib/view";
-import { Topbar } from "@/chrome/topbar";
-import { LoaderLogoOrText } from "../player/loader-logo-or-text";
+import { LogoOrText } from "./logo-or-text";
+import { useT } from "@/lib/i18n";
 
 export function AutoPlayTransition({
   meta,
@@ -24,23 +23,20 @@ export function AutoPlayTransition({
   download?: boolean;
 }) {
   void resolving;
-  const t = useT();
   const kid = useActiveKid();
+  const t = useT();
   const backdrop = episode?.still || meta.background || meta.poster;
   const [stubNotice, setStubNotice] = useState<string | null>(null);
   useEffect(() => {
     const ev = consumeRecentStubEvent(8000);
     if (!ev) return;
-    setStubNotice("Last source wasn't actually cached on your debrid yet. Trying another.");
-    const t = window.setTimeout(() => setStubNotice(null), 6000);
-    return () => window.clearTimeout(t);
-  }, []);
+    setStubNotice(t("Last source wasn't actually cached on your debrid yet. Trying another."));
+    const timer = window.setTimeout(() => setStubNotice(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [t]);
   return (
-    <main
-      data-tv-focus-scope
-      className={`fixed inset-0 z-[120] overflow-hidden ${kid ? "bg-[#0c4a6e]" : "bg-black"}`}
-    >
-      <Topbar connecting />
+    <main className={`fixed inset-0 z-[120] overflow-hidden ${kid ? "bg-[#0c4a6e]" : "bg-black"}`}>
+      <div data-tauri-drag-region className="absolute inset-x-0 top-0 z-20 h-16" />
       {backdrop && (
         <img
           src={backdrop}
@@ -96,7 +92,12 @@ export function AutoPlayTransition({
         </div>
       )}
       <div className="relative flex h-full flex-col items-center justify-center gap-7 px-8 text-center">
-        <LoaderLogoOrText logo={meta.logo ?? null} fallbackText={meta.name} />
+        <LogoOrText
+          logo={meta.logo ?? null}
+          fallbackText={meta.name}
+          imgClass="max-h-44 w-auto max-w-[72%] animate-loader-pulse object-contain drop-shadow-[0_24px_60px_rgba(0,0,0,0.65)]"
+          textClass="animate-loader-pulse font-display text-[64px] font-medium leading-[0.96] tracking-tight text-white drop-shadow-[0_18px_45px_rgba(0,0,0,0.7)]"
+        />
         {episode && (
           <p className="text-[12.5px] font-semibold uppercase tracking-[0.32em] text-white/70">
             S{episode.imdbSeason ?? episode.season} · E
@@ -110,17 +111,18 @@ export function AutoPlayTransition({
             download
               ? t("Preparing download")
               : attemptIdx && attemptIdx > 0
-                ? `${t("Trying source")} ${attemptIdx + 1}`
-                : t("Selecting best source")
+                ? t("Trying source {n}", { n: attemptIdx + 1 })
+                : t("Connecting")
           }
         />
         {stubNotice && (
-          <p className="max-w-md text-[13px] leading-relaxed text-amber-200/80">{stubNotice}</p>
+          <p className="max-w-md text-[13px] leading-relaxed text-amber-200/80">
+            {stubNotice}
+          </p>
         )}
       </div>
       <button
         onClick={onCancel}
-        data-tv-modal-close
         className="absolute bottom-10 left-1/2 z-10 flex h-11 -translate-x-1/2 cursor-pointer items-center gap-2 rounded-full border border-white/15 bg-black/45 px-6 text-[13.5px] font-medium text-white/75 backdrop-blur-md transition-colors hover:border-white/30 hover:bg-black/60 hover:text-white"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>

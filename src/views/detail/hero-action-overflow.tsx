@@ -6,6 +6,7 @@ import { activeDownloadFor, cancelDownload, useDownloads } from "@/lib/download/
 import { useView } from "@/lib/view";
 import { useT } from "@/lib/i18n";
 import { AddToListMenu } from "@/components/lists/add-to-list-menu";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import type { ListItemInput } from "@/lib/custom-lists";
 import { AnilistMenuItems, SimklMenuItems, TraktMenuItems } from "./overflow-sync-items";
 import { PreviewIcon } from "./preview-icon";
@@ -129,18 +130,19 @@ export function HeroActionOverflow({
 
   return (
     <>
-      <button
-        ref={btnRef}
-        type="button"
-        aria-label={t("More actions")}
-        title={t("More")}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={() => (menu ? setMenu(null) : openMenu())}
-        className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-edge bg-canvas/80 text-ink transition-[transform,background-color,border-color] duration-200 hover:border-ink-subtle hover:bg-canvas/95 active:scale-[0.94]"
-      >
-        <MoreHorizontal size={20} strokeWidth={1.9} />
-        {isFav && <span className="absolute end-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-accent" />}
-      </button>
+      <HoverTooltip label={t("More actions")} align="center" disabled={!!menu} className="shrink-0">
+        <button
+          ref={btnRef}
+          type="button"
+          aria-label={t("More actions")}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => (menu ? setMenu(null) : openMenu())}
+          className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-edge bg-canvas/80 text-ink transition-[transform,background-color,border-color] duration-200 hover:border-ink-subtle hover:bg-canvas/95 active:scale-[0.94]"
+        >
+          <MoreHorizontal size={20} strokeWidth={1.9} />
+          {isFav && <span className="absolute end-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-accent" />}
+        </button>
+      </HoverTooltip>
       {menu &&
         createPortal(
           <div

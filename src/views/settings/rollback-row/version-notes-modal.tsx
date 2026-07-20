@@ -1,8 +1,10 @@
 import { ArrowDownToLine, Check, X } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { BetaTag } from "@/components/beta-tag";
+import { RichNote } from "@/components/update/rich-notes";
 import { useT } from "@/lib/i18n";
+import { hasRichNote, releaseNote, type ReleaseNote } from "@/lib/updater/release-notes";
 import { installerUrl, type VersionEntry } from "@/lib/updater/versions";
 import { openUrl } from "@/lib/window";
 
@@ -19,12 +21,21 @@ export function VersionNotesModal({
 }) {
   const t = useT();
   const url = installerUrl(entry);
+  const [rich, setRich] = useState<ReleaseNote | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    let ok = true;
+    releaseNote(entry.version).then((n) => ok && setRich(n));
+    return () => {
+      ok = false;
+    };
+  }, [entry.version]);
 
   return createPortal(
     <div
@@ -57,7 +68,9 @@ export function VersionNotesModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {entry.notes ? (
+          {hasRichNote(rich) ? (
+            <RichNote note={rich} />
+          ) : entry.notes ? (
             <p className="whitespace-pre-line text-[13.5px] leading-relaxed text-ink-muted">{entry.notes}</p>
           ) : (
             <p className="text-[13px] text-ink-subtle">

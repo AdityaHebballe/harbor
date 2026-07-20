@@ -119,10 +119,7 @@ export function AudioMenu(props: Props) {
         </button>
       </Tooltip>
       {open && (forceInline || !useOverlay) && (
-        <div
-          data-tv-focus-scope
-          className={`absolute bottom-[calc(100%+10px)] ${side === "start" ? "start-0" : "end-0"} flex max-h-[400px] w-[360px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl border border-edge bg-elevated shadow-[0_24px_60px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl`}
-        >
+        <div className={`absolute bottom-[calc(100%+10px)] ${side === "start" ? "start-0" : "end-0"} flex max-h-[400px] w-[360px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-2xl border border-edge bg-elevated shadow-[0_24px_60px_-18px_rgba(0,0,0,0.8)] backdrop-blur-xl`}>
           <AudioMenuBody {...props} onClose={() => setOpen(false)} />
         </div>
       )}
@@ -149,7 +146,6 @@ function MenuBody(props: Props & { onClose: () => void }) {
         <button
           onClick={onClose}
           aria-label={t("Close")}
-          data-tv-modal-close
           className="flex h-7 w-7 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-raised hover:text-ink"
         >
           <X size={13} strokeWidth={2.2} />

@@ -2,8 +2,9 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AwardLogo, laurelColorFor } from "@/components/icons/award-logo";
 import { Laurel } from "@/components/icons/laurel";
 import { awardSourceMeta, findAnyAwardWins, parseAwardYear } from "@/lib/anime-awards";
+import { resolveAwardIcon, useAwardPacks } from "@/lib/award-icons";
 import type { Meta } from "@/lib/cinemeta";
-import { awardSummary, useAwards, type AwardType } from "@/lib/providers/wikidata";
+import { awardSummary, pickHeroAwards, useAwards, type AwardType } from "@/lib/providers/wikidata";
 import { mergeBundledAwards } from "@/lib/awards-history";
 
 const HEADLINE_FOR: Record<string, string> = {
@@ -33,7 +34,14 @@ const NOUN_FOR: Record<string, string> = {
 export function MetaAwardsCorner({ meta, imdbId }: { meta: Meta; imdbId?: string | null }) {
   const isAnime = meta.id.startsWith("kitsu:") || meta.id.startsWith("mal:");
   if (isAnime) return <AnimeCorner name={meta.name} year={parseAwardYear(meta.releaseInfo)} />;
-  return <ClassicCorner imdbId={imdbId ?? null} name={meta.name} year={parseAwardYear(meta.releaseInfo)} />;
+  return (
+    <ClassicCorner
+      imdbId={imdbId ?? null}
+      name={meta.name}
+      year={parseAwardYear(meta.releaseInfo)}
+      isSeries={meta.type === "series"}
+    />
+  );
 }
 
 type CornerTier = "full" | "compact" | "hidden";
@@ -61,10 +69,12 @@ function useHostTier() {
 
 function AnimeCorner({ name, year }: { name: string; year?: number }) {
   const { ref, tier } = useHostTier();
+  useAwardPacks();
   const wins = findAnyAwardWins(name, year);
   if (wins.length === 0 || tier === "hidden") return null;
   const top = wins[0];
   const src = awardSourceMeta(top.source);
+  const custom = resolveAwardIcon(top.source);
   const compact = tier === "compact";
   const subline = top.isAOTY
     ? `${top.year} Anime of the Year`
@@ -92,9 +102,9 @@ function AnimeCorner({ name, year }: { name: string; year?: number }) {
       <span className="shrink-0 text-accent">
         <Laurel size={compact ? 48 : 68}>
           <img
-            src={src.iconSmall}
+            src={custom ?? src.iconSmall}
             alt=""
-            className={`object-contain ${compact ? "h-5 w-5" : "h-7 w-7"} ${top.source === "animation_kobe" ? "brightness-0 invert" : ""}`}
+            className={`object-contain ${compact ? "h-5 w-5" : "h-7 w-7"} ${!custom && top.source === "animation_kobe" ? "brightness-0 invert" : ""}`}
             draggable={false}
           />
         </Laurel>
@@ -103,11 +113,21 @@ function AnimeCorner({ name, year }: { name: string; year?: number }) {
   );
 }
 
-function ClassicCorner({ imdbId, name, year }: { imdbId: string | null; name: string; year?: number }) {
+function ClassicCorner({
+  imdbId,
+  name,
+  year,
+  isSeries,
+}: {
+  imdbId: string | null;
+  name: string;
+  year?: number;
+  isSeries?: boolean;
+}) {
   const { ref, tier } = useHostTier();
-  const live = useAwards(imdbId ?? undefined);
+  const live = useAwards(imdbId ?? undefined, isSeries);
   const awards = useMemo(() => mergeBundledAwards(live, name, year), [live, name, year]);
-  const summary = useMemo(() => awardSummary(awards).slice(0, 2), [awards]);
+  const summary = useMemo(() => pickHeroAwards(awardSummary(awards)), [awards]);
   if (summary.length === 0 || tier === "hidden") return null;
   const top = summary[0];
   const won = top.wins > 0;

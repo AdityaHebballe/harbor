@@ -36,6 +36,17 @@ export type TorrentEngineStats = {
   state: string;
 };
 
+export type TorrentListItem = {
+  infoHash: string;
+  name: string;
+  downloaded: number;
+  total: number;
+  downloadSpeed: number;
+  finished: boolean;
+  paused: boolean;
+  state: string;
+};
+
 export type SelfTestStep = {
   label: string;
   ok: boolean;
@@ -100,6 +111,29 @@ export async function torrentEngineStats(
   } catch {
     return null;
   }
+}
+
+export async function torrentEngineList(): Promise<TorrentListItem[]> {
+  if (!isTauri) return [];
+  try {
+    return await invoke<TorrentListItem[]>("torrent_engine_list");
+  } catch {
+    return [];
+  }
+}
+
+export async function torrentEnginePause(infoHash: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("torrent_engine_pause", { infoHash }).catch((e) =>
+    console.warn("[engine] pause failed", e),
+  );
+}
+
+export async function torrentEngineResume(infoHash: string): Promise<void> {
+  if (!isTauri) return;
+  await invoke("torrent_engine_resume", { infoHash }).catch((e) =>
+    console.warn("[engine] resume failed", e),
+  );
 }
 
 export async function torrentEngineRemove(infoHash: string, deleteFiles: boolean): Promise<void> {

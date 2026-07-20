@@ -1,4 +1,5 @@
 import { Check, Eye, Play } from "lucide-react";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import { useEffect, useMemo, useState } from "react";
 import { EpisodeRatingBadge } from "./episode-rating-badge";
 import { Poster } from "@/components/poster";
@@ -61,9 +62,7 @@ export function EpisodeRow({
   const still = candidates[imgIdx];
   const watchedAgo = progress.startedAt > 0 ? formatRelativeWatched(progress.startedAt) : "";
   const resolvedImdbId = useMemo(() => {
-    const v = cinemetaVideos?.find(
-      (x) => x.season === ep.seasonNumber && x.episode === ep.episodeNumber,
-    );
+    const v = cinemetaVideos?.find((x) => x.season === ep.seasonNumber && x.episode === ep.episodeNumber);
     return v?.id ?? undefined;
   }, [cinemetaVideos, ep.seasonNumber, ep.episodeNumber]);
   const playEpisode = {
@@ -89,10 +88,7 @@ export function EpisodeRow({
           playEpisodeLocalAware({
             meta,
             episode: playEpisode,
-            opts: {
-              autoPlay: settings.instantPlay || settings.seasonSourceLock,
-              resume: !progress.watched && progress.ratio > 0.01,
-            },
+            opts: { autoPlay: settings.instantPlay || settings.seasonSourceLock, resume: !progress.watched && progress.ratio > 0.01 },
             imdbId: seriesImdbId,
             videos: cinemetaVideos,
           })
@@ -155,9 +151,7 @@ export function EpisodeRow({
                 .join("  ·  ")}
             </span>
             {progress.watched && watchedAgo && (
-              <span className="text-emerald-300/85">
-                · {t("Watched {ago}", { ago: watchedAgo })}
-              </span>
+              <span className="text-emerald-300/85">· {t("Watched {ago}", { ago: watchedAgo })}</span>
             )}
             {!progress.watched && progress.ratio > 0.01 && watchedAgo && (
               <span className="text-accent/85">
@@ -176,15 +170,16 @@ export function EpisodeRow({
           )}
         </div>
       </button>
-      <button
-        type="button"
-        onClick={() => openEpisodeDetail(meta.id, ep.seasonNumber, ep.episodeNumber, meta)}
-        aria-label={t("Episode details")}
-        title={t("Episode details")}
-        className="flex h-10 w-10 shrink-0 items-center justify-center self-center rounded-full text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
-      >
-        <Eye size={18} strokeWidth={2} />
-      </button>
+      <HoverTooltip label={t("Episode details")} align="center" className="shrink-0 self-center">
+        <button
+          type="button"
+          onClick={() => openEpisodeDetail(meta.id, ep.seasonNumber, ep.episodeNumber, meta)}
+          aria-label={t("Episode details")}
+          className="flex h-10 w-10 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
+        >
+          <Eye size={18} strokeWidth={2} />
+        </button>
+      </HoverTooltip>
       <EpisodeDownloadButton meta={meta} episode={playEpisode} />
     </div>
   );

@@ -1,6 +1,7 @@
 import { ArrowLeft, Layers, X } from "lucide-react";
+import { useRef, useState } from "react";
 import type { Meta } from "@/lib/cinemeta";
-import { MAX_ITEMS, removeFromList, useList, type ListItem } from "@/lib/custom-lists";
+import { MAX_ITEMS, removeFromList, reorderListItems, useList, type ListItem } from "@/lib/custom-lists";
 import { relativeTime } from "@/lib/dates";
 import { useT } from "@/lib/i18n";
 import { PickCard } from "@/components/pick-card";
@@ -15,6 +16,53 @@ function itemToMeta(it: ListItem): Meta {
 export function ListDetail({ listId, onBack }: { listId: string; onBack: () => void }) {
   const t = useT();
   const list = useList(listId);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const dragRef = useRef<{ id: string; x: number; y: number; active: boolean } | null>(null);
+  const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const itemsRef = useRef<ListItem[]>([]);
+  itemsRef.current = list?.items ?? [];
+  const suppressClick = useRef(false);
+
+  const onDown = (e: React.PointerEvent, id: string) => {
+    dragRef.current = { id, x: e.clientX, y: e.clientY, active: false };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    if (!d.active) {
+      if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) < 8) return;
+      d.active = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      setDragId(d.id);
+    }
+    let target: string | null = null;
+    for (const it of itemsRef.current) {
+      if (it.id === d.id) continue;
+      const el = cellRefs.current.get(it.id);
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
+        target = it.id;
+        break;
+      }
+    }
+    setDropTarget(target);
+  };
+  const onUp = () => {
+    const d = dragRef.current;
+    if (d?.active) {
+      suppressClick.current = true;
+      if (dropTarget && dropTarget !== d.id && list) {
+        const ids = itemsRef.current.map((it) => it.id).filter((x) => x !== d.id);
+        ids.splice(ids.indexOf(dropTarget), 0, d.id);
+        reorderListItems(list.id, ids);
+      }
+    }
+    dragRef.current = null;
+    setDragId(null);
+    setDropTarget(null);
+  };
 
   if (!list) return null;
 
@@ -47,7 +95,27 @@ export function ListDetail({ listId, onBack }: { listId: string; onBack: () => v
       ) : (
         <Grid>
           {list.items.map((it) => (
-            <div key={it.id} className="group/item relative">
+            <div
+              key={it.id}
+              ref={(el) => {
+                if (el) cellRefs.current.set(it.id, el);
+                else cellRefs.current.delete(it.id);
+              }}
+              onPointerDown={(e) => onDown(e, it.id)}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+              onClickCapture={(e) => {
+                if (suppressClick.current) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  suppressClick.current = false;
+                }
+              }}
+              className={`group/item relative touch-none rounded-[14px] transition-[opacity,box-shadow] ${
+                dragId === it.id ? "opacity-40" : ""
+              } ${dropTarget === it.id && dragId !== it.id ? "ring-2 ring-accent ring-offset-2 ring-offset-canvas" : ""}`}
+            >
               <PickCard meta={itemToMeta(it)} />
               <button
                 type="button"

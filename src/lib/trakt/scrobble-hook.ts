@@ -181,6 +181,11 @@ function sendBeacon(
   let body: object;
   if (target.kind === "movie") {
     body = { movie: { ids: target.ids }, progress: clamped };
+  } else if (target.episodeIds && Object.keys(target.episodeIds).length > 0) {
+    body =
+      Object.keys(target.show.ids).length > 0
+        ? { show: { ids: target.show.ids }, episode: { ids: target.episodeIds }, progress: clamped }
+        : { episode: { ids: target.episodeIds }, progress: clamped };
   } else {
     body = {
       show: { ids: target.show.ids },

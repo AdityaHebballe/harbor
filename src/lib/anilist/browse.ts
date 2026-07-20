@@ -1,7 +1,9 @@
 import type { Meta } from "@/lib/cinemeta";
 import { anilistRequest } from "./client";
-import { anilistMediaToMeta } from "./to-meta";
+import { buildAnimeRowMetas } from "./franchise-root";
 import type { AnilistMedia } from "./types";
+import { lruSet } from "@/lib/cache";
+import { registerEvictable } from "@/lib/maintenance";
 
 const BROWSE_QUERY = `query ($page: Int, $perPage: Int, $sort: [MediaSort], $isAdult: Boolean) {
   Page(page: $page, perPage: $perPage) {
@@ -48,7 +50,7 @@ export async function anilistCountriesByMalIds(malIds: number[]): Promise<Map<nu
       }>(COUNTRY_BY_MAL_QUERY, { ids: batch }, undefined, true);
       for (const m of data?.Page?.media ?? []) {
         if (m.idMal != null && m.countryOfOrigin) {
-          malCountryCache.set(m.idMal, m.countryOfOrigin);
+          lruSet(malCountryCache, m.idMal, m.countryOfOrigin, 1000);
           out.set(m.idMal, m.countryOfOrigin);
         }
       }
@@ -135,17 +137,17 @@ async function fetchAnilistBrowse(sort: string, count: number): Promise<Meta[]> 
       ).catch(() => null),
     ),
   );
-  const out: Meta[] = [];
-  const seen = new Set<string>();
+  const all: AnilistMedia[] = [];
+  const seenId = new Set<number>();
   for (const data of responses) {
     for (const m of data?.Page?.media ?? []) {
-      const meta = anilistMediaToMeta(m);
-      if (!meta || seen.has(meta.id)) continue;
-      seen.add(meta.id);
-      out.push(meta);
+      if (m.id == null || seenId.has(m.id)) continue;
+      seenId.add(m.id);
+      all.push(m);
     }
   }
-  return out.slice(0, count);
+  const metas = await buildAnimeRowMetas(all);
+  return metas.slice(0, count);
 }
 
 const ART_BY_ID_QUERY = `query ($id: Int) {
@@ -168,11 +170,11 @@ export async function anilistArtById(id: number): Promise<{ banner?: string; cov
       banner: data?.Media?.bannerImage ?? undefined,
       cover: data?.Media?.coverImage?.extraLarge ?? undefined,
     };
-    artByIdCache.set(id, art);
+    lruSet(artByIdCache, id, art, 500);
     return art;
   } catch {
     const empty = {};
-    artByIdCache.set(id, empty);
+    lruSet(artByIdCache, id, empty, 500);
     return empty;
   }
 }
@@ -205,11 +207,11 @@ export async function anilistArtByMalId(
       banner: data?.Media?.bannerImage ?? undefined,
       cover: data?.Media?.coverImage?.extraLarge ?? undefined,
     };
-    artByMalCache.set(malId, art);
+    lruSet(artByMalCache, malId, art, 500);
     return art;
   } catch {
     const empty = {};
-    artByMalCache.set(malId, empty);
+    lruSet(artByMalCache, malId, empty, 500);
     return empty;
   }
 }
@@ -237,6 +239,10 @@ const RECS_QUERY = `query ($id: Int) {
 }`;
 
 const recsCache = new Map<number, Meta[]>();
+const RECS_MAX = 150;
+registerEvictable("anilist-recs", (aggressive) => {
+  if (aggressive) recsCache.clear();
+});
 
 export async function anilistRecommendations(anilistId: number): Promise<Meta[]> {
   if (!anilistId) return [];
@@ -246,16 +252,16 @@ export async function anilistRecommendations(anilistId: number): Promise<Meta[]>
     const data = await anilistRequest<{
       Media: { recommendations: { nodes: Array<{ mediaRecommendation: AnilistMedia | null }> } | null } | null;
     }>(RECS_QUERY, { id: anilistId }, undefined, true);
-    const out: Meta[] = [];
-    const seen = new Set<string>();
+    const rawMedia: AnilistMedia[] = [];
+    const seenId = new Set<number>();
     for (const n of data?.Media?.recommendations?.nodes ?? []) {
-      if (!n.mediaRecommendation) continue;
-      const meta = anilistMediaToMeta(n.mediaRecommendation);
-      if (!meta || seen.has(meta.id)) continue;
-      seen.add(meta.id);
-      out.push(meta);
+      const rec = n.mediaRecommendation;
+      if (!rec || rec.id == null || seenId.has(rec.id)) continue;
+      seenId.add(rec.id);
+      rawMedia.push(rec);
     }
-    recsCache.set(anilistId, out);
+    const out = await buildAnimeRowMetas(rawMedia);
+    lruSet(recsCache, anilistId, out, RECS_MAX);
     return out;
   } catch {
     return [];

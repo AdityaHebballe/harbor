@@ -1,9 +1,12 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { TvdbSeasonTypeOption } from "@/lib/providers/tvdb";
 import { useT } from "@/lib/i18n";
 import type { PickerItem } from "./season-arc-picker";
+
+function shortOrderLabel(label: string): string {
+  return label.replace(/\s*Order$/i, "");
+}
 
 type MenuPos = { left?: number; right?: number; top?: number; bottom?: number; maxH: number };
 
@@ -50,9 +53,9 @@ export function TvdbOrderPanel({
   items: PickerItem[];
   activeKey: string;
   onSelect: (key: string) => void;
-  orderTypes: TvdbSeasonTypeOption[];
+  orderTypes: Array<{ value: string; label: string }>;
   activeType: string;
-  onSelectType: (v: TvdbSeasonTypeOption["value"]) => void;
+  onSelectType: (v: string) => void;
 }) {
   const t = useT();
   const [menu, setMenu] = useState<MenuPos | null>(null);
@@ -134,7 +137,7 @@ export function TvdbOrderPanel({
             className="animate-fade-in fixed z-[200] flex w-[340px] flex-col overflow-hidden rounded-2xl border border-edge-soft bg-canvas shadow-2xl"
           >
             {orderTypes.length > 1 && (
-              <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-edge-soft/60 p-2">
+              <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-edge-soft/60 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {orderTypes.map((o) => {
                   const on =
                     o.value === activeType || (activeType === "official" && o.value === "aired");
@@ -142,11 +145,11 @@ export function TvdbOrderPanel({
                     <button
                       key={o.value}
                       onClick={() => onSelectType(o.value)}
-                      className={`h-8 rounded-full px-3 text-[12.5px] font-medium transition-colors ${
+                      className={`h-8 shrink-0 whitespace-nowrap rounded-full px-3.5 text-[12.5px] font-medium transition-colors ${
                         on ? "bg-ink text-canvas" : "text-ink-muted hover:bg-elevated/60 hover:text-ink"
                       }`}
                     >
-                      {o.label}
+                      {shortOrderLabel(o.label)}
                     </button>
                   );
                 })}

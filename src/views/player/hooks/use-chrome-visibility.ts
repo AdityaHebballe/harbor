@@ -1,11 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { getSeekHovering, subscribeSeekHovering } from "@/lib/player/playback-clock";
-import {
-  CHROME_HIDE_MS_PAUSED,
-  CHROME_HIDE_MS_PLAYING,
-  CHROME_HIDE_MS_RESUME,
-} from "../player-utils";
-import { getFocusable, isVisible } from "@/lib/keyboard-navigation";
+import { CHROME_HIDE_MS_PAUSED, CHROME_HIDE_MS_PLAYING, CHROME_HIDE_MS_RESUME } from "../player-utils";
 
 const UI_SCALE_ACTIVITY_EVENT = "harbor:ui-scale-activity";
 const UI_SCALE_RESIZE_HOLD_MS = 700;
@@ -31,13 +26,19 @@ export function useChromeVisibility(params: {
   const resizingUiRef = useRef(false);
   const anyMenuOpenRef = useRef(false);
   const resumeHideRef = useRef(false);
+  const playingRef = useRef(playing);
+  playingRef.current = playing;
+  const drawModeRef = useRef(drawMode);
+  drawModeRef.current = drawMode;
+  const pipModeRef = useRef(pipMode);
+  pipModeRef.current = pipMode;
 
   const wakeChrome = useCallback(() => {
     setChromeVisible(true);
-    setChromeHidden(pipMode);
+    setChromeHidden(pipModeRef.current);
     if (hideTimer.current) window.clearTimeout(hideTimer.current);
     if (resizingUiRef.current || anyMenuOpenRef.current || getSeekHovering()) return;
-    let wait = playing && !drawMode ? CHROME_HIDE_MS_PLAYING : CHROME_HIDE_MS_PAUSED;
+    let wait = playingRef.current && !drawModeRef.current ? CHROME_HIDE_MS_PLAYING : CHROME_HIDE_MS_PAUSED;
     if (resumeHideRef.current) {
       resumeHideRef.current = false;
       wait = CHROME_HIDE_MS_RESUME;
@@ -46,7 +47,7 @@ export function useChromeVisibility(params: {
       setChromeVisible(false);
       setChromeHidden(true);
     }, wait);
-  }, [playing, drawMode, pipMode, setChromeHidden]);
+  }, [setChromeHidden]);
   const wakeChromeRef = useRef(wakeChrome);
   wakeChromeRef.current = wakeChrome;
 
@@ -74,46 +75,20 @@ export function useChromeVisibility(params: {
     const onKeyDown = () => {
       lastInputKeyboardRef.current = true;
     };
-    const onTvActivity = () => {
-      lastInputKeyboardRef.current = true;
-      wakeChrome();
-    };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("touchstart", onMove);
     window.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("harbor:user-activity", onTvActivity);
     return () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("touchstart", onMove);
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("harbor:user-activity", onTvActivity);
       if (hideTimer.current) window.clearTimeout(hideTimer.current);
       if (resizeTimer.current) window.clearTimeout(resizeTimer.current);
       setChromeHidden(false);
     };
   }, [wakeChrome, setChromeHidden, playing, keyboardPauseShowsControls]);
-
-  useEffect(() => {
-    if (chromeVisible && lastInputKeyboardRef.current) {
-      const timer = window.setTimeout(() => {
-        const active = document.activeElement;
-        const playerScope = document.querySelector<HTMLElement>("[data-harbor-player]");
-        const isFocusedInPlayer = active instanceof HTMLElement && !!playerScope?.contains(active);
-        if (!isFocusedInPlayer) {
-          const initial = playerScope?.querySelector<HTMLElement>("[data-tv-initial-focus]");
-          if (initial && isVisible(initial)) {
-            initial.focus({ preventScroll: true });
-          } else {
-            const all = playerScope ? getFocusable(playerScope) : [];
-            all[0]?.focus({ preventScroll: true });
-          }
-        }
-      }, 50);
-      return () => window.clearTimeout(timer);
-    }
-  }, [chromeVisible]);
 
   useEffect(() => {
     const onScaleActivity = () => {
@@ -181,15 +156,11 @@ export function useChromeVisibility(params: {
     }
   }, [anyMenuOpen]);
 
-  const cursorStyle: CSSProperties = useMemo(
-    () =>
-      drawMode
-        ? { cursor: "none" }
-        : !chromeVisible && playing
-          ? { cursor: "none" }
-          : { cursor: "default" },
-    [drawMode, chromeVisible, playing],
-  );
+  const cursorStyle: CSSProperties = drawMode
+    ? { cursor: "none" }
+    : !chromeVisible && playing
+      ? { cursor: "none" }
+      : { cursor: "default" };
 
   return {
     chromeVisible,

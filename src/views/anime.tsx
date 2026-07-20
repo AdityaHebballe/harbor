@@ -9,12 +9,7 @@ import { PickCard } from "@/components/pick-card";
 import { Row, ScrollRootContext } from "@/components/row";
 import { AnimeRankCard } from "@/components/top-rank-card";
 import { useAuth } from "@/lib/auth";
-import {
-  createAddonCatalogFetcher,
-  loadAddonRows,
-  normalizeName,
-  type AddonRow,
-} from "@/lib/addons";
+import { createAddonCatalogFetcher, isCollectionCatalog, loadAddonRows, normalizeName, type AddonRow } from "@/lib/addons";
 import type { Meta } from "@/lib/cinemeta";
 import { awardFranchiseKey, uniqueWinnerFranchisesAcrossSources } from "@/lib/anime-awards";
 import { publishResumeStates } from "@/lib/hover-preview/store";
@@ -29,7 +24,6 @@ import { detectAnimeForCw, useDetectedAnimeVersion } from "@/lib/anime-detect";
 import { AnilistRowControls } from "./anime/anilist-row-controls";
 import { MalRowControls } from "./anime/mal-row-controls";
 import { AnilistTopRow, AnilistTrendingRow } from "./anime/anilist-top-row";
-import { useCatalogPage, type CatalogRowSpec } from "@/lib/catalog-page";
 import {
   EMPTY_ROW,
   ROW_MAX_PAGES,
@@ -37,10 +31,10 @@ import {
   RowSkeleton,
   SPECS,
   TOP_PICKS_KEY,
+  isAnimeRow,
   type RowPool,
   type RowState,
 } from "./anime/anime-rows";
-import { isAnimeRow } from "@/lib/is-anime-row";
 import { animeFranchiseKey, stripFranchiseSuffix } from "@/lib/providers/jikan";
 import { franchiseRoot, franchiseRootSync } from "@/lib/providers/anime-franchise-root";
 import { animeFiltered, enrichAnimeCountry, type AnimeFilterOpts } from "@/lib/anime-filter";
@@ -48,32 +42,36 @@ import {
   buildHeroSelection,
   buildHostedHero,
   cacheHero,
+  heroSourceLabel,
   isHeroCacheFresh,
   readCachedHero,
   resolveHeroSlides,
+  upgradeHeroArtFromStatic,
   type HeroBuilt,
 } from "./anime/hero-build";
 import { fetchHostedHero, peekHostedHero, type HostedHeroItem } from "@/lib/anime-hosted-hero";
+import { fetchMalHeroList, type MalHeroItem } from "@/lib/mal-hero";
+import {
+  ensureStaticHeroArt,
+  peekStaticHeroArt,
+  staticHeroPool,
+} from "@/lib/providers/anime-hero-art-static";
+import { useAnnouncement } from "@/lib/announcements";
+import { AnnouncementHero } from "@/components/announcement-hero";
 import { fetchAnilistTrendingAnime } from "@/lib/anilist/browse";
 import { useSettings } from "@/lib/settings";
+import { useContentDrag } from "@/lib/window-drag";
 import { isAdultAnime } from "@/lib/addons-store/adult-filter";
 import { isAnimeCwItem, isCwMember, library, type LibraryItem } from "@/lib/stremio";
-import { clearLocalCw } from "@/lib/local-cw";
-import {
-  dismissManualWatched,
-  manualWatchedLibraryItems,
-  manualWatchedVersion,
-  subscribeManualWatched,
-} from "@/lib/manual-watched";
+import { clearLocalCw, localCwEntry, localCwVersion, subscribeLocalCw } from "@/lib/local-cw";
+import { dismissManualWatched, manualWatchedLibraryItems, manualWatchedVersion, subscribeManualWatched } from "@/lib/manual-watched";
 import { fetchSimklPlaybackItems } from "@/lib/simkl/playback";
-import {
-  loadSimklWatchedMap,
-  loadSimklStatusMap,
-  type WatchlistStatus,
-} from "@/lib/simkl/list-status";
+import { loadSimklWatchedMap, loadSimklStatusMap, simklWatchedForId, statusForId, type WatchlistStatus } from "@/lib/simkl/list-status";
 import { loadAnilistWatchedMap } from "@/lib/anilist/watched-map";
 import { useSimkl } from "@/lib/simkl/provider";
 import { useScrollMemory, useView } from "@/lib/view";
+
+export { isAnimeRow } from "./anime/anime-rows";
 
 function cleanMeta(m: Meta): Meta {
   const cleaned = stripFranchiseSuffix(m.name);
@@ -83,51 +81,95 @@ function cleanMeta(m: Meta): Meta {
 export function AnimeView({ active = true }: { active?: boolean }) {
   const t = useT();
   const { settings, update } = useSettings();
-
-  const animeSpecs = useMemo<CatalogRowSpec[]>(
-    () =>
-      SPECS.map((s) => ({
-        key: s.key,
-        title: s.title,
-        fetcher: s.fetcher,
-        minVisible: ROW_MIN_VISIBLE,
-      })),
-    [],
-  );
-
-  const { rowsByKey: catalogRowsByKey, loadMore } = useCatalogPage({
-    pageId: "anime",
-    scope: "jikan",
-    specs: animeSpecs,
-    enabled: active,
-    maxPerRow: 80,
+  const contentDrag = useContentDrag();
+  const [rowsByKey, setRowsByKey] = useState<Record<string, RowState>>(() => {
+    const init: Record<string, RowState> = {};
+    for (const s of SPECS) init[s.key] = EMPTY_ROW;
+    return init;
   });
+  const rowsRef = useRef(rowsByKey);
+  const loadingRef = useRef<Set<string>>(new Set());
 
-  // Keep anime-compatible RowState shape (ready flag for skeletons).
-  const rowsByKey = useMemo(() => {
-    const map: Record<string, RowState> = {};
-    for (const s of SPECS) {
-      const r = catalogRowsByKey[s.key];
-      map[s.key] = r
-        ? {
-            metas: r.metas,
-            page: r.page,
-            hasMore: r.hasMore && r.page < ROW_MAX_PAGES,
-            ready: r.ready,
-          }
-        : EMPTY_ROW;
-    }
-    return map;
-  }, [catalogRowsByKey]);
+  useEffect(() => {
+    rowsRef.current = rowsByKey;
+  }, [rowsByKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const BATCH = 6;
+      const GAP_MS = 350;
+      for (let i = 0; i < SPECS.length; i += BATCH) {
+        if (cancelled) return;
+        const batch = SPECS.slice(i, i + BATCH);
+        await Promise.all(
+          batch.map(async (s) => {
+            try {
+              const metas = await s.fetcher(1);
+              if (cancelled) return;
+              setRowsByKey((prev) => ({
+                ...prev,
+                [s.key]: { metas, page: 1, hasMore: metas.length >= ROW_MIN_VISIBLE, ready: true },
+              }));
+            } catch {
+              if (cancelled) return;
+              setRowsByKey((prev) => ({
+                ...prev,
+                [s.key]: { metas: [], page: 1, hasMore: false, ready: true },
+              }));
+            }
+          }),
+        );
+        if (i + BATCH < SPECS.length) {
+          await new Promise((r) => setTimeout(r, GAP_MS));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadMore = useCallback((key: string) => {
+    if (loadingRef.current.has(key)) return;
+    const spec = SPECS.find((s) => s.key === key);
+    const row = rowsRef.current[key];
+    if (!spec || !row || !row.hasMore || row.metas.length >= 80) return;
+    loadingRef.current.add(key);
+    const next = row.page + 1;
+    spec
+      .fetcher(next)
+      .then((more) => {
+        setRowsByKey((prev) => {
+          const cur = prev[key];
+          if (!cur) return prev;
+          const ids = new Set(cur.metas.map((m) => m.id));
+          const fresh = more.filter((m) => !ids.has(m.id));
+          return {
+            ...prev,
+            [key]: {
+              ...cur,
+              metas: [...cur.metas, ...fresh],
+              page: next,
+              hasMore: more.length >= ROW_MIN_VISIBLE && cur.metas.length + fresh.length < 80,
+            },
+          };
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        loadingRef.current.delete(key);
+      });
+  }, []);
 
   const filterSig = `${settings.animeExcludeOrigins.join(",")}|${settings.animeHideWatchedPicks}`;
   const [heroSeed, setHeroSeed] = useState(() => Math.floor(Math.random() * 0x7fffffff));
-  const [hero, setHero] = useState<HeroBuilt>(
-    () => readCachedHero(filterSig) ?? { metas: [], trending: {} },
-  );
+  const [hero, setHero] = useState<HeroBuilt>(() => readCachedHero(filterSig) ?? { metas: [], trending: {} });
+  const [malExtra, setMalExtra] = useState<MalHeroItem[]>([]);
   const heroBuildRef = useRef(0);
   const heroResolvedRef = useRef(false);
   const heroBuildingRef = useRef(false);
+  const heroActivateRef = useRef(false);
   const filtersInitRef = useRef(true);
   const [anilistTrending, setAnilistTrending] = useState<Meta[]>([]);
   const [hostedHero, setHostedHero] = useState<HostedHeroItem[] | null>(() => peekHostedHero());
@@ -164,29 +206,44 @@ export function AnimeView({ active = true }: { active?: boolean }) {
     setHeroSeed(Math.floor(Math.random() * 0x7fffffff));
     setHero({ metas: [], trending: {} });
   }, [filterSig]);
+  const buildHostedSelection = useCallback(
+    (seed: number): boolean => {
+      if (!hostedHero || hostedHero.length < 3) return false;
+      const filterOpts: AnimeFilterOpts = {
+        excludeOrigins: settings.animeExcludeOrigins,
+        hideWatched: settings.animeHideWatchedPicks,
+      };
+      const hosted = buildHostedHero(hostedHero, seed, filterOpts);
+      if (hosted.metas.length < 3) return false;
+      heroResolvedRef.current = true;
+      const buildId = ++heroBuildRef.current;
+      setHero(hosted);
+      cacheHero(hosted, filterSig);
+      void upgradeHeroArtFromStatic(hosted).then((up) => {
+        if (heroBuildRef.current === buildId) {
+          setHero(up);
+          cacheHero(up, filterSig);
+        }
+      });
+      return true;
+    },
+    [hostedHero, settings.animeExcludeOrigins, settings.animeHideWatchedPicks, filterSig],
+  );
   useEffect(() => {
-    const filterOpts: AnimeFilterOpts = {
-      excludeOrigins: settings.animeExcludeOrigins,
-      hideWatched: settings.animeHideWatchedPicks,
-    };
-    if (hero.metas.length === 0 && hostedHero && hostedHero.length >= 3) {
-      const hosted = buildHostedHero(hostedHero, heroSeed, filterOpts);
-      if (hosted.metas.length >= 3) {
-        heroResolvedRef.current = true;
-        heroBuildRef.current += 1;
-        setHero(hosted);
-        cacheHero(hosted, filterSig);
-        return;
-      }
-    }
+    if (hero.metas.length === 0 && buildHostedSelection(heroSeed)) return;
     if (heroResolvedRef.current) return;
     if (hero.metas.length > 0 && isHeroCacheFresh(filterSig)) {
       heroResolvedRef.current = true;
       return;
     }
+    if (buildHostedSelection(heroSeed)) return;
     const readyCount = SPECS.filter((s) => rowsByKey[s.key]?.ready).length;
     if (readyCount < 2 && anilistTrending.length === 0) return;
     if (heroBuildingRef.current) return;
+    const filterOpts: AnimeFilterOpts = {
+      excludeOrigins: settings.animeExcludeOrigins,
+      hideWatched: settings.animeHideWatchedPicks,
+    };
     const built = buildHeroSelection(rowsByKey, heroSeed, filterOpts, anilistTrending);
     if (built.metas.length < 3) return;
     heroBuildingRef.current = true;
@@ -210,6 +267,7 @@ export function AnimeView({ active = true }: { active?: boolean }) {
     settings.tmdbKey,
     filterSig,
     hostedHero,
+    buildHostedSelection,
   ]);
   const heroMetas = hero.metas;
   const heroTrending = hero.trending;
@@ -226,12 +284,8 @@ export function AnimeView({ active = true }: { active?: boolean }) {
   const [libItems, setLibItems] = useState<LibraryItem[]>([]);
   const [simklCw, setSimklCw] = useState<LibraryItem[]>([]);
   const [simklWatchedMap, setSimklWatchedMap] = useState<Map<string, Set<string>>>(() => new Map());
-  const [simklStatusMap, setSimklStatusMap] = useState<Map<string, WatchlistStatus>>(
-    () => new Map(),
-  );
-  const [anilistWatchedMap, setAnilistWatchedMap] = useState<Map<string, Set<string>>>(
-    () => new Map(),
-  );
+  const [simklStatusMap, setSimklStatusMap] = useState<Map<string, WatchlistStatus>>(() => new Map());
+  const [anilistWatchedMap, setAnilistWatchedMap] = useState<Map<string, Set<string>>>(() => new Map());
   const [addonRows, setAddonRows] = useState<AddonRow[]>([]);
   useEffect(() => {
     if (!authKey) {
@@ -273,6 +327,7 @@ export function AnimeView({ active = true }: { active?: boolean }) {
 
   const animeDetectVer = useDetectedAnimeVersion();
   const [cwRootVersion, setCwRootVersion] = useState(0);
+  const localCwVer = useSyncExternalStore(subscribeLocalCw, localCwVersion);
   const continueWatching = useMemo(() => {
     const seen = new Set<string>();
     const seenRoot = new Set<string>();
@@ -281,6 +336,7 @@ export function AnimeView({ active = true }: { active?: boolean }) {
         if (!isCwMember(i)) return false;
         if (!isAnimeCwItem(i)) return false;
         if (isCwDismissed(i)) return false;
+        if (settings.cwPerProfile && localCwEntry(i._id) === null) return false;
         if (seen.has(i._id)) return false;
         seen.add(i._id);
         return true;
@@ -298,7 +354,7 @@ export function AnimeView({ active = true }: { active?: boolean }) {
         return true;
       })
       .slice(0, 20);
-  }, [libItems, simklCw, cwVersion, animeDetectVer, cwRootVersion]);
+  }, [libItems, simklCw, cwVersion, animeDetectVer, cwRootVersion, settings.cwPerProfile, localCwVer]);
 
   useEffect(() => {
     const ids = [...libItems, ...simklCw]
@@ -350,20 +406,13 @@ export function AnimeView({ active = true }: { active?: boolean }) {
       cancelled = true;
     };
   }, [simklConnected]);
-  useEffect(() => {
-    let cancelled = false;
-    const ids = continueWatching
-      .filter((i) => /^(kitsu|mal|anilist):/.test(i._id))
-      .map((i) => i._id);
-    loadAnilistWatchedMap(ids)
-      .then((m) => {
-        if (!cancelled) setAnilistWatchedMap(m);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [continueWatching]);
+  const isAnimeWatched = useCallback(
+    (id: string): boolean =>
+      statusForId(simklStatusMap, id) === "completed" ||
+      simklWatchedForId(simklWatchedMap, id).size > 0 ||
+      (anilistWatchedMap.get(id)?.size ?? 0) > 0,
+    [simklStatusMap, simklWatchedMap, anilistWatchedMap],
+  );
   const emptyTrakt = useMemo(() => new Set<string>(), []);
   const cwItems = useCwAdvance(
     continueWatching,
@@ -402,10 +451,30 @@ export function AnimeView({ active = true }: { active?: boolean }) {
       cancelled = true;
     };
   }, [topPicksRaw]);
+  useEffect(() => {
+    const isId = (id: string) => /^(kitsu|mal|anilist):/.test(id);
+    const ids = new Set<string>();
+    for (const i of continueWatching) if (isId(i._id)) ids.add(i._id);
+    for (const m of topPicksRaw) if (isId(m.id)) ids.add(m.id);
+    for (const m of heroMetas) if (isId(m.id)) ids.add(m.id);
+    for (const m of anilistTrending) if (isId(m.id)) ids.add(m.id);
+    for (const m of hostedHero ?? []) if (isId(m.id)) ids.add(m.id);
+    if (ids.size === 0) return;
+    let cancelled = false;
+    loadAnilistWatchedMap([...ids])
+      .then((m) => {
+        if (!cancelled) setAnilistWatchedMap(m);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [continueWatching, topPicksRaw, heroMetas, anilistTrending, hostedHero]);
   const topPicks = useMemo(() => {
     const opts: AnimeFilterOpts = {
       excludeOrigins: settings.animeExcludeOrigins,
       hideWatched: settings.animeHideWatchedPicks,
+      isWatched: isAnimeWatched,
     };
     const base = picksEnriched.length > 0 ? picksEnriched : topPicksRaw;
     const filtered = base.filter((m) => !animeFiltered(m, opts));
@@ -422,7 +491,92 @@ export function AnimeView({ active = true }: { active?: boolean }) {
     settings.animeHideWatchedPicks,
     hostedHero,
     heroMetas,
+    isAnimeWatched,
   ]);
+  const [staticPoolReady, setStaticPoolReady] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    void ensureStaticHeroArt().then(() => setStaticPoolReady((n) => n + 1));
+  }, [active]);
+  useEffect(() => {
+    if (!active || malExtra.length > 0) return;
+    let cancelled = false;
+    void fetchMalHeroList().then((items) => {
+      if (!cancelled && items.length > 0) setMalExtra(items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [active, malExtra.length]);
+  const heroSlides = useMemo(() => {
+    const front =
+      settings.animeHideWatchedPicks && heroMetas.some((m) => !isAnimeWatched(m.id))
+        ? heroMetas.filter((m) => !isAnimeWatched(m.id))
+        : heroMetas;
+    if (front.length === 0) return front;
+    const opts: AnimeFilterOpts = {
+      excludeOrigins: settings.animeExcludeOrigins,
+      hideWatched: settings.animeHideWatchedPicks,
+      isWatched: isAnimeWatched,
+    };
+    const seenBg = new Set(front.map((m) => m.background));
+    const seenFr = new Set(front.filter((m) => m.name).map((m) => animeFranchiseKey(m.name)));
+    const consider = (m: Meta): boolean => {
+      if (seenBg.has(m.background) || animeFiltered(m, opts)) return false;
+      const fr = m.name ? animeFranchiseKey(m.name) : "";
+      if (fr && seenFr.has(fr)) return false;
+      seenBg.add(m.background);
+      if (fr) seenFr.add(fr);
+      return true;
+    };
+    const malPool: Meta[] = [];
+    for (const m of peekHostedHero() ?? [])
+      if ((m as { source?: string }).source === "MyAnimeList" && consider(m)) malPool.push(m);
+    for (const it of malExtra) {
+      const art = peekStaticHeroArt(it.id);
+      if (!art?.bg) continue;
+      const m: Meta & { source?: string } = {
+        id: it.id,
+        type: it.format === "MOVIE" ? "movie" : "series",
+        name: it.name,
+        description: it.description,
+        background: art.bg,
+        logo: art.logo ?? undefined,
+        poster: it.poster,
+        releaseInfo: it.year,
+        imdbRating: it.rating,
+        animeFormat: it.format,
+        source: "MyAnimeList",
+      };
+      if (consider(m)) malPool.push(m);
+    }
+    const bulk: Meta[] = [];
+    for (const m of staticHeroPool()) if (consider(m)) bulk.push(m);
+    if (malPool.length === 0) return [...front, ...bulk];
+    const step = Math.max(3, Math.floor(bulk.length / malPool.length));
+    const mixed: Meta[] = [];
+    let mi = 0;
+    for (let i = 0; i < bulk.length; i += 1) {
+      mixed.push(bulk[i]);
+      if (mi < malPool.length && (i + 1) % step === 0) mixed.push(malPool[mi++]);
+    }
+    while (mi < malPool.length) mixed.push(malPool[mi++]);
+    return [...front, ...mixed];
+  }, [
+    heroMetas,
+    isAnimeWatched,
+    settings.animeHideWatchedPicks,
+    settings.animeExcludeOrigins,
+    staticPoolReady,
+    malExtra,
+  ]);
+  const heroTrendingAll = useMemo(() => {
+    const m: Record<string, string> = { ...heroTrending };
+    for (const s of heroSlides)
+      if (!(s.id in m)) m[s.id] = heroSourceLabel((s as { source?: string }).source);
+    return m;
+  }, [heroTrending, heroSlides]);
+  const { announcement, seen: announcementSeen, dismiss: announcementDismiss } = useAnnouncement();
 
   const awardWinnerEntries = useCrunchyrollAwardMetas();
   const awardWinnersRaw = useMemo(() => {
@@ -518,7 +672,9 @@ export function AnimeView({ active = true }: { active?: boolean }) {
       if (seen.has(key)) continue;
       seen.add(key);
       out.push(
-        settings.hideContent.adult ? { ...r, metas: r.metas.filter((m) => !isAdultAnime(m)) } : r,
+        settings.hideContent.adult
+          ? { ...r, metas: r.metas.filter((m) => !isAdultAnime(m)) }
+          : r,
       );
     }
     return out;
@@ -552,6 +708,18 @@ export function AnimeView({ active = true }: { active?: boolean }) {
   }, [active]);
 
   useEffect(() => {
+    if (!active) {
+      heroActivateRef.current = false;
+      return;
+    }
+    if (heroActivateRef.current) return;
+    heroActivateRef.current = true;
+    const seed = Math.floor(Math.random() * 0x7fffffff);
+    setHeroSeed(seed);
+    buildHostedSelection(seed);
+  }, [active, buildHostedSelection]);
+
+  useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ anchor: string }>).detail;
       const anchor = detail?.anchor;
@@ -578,18 +746,32 @@ export function AnimeView({ active = true }: { active?: boolean }) {
   }, []);
 
   return (
-    <main ref={scrollCb} className="flex-1 overflow-y-auto overflow-x-hidden px-12 pt-28 pb-14">
+    <main
+      ref={scrollCb}
+      className="flex-1 overflow-y-auto overflow-x-hidden px-12 pt-28 pb-14"
+    >
       <ScrollRootContext.Provider value={scrollEl}>
-        <div data-tauri-drag-region className="flex flex-col gap-12">
-          {heroMetas.length > 0 ? (
-            <div data-scroll-anchor="hero" className="relative harbor-anime-hero">
-              <AnimeHero slides={heroMetas} topPicks={topPicks} trendingByMetaId={heroTrending} />
+        <div {...contentDrag} className="flex flex-col gap-12">
+          {announcement ? (
+            <AnnouncementHero
+              announcement={announcement}
+              onSeen={announcementSeen}
+              onDismiss={announcementDismiss}
+            />
+          ) : heroMetas.length > 0 ? (
+            <div data-scroll-anchor="hero" className="relative harbor-anime-hero hero-reveal">
+              <AnimeHero
+                slides={heroSlides}
+                topPicks={topPicks}
+                trendingByMetaId={heroTrendingAll}
+              />
               <button
                 type="button"
                 onClick={() => setShowPicker(true)}
                 title={t("Tune anime")}
                 aria-label={t("Tune anime")}
-                className="group absolute end-[-3rem] top-[34%] z-10 flex flex-col items-center gap-2.5 rounded-s-xl border border-e-0 border-edge-soft/40 bg-canvas/55 py-4 pe-2 ps-2 text-ink-subtle opacity-45 backdrop-blur-md transition-all duration-300 hover:bg-canvas/85 hover:text-ink hover:opacity-100 hover:ps-3"
+                style={{ top: "min(22%, 200px)" }}
+                className="group absolute end-[-3rem] z-20 flex flex-col items-center gap-2.5 rounded-s-xl border border-e-0 border-edge-soft/40 bg-canvas/55 py-4 pe-2 ps-2 text-ink-subtle opacity-45 backdrop-blur-md transition-all duration-300 hover:bg-canvas/85 hover:text-ink hover:opacity-100 hover:ps-3"
               >
                 <SlidersHorizontal
                   size={15}
@@ -699,15 +881,26 @@ export function AnimeView({ active = true }: { active?: boolean }) {
                 scrollKey={`anime:addon:${row.key}`}
                 onViewAll={
                   row.more && row.metas.length > 0
-                    ? () =>
+                    ? () => {
+                        const collection = isCollectionCatalog({ type: row.type, id: row.more?.id, name: row.name });
+                        const origin = row.metas[0]?.addonOrigin;
+                        const map =
+                          collection || origin
+                            ? (m: Meta) => ({
+                                ...cleanMeta(m),
+                                ...(origin ? { addonOrigin: origin } : null),
+                                ...(collection ? { isCollection: true } : null),
+                              })
+                            : cleanMeta;
                         openGrid({
                           title: row.name,
                           fetcher: createAddonCatalogFetcher(row.more!, {
                             initialPageSize: row.metas.length,
-                            mapMeta: cleanMeta,
+                            mapMeta: map,
                           }),
-                          initial: row.metas.map(cleanMeta),
-                        })
+                          initial: row.metas.map(map),
+                        });
+                      }
                     : undefined
                 }
               >
@@ -723,7 +916,9 @@ export function AnimeView({ active = true }: { active?: boolean }) {
       {showPicker && (
         <AnimeGenrePicker
           initial={favoriteGenres}
-          onSave={(g) => update({ animeFavoriteGenres: g, animePicksDismissedAt: Date.now() })}
+          onSave={(g) =>
+            update({ animeFavoriteGenres: g, animePicksDismissedAt: Date.now() })
+          }
           onClose={() => {
             setShowPicker(false);
             update({ animePicksDismissedAt: Date.now() });
@@ -733,3 +928,5 @@ export function AnimeView({ active = true }: { active?: boolean }) {
     </main>
   );
 }
+
+

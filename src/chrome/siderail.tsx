@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { HarborMark } from "@/components/icons/harbor-mark";
-import { ProfileBlock } from "@/chrome/siderail/profile-block";
+import { NotificationCenter } from "@/components/notification-center/notification-center";
+import { AccountMenu } from "@/chrome/account-menu/account-menu";
 import { CollapseToggle } from "@/chrome/sidebar/collapse-toggle";
 import { RecordingPill } from "@/chrome/recording-pill";
 import { TogetherButton } from "@/chrome/topbar";
@@ -38,7 +39,8 @@ export function SideRail() {
   const isVisible = (item: NavItem) =>
     item.id !== "kids" &&
     (item.view !== "vod" || settings.showPlaylistsTab) &&
-    (!item.parentalKey || !locked || !hiddenTabs[item.parentalKey]);
+    (!item.parentalKey || !locked || !hiddenTabs[item.parentalKey]) &&
+    !(item.hideKey && settings.hideContent[item.hideKey]);
 
   const items = applyNavCustomization(NAV_ITEMS, settings.navCustomization);
   const primary = items.filter((item) => PRIMARY_IDS.has(item.id) && isVisible(item));
@@ -51,7 +53,6 @@ export function SideRail() {
     <>
       <aside
         aria-hidden={chromeHidden}
-        data-tv-nav-zone
         className={`relative z-[60] flex shrink-0 flex-col border-e border-edge-soft bg-canvas/40 transition-[opacity,width] duration-300 ${
           collapsed ? "w-[68px]" : "w-[200px]"
         } ${chromeHidden ? "pointer-events-none opacity-0" : "opacity-100"}`}
@@ -129,13 +130,14 @@ export function SideRail() {
               <Search size={15} strokeWidth={1.8} />
             </button>
             {!collapsed && <RecordingPill />}
+            {!collapsed && <NotificationCenter />}
             {!collapsed && view !== "live" && <TogetherButton variant="ghost" popoverPlacement="above-left" />}
           </div>
           <div className={`flex ${collapsed ? "justify-center" : ""}`}>
             <CollapseToggle collapsed={collapsed} />
           </div>
-          {!collapsed && <ProfileBlock onOpenSettings={() => setView("settings")} />}
-          {IS_TAURI && !settings.useNativeTitleBar && (
+          {!collapsed && <AccountMenu trigger="row" placement="up" align="stretch" showSettings onOpenSettings={() => setView("settings")} settingsActive={view === "settings"} />}
+          {IS_TAURI && !settings.useNativeTitleBar && !settings.hybridTitleBar && (
             <div className="flex items-center justify-end gap-0.5 pt-1">
               <WinBtn onClick={minimize} label={t("chrome.minimize")}>
                 <path d="M3 6.5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />

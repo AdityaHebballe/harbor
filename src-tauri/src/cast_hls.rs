@@ -555,7 +555,9 @@ async fn spawn_continuous_ffmpeg(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
 
+    crate::proc_guard::configure_command(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("ffmpeg spawn: {}", e))?;
+    crate::proc_guard::adopt(&child);
     eprintln!("[cast-hls] ffmpeg spawned for seek={seek_start:.1}");
 
     if let Some(stderr) = child.stderr.take() {

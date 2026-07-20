@@ -6,9 +6,23 @@ export function episodeFileRegex(season: number, episode: number): RegExp {
   const s = String(season).padStart(2, "0");
   const e = String(episode).padStart(2, "0");
   return new RegExp(
-    `s0*${season}[^0-9]?e0*${episode}(?![0-9])|${s}${e}(?![0-9])|\\b${season}x0*${episode}(?![0-9])`,
+    `s0*${season}[^0-9]?e0*${episode}(?![0-9])|(?<![A-Za-z0-9])${s}${e}(?![0-9])|\\b${season}x0*${episode}(?![0-9])`,
     "i",
   );
+}
+
+export function episodeVariantMatch(text: string, season: number | null, episode: number): boolean {
+  if (season != null && episodeFileRegex(season, episode).test(text)) return true;
+  if (
+    season != null &&
+    new RegExp(`season\\s*0*${season}\\s*(?:episode|ep|e)\\s*0*${episode}(?![0-9])`, "i").test(text)
+  ) {
+    return true;
+  }
+  const hasSeasonToken =
+    season == null ||
+    new RegExp(`(?:^|[^a-z0-9])(?:s0*${season}|season\\s*0*${season})(?![0-9])`, "i").test(text);
+  return hasSeasonToken && new RegExp(`(?:^|[^a-z0-9])e0*${episode}(?![0-9])`, "i").test(text);
 }
 
 export function matchEpisodeFileIndex(names: string[], hint: EpisodeHint | undefined): number {

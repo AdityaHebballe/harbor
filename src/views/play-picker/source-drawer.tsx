@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AddonLogo, AddonLogoStack } from "@/components/addon-logo";
 import { CopyLinkButton, resolveStreamLink } from "@/components/player/copy-link-button";
 import { FlagStack } from "@/components/flag";
-import { FormatBadge } from "@/components/format-badge";
+import { FormatBadge, RuleBadges } from "@/components/format-badge";
 import { HostMatchChip } from "@/components/host-match-chip";
 import { useDebridClients } from "@/lib/debrid/registry";
 import { useSettings } from "@/lib/settings";
@@ -179,11 +179,6 @@ function SourceRow({
         disabled={resolving}
         className="group flex w-full items-start gap-4 px-5 py-4 text-start transition-colors hover:bg-ink/5 disabled:cursor-wait disabled:opacity-60"
       >
-        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
-          {tierChipBadges(stream).map((k) => (
-            <FormatBadge key={k} kind={k} size="md" />
-          ))}
-        </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-w-0 items-center gap-2">
             <p className="min-w-0 truncate font-mono text-[14px] text-ink">{title}</p>
@@ -207,7 +202,8 @@ function SourceRow({
             </span>
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-3 pt-0.5">
+        <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+          <div className="flex items-center gap-3">
           {link && <CopyLinkButton url={link} />}
           <HostMatchChip match={match} />
           {stream.audioLanguages.filter((l) => l.toLowerCase() !== "unknown").length > 0 && (
@@ -258,6 +254,15 @@ function SourceRow({
               strokeWidth={0}
               className="text-ink-muted/50 transition-all group-hover:translate-x-0.5 group-hover:text-ink"
             />
+          )}
+          </div>
+          {tierChipBadges(stream).length > 0 && (
+            <div className="flex max-w-[320px] flex-wrap items-center justify-end gap-1.5">
+              {tierChipBadges(stream).map((k) => (
+                <FormatBadge key={k} kind={k} size="sm" />
+              ))}
+              <RuleBadges stream={stream} size="sm" />
+            </div>
           )}
         </div>
       </button>

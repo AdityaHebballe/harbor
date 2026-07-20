@@ -8,6 +8,7 @@ import { useSettings } from "@/lib/settings";
 import { openUrl } from "@/lib/window";
 import { useT } from "@/lib/i18n";
 import { Section, ToggleRow } from "./shared";
+import { SyncIndicatorSetting } from "./sync-indicator-setting";
 
 export function MalPanel() {
   const t = useT();
@@ -175,6 +176,8 @@ export function MalPanel() {
           )}
         </Section>
       )}
+
+      {isConnected && <SyncIndicatorSetting />}
 
       {modalOpen && <MalConnectModal onClose={() => setModalOpen(false)} />}
     </>

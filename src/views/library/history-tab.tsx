@@ -16,9 +16,11 @@ import {
   applyFilter,
   countByType,
   FilterBar,
+  Grid,
   groupByDate,
   GroupedGrid,
   parseTs,
+  RefreshButton,
   SortControl,
   sortedGroups,
   type TypeKey,
@@ -47,6 +49,9 @@ export function HistoryTab() {
   const [stremio, setStremio] = useState<LibraryItem[]>([]);
   const [trakt, setTrakt] = useState<HistoryItem[]>([]);
   const [traktStatus, setTraktStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [stremioLoading, setStremioLoading] = useState<boolean>(!!authKey);
+  const [reloadKey, setReloadKey] = useState(0);
+  const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!authKey) {
@@ -54,16 +59,20 @@ export function HistoryTab() {
       return;
     }
     let cancelled = false;
+    setStremioLoading(true);
     library(authKey)
       .then((items) => {
         if (cancelled) return;
         setStremio(filterHistory(items));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setStremioLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-  }, [authKey]);
+  }, [authKey, reloadKey]);
 
   const handleRemove = useCallback(
     async (stremioId: string) => {
@@ -101,7 +110,7 @@ export function HistoryTab() {
     return () => {
       cancelled = true;
     };
-  }, [traktConnected]);
+  }, [traktConnected, reloadKey]);
 
   const merged = useMemo(() => mergeHistory(stremio, trakt), [stremio, trakt]);
   const [type, setType] = useState<TypeKey>("all");
@@ -115,8 +124,8 @@ export function HistoryTab() {
   const toggleFlat = useCallback(() => {
     setFlat((v) => !v);
   }, []);
-  const [view, setView] = useState<HistoryView>(() =>
-    localStorage.getItem("harbor.history.view") === "episodes" ? "episodes" : "posters",
+  const [view, setView] = useState<HistoryView>(
+    () => (localStorage.getItem("harbor.history.view") === "episodes" ? "episodes" : "posters"),
   );
   const setViewPersist = useCallback((next: HistoryView) => {
     setView(next);
@@ -173,13 +182,20 @@ export function HistoryTab() {
       )}
       <div className="flex items-center justify-between">
         <span className="text-[12px] text-ink-muted">
-          {merged.length === 1
-            ? t("{n} item", { n: merged.length })
-            : t("{n} items", { n: merged.length })}
-          {traktConnected && traktStatus === "loading" ? t(" · Syncing Trakt…") : ""}
+          {(stremioLoading || traktStatus === "loading") && merged.length === 0
+            ? t("Loading your history…")
+            : merged.length === 1
+              ? t("{n} item", { n: merged.length })
+              : t("{n} items", { n: merged.length })}
+          {traktConnected && traktStatus === "loading" && merged.length > 0
+            ? t(" · Syncing Trakt…")
+            : ""}
         </span>
+        <RefreshButton onClick={refresh} spinning={stremioLoading || traktStatus === "loading"} />
       </div>
-      {merged.length === 0 ? (
+      {(stremioLoading || traktStatus === "loading") && merged.length === 0 ? (
+        <HistorySkeleton />
+      ) : merged.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-edge-soft bg-canvas/30 px-8 py-16 text-center">
           <Clock size={28} strokeWidth={1.6} className="text-ink-subtle" />
           <h2 className="text-[16px] font-semibold text-ink">{t("Nothing watched yet")}</h2>
@@ -191,10 +207,14 @@ export function HistoryTab() {
         <p className="rounded-2xl border border-dashed border-edge-soft bg-canvas/30 px-6 py-10 text-center text-[13px] text-ink-muted">
           {t("No matches for these filters.")}
         </p>
-      ) : view === "episodes" ? (
-        <EpisodesGrid groups={groups} onRemove={handleRemove} />
       ) : (
-        <GroupedGrid groups={groups} onRemove={handleRemove} />
+        <div key={view} className="harbor-hist-in">
+          {view === "episodes" ? (
+            <EpisodesGrid groups={groups} onRemove={handleRemove} />
+          ) : (
+            <GroupedGrid groups={groups} onRemove={handleRemove} />
+          )}
+        </div>
       )}
     </section>
   );
@@ -235,27 +255,45 @@ function HistoryViewToggle({
   return (
     <div className="flex items-center gap-1 rounded-full bg-elevated/40 p-0.5 ring-1 ring-edge-soft/60">
       <button
-        type="button"
         onClick={() => view !== "posters" && onChange("posters")}
         className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
-          view === "posters"
-            ? "bg-ink text-canvas"
-            : "text-ink-muted hover:bg-raised hover:text-ink"
+          view === "posters" ? "bg-ink text-canvas" : "text-ink-muted hover:bg-raised hover:text-ink"
         }`}
       >
         {t("Posters")}
       </button>
       <button
-        type="button"
         onClick={() => view !== "episodes" && onChange("episodes")}
         className={`rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition-colors ${
-          view === "episodes"
-            ? "bg-ink text-canvas"
-            : "text-ink-muted hover:bg-raised hover:text-ink"
+          view === "episodes" ? "bg-ink text-canvas" : "text-ink-muted hover:bg-raised hover:text-ink"
         }`}
       >
         {t("Episodes")}
       </button>
+    </div>
+  );
+}
+
+function HistorySkeleton() {
+  return (
+    <div className="flex flex-col gap-7" aria-hidden>
+      {[14, 8].map((count, gi) => (
+        <div key={gi} className="flex flex-col gap-3">
+          <div className="harbor-skel h-3 w-24 rounded bg-elevated/25" />
+          <Grid>
+            {Array.from({ length: count }).map((_, i) => (
+              <div
+                key={i}
+                className="harbor-hist-in flex flex-col gap-2"
+                style={{ animationDelay: `${Math.min(i, 12) * 35}ms` }}
+              >
+                <div className="harbor-skel aspect-[2/3] rounded-xl bg-elevated/30" />
+                <div className="harbor-skel h-2.5 w-3/4 rounded bg-elevated/25" />
+              </div>
+            ))}
+          </Grid>
+        </div>
+      ))}
     </div>
   );
 }
@@ -289,10 +327,16 @@ function EpisodesGrid({
 function filterHistory(items: LibraryItem[]): LibraryItem[] {
   return items
     .filter((i) => !i.removed || i.temp)
-    .filter((i) => i.state?.flaggedWatched === 1 || (i.state?.timeOffset ?? 0) > 0)
+    .filter(
+      (i) =>
+        (i.state?.flaggedWatched ?? 0) > 0 ||
+        (i.state?.timesWatched ?? 0) > 0 ||
+        (i.state?.timeOffset ?? 0) > 0,
+    )
     .sort(
       (a, b) =>
-        Date.parse(b.state?.lastWatched ?? b._mtime) - Date.parse(a.state?.lastWatched ?? a._mtime),
+        Date.parse(b.state?.lastWatched ?? b._mtime) -
+        Date.parse(a.state?.lastWatched ?? a._mtime),
     );
 }
 
@@ -330,7 +374,10 @@ function mergeHistory(stremio: LibraryItem[], trakt: HistoryItem[]): HistoryEntr
       season: ep?.season,
       episode: ep?.episode,
       progress,
-      watched: item.state?.flaggedWatched === 1 || progress >= 0.9,
+      watched:
+        (item.state?.flaggedWatched ?? 0) > 0 ||
+        (item.state?.timesWatched ?? 0) > 0 ||
+        progress >= 0.9,
       durationMs: dur,
       timeOffsetMs: off,
       watchedAt: parseTs(item.state?.lastWatched ?? item._mtime),
@@ -345,7 +392,7 @@ function mergeHistory(stremio: LibraryItem[], trakt: HistoryItem[]): HistoryEntr
       meta: {
         id,
         type: h.type === "movie" ? "movie" : "series",
-        name: h.type === "movie" ? h.title : h.showImdb ? "" : h.title,
+        name: h.type === "movie" ? h.title : (h.showImdb ? "" : h.title),
       },
       date: parseTs(h.watchedAt),
       progress: 0,

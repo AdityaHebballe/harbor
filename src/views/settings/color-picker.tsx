@@ -81,6 +81,12 @@ export function ColorPopoverTrigger({
 
   useEffect(() => {
     if (!open) return;
+    document.body.setAttribute("data-color-popover", "");
+    return () => document.body.removeAttribute("data-color-popover");
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const close = (e: MouseEvent) => {
       const t = e.target as Node;
       if (wrapRef.current?.contains(t) || panelRef.current?.contains(t)) return;

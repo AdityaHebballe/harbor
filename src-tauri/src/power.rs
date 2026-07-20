@@ -164,8 +164,8 @@ pub async fn power_inhibit(on: bool) {
         let mut guard = TOKEN.lock().await;
         match (on, guard.take()) {
             (true, None) => *guard = linux::begin().await,
-            (true, Some(token)) => *guard = Some(token),
-            (false, Some(token)) => linux::end(token).await,
+            (true, Some(t)) => *guard = Some(t),
+            (false, Some(t)) => linux::end(t).await,
             (false, None) => {}
         }
     }

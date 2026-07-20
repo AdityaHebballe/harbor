@@ -1,4 +1,4 @@
-import { createAddonCatalogFetcher, gatherCatalogAddons, type CatalogExtra } from "./addons";
+import { createAddonCatalogFetcher, gatherCatalogAddons, isCollectionCatalog, type CatalogExtra } from "./addons";
 
 const NON_CONTENT = new Set(["addon_catalog"]);
 
@@ -44,5 +44,12 @@ export async function listBrowseCatalogs(authKey: string | null): Promise<Browse
 export function browseFetcher(cat: BrowseCatalog, genre: string | null) {
   const extras: CatalogExtra[] | undefined =
     genre && cat.genreExtra ? [{ name: cat.genreExtra, value: genre }] : undefined;
-  return createAddonCatalogFetcher({ base: cat.base, type: cat.type, id: cat.id, extras });
+  const cursor = { base: cat.base, type: cat.type, id: cat.id, extras };
+  if (!isCollectionCatalog({ type: cat.type, id: cat.id, name: cat.name })) {
+    return createAddonCatalogFetcher(cursor);
+  }
+  const origin = { id: cat.key, name: cat.addonName, logo: cat.addonLogo, base: cat.base };
+  return createAddonCatalogFetcher(cursor, {
+    mapMeta: (m) => ({ ...m, addonOrigin: origin, isCollection: true }),
+  });
 }

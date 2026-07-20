@@ -1,9 +1,7 @@
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { TvModalClose } from "@/components/tv-modal-close";
 import { useT } from "@/lib/i18n";
-import { useTvFocusScope } from "@/lib/keyboard-navigation";
 import { useProfiles } from "@/lib/profiles";
 import { EditorView } from "./editor-view";
 import { PasswordPrompt } from "./password-prompt";
@@ -16,17 +14,17 @@ export function ProfilePickerModal() {
   const { profiles, pickerOpen, pickerView, setPickerView, selectProfile, closePicker } = useProfiles();
   const t = useT();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scopeRef = useRef<HTMLDivElement>(null);
   const [moreBelow, setMoreBelow] = useState(false);
   const [selectingId, setSelectingId] = useState<string | null>(null);
   const [exiting, setExiting] = useState(false);
+  const [cameFromList, setCameFromList] = useState(false);
   const timers = useRef<number[]>([]);
-  useTvFocusScope(pickerOpen, scopeRef);
 
   useEffect(() => {
     if (!pickerOpen) {
       setSelectingId(null);
       setExiting(false);
+      setCameFromList(false);
       timers.current.forEach((id) => window.clearTimeout(id));
       timers.current = [];
     }
@@ -51,6 +49,7 @@ export function ProfilePickerModal() {
   if (!pickerOpen) return null;
 
   const goList = () => setPickerView({ kind: "list" });
+  const finishEditor = () => (cameFromList ? goList() : closePicker());
   const showClose = pickerView.kind === "create" || pickerView.kind === "edit";
 
   const handleSelect = (id: string) => {
@@ -70,14 +69,11 @@ export function ProfilePickerModal() {
 
   return createPortal(
     <div
-      ref={scopeRef}
-      data-tv-focus-scope
       data-tauri-drag-region
       className={`fixed inset-0 z-[180] flex items-center justify-center bg-black/85 backdrop-blur-2xl transition-opacity duration-[340ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         exiting ? "opacity-0" : "animate-in fade-in duration-500"
       }`}
     >
-      <TvModalClose onClose={closePicker} label={t("common.close")} />
       <div className="relative flex max-h-[calc(100vh-3rem)] w-full max-w-[860px] flex-col animate-in fade-in zoom-in-95 slide-in-from-bottom-3 duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]">
         {showClose && (
           <button
@@ -96,18 +92,26 @@ export function ProfilePickerModal() {
           {pickerView.kind === "list" && (
             <ListView
               selectingId={selectingId}
-              onCreate={() => setPickerView({ kind: "create" })}
-              onEdit={(id) => setPickerView({ kind: "edit", profileId: id })}
+              onCreate={() => {
+                setCameFromList(true);
+                setPickerView({ kind: "create" });
+              }}
+              onEdit={(id) => {
+                setCameFromList(true);
+                setPickerView({ kind: "edit", profileId: id });
+              }}
               onSelect={handleSelect}
             />
           )}
-          {pickerView.kind === "create" && <EditorView mode={{ kind: "create" }} onCancel={goList} onDone={goList} />}
+          {pickerView.kind === "create" && (
+            <EditorView mode={{ kind: "create" }} onCancel={finishEditor} onDone={finishEditor} />
+          )}
           {pickerView.kind === "edit" && (() => {
             const target = profiles.find((p) => p.id === pickerView.profileId);
             if (!target) {
-              return <NotFoundFallback onBack={goList} />;
+              return <NotFoundFallback onBack={finishEditor} />;
             }
-            return <EditorView mode={{ kind: "edit", profile: target }} onCancel={goList} onDone={goList} />;
+            return <EditorView mode={{ kind: "edit", profile: target }} onCancel={finishEditor} onDone={finishEditor} />;
           })()}
           {pickerView.kind === "unlock" && (() => {
             const target = profiles.find((p) => p.id === pickerView.profileId);
@@ -198,7 +202,6 @@ function ListView({
                 profile={p}
                 onSelect={() => onSelect(p.id)}
                 onEdit={canEditThis ? () => onEdit(p.id) : undefined}
-                initialFocus={i === 0}
               />
             </div>
           );

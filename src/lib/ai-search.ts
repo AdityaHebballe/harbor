@@ -1,5 +1,5 @@
 import { searchCinemeta } from "./search";
-import { DEFAULT_AI_MODEL, migrateModelId, providerForModel } from "./ai-models";
+import { DEFAULT_AI_MODEL, migrateModelId } from "./ai-models";
 import type { Meta } from "./cinemeta";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -23,17 +23,17 @@ export type AiResult = {
 };
 
 const SYSTEM_PROMPT =
-  "You are a film and TV discovery engine for a media app. The user describes what they want to watch in natural language. Reply with ONLY a JSON array (no prose, no markdown code fences) of up to 12 specific, real movies or TV shows that best match, most relevant first. Each element is an object: {\"title\": string, \"year\": number, \"type\": \"movie\" or \"series\"}. If the user is clearly asking about a SPECIFIC EPISODE (by plot, scene, character, quote, or meme, for example 'the south park episode with kanye west'), return that show as the first result and add its \"season\" and \"episode\" numbers plus \"episodeTitle\", like {\"title\": \"South Park\", \"type\": \"series\", \"season\": 13, \"episode\": 5, \"episodeTitle\": \"Fishsticks\"}. Use your own knowledge of the show to pick the exact episode. Use the original or most internationally recognized title. Never repeat a title. When live web context is provided below, treat it as authoritative ground truth for fact-grounded queries (people's filmographies, box office, recency, regional titles, memes, current seasons/episodes) — use it as your primary source and cite the exact title/year it mentions rather than guessing from training data.";
+  "You are a film and TV discovery engine for a media app. The user describes what they want to watch in natural language. Reply with ONLY a JSON array (no prose, no markdown code fences) of up to 12 specific, real movies or TV shows that best match, most relevant first. Each element is an object: {\"title\": string, \"year\": number, \"type\": \"movie\" or \"series\"}. If the user is clearly asking about a SPECIFIC EPISODE (by plot, scene, character, quote, or meme, for example 'the south park episode with kanye west'), return that show as the first result and add its \"season\" and \"episode\" numbers plus \"episodeTitle\", like {\"title\": \"South Park\", \"type\": \"series\", \"season\": 13, \"episode\": 5, \"episodeTitle\": \"Fishsticks\"}. Use your own knowledge of the show to pick the exact episode. Use the original or most internationally recognized title. Never repeat a title. When live web context is provided below, treat it as authoritative ground truth for fact-grounded queries (people's filmographies, box office, recency, regional titles, memes, current seasons/episodes): use it as your primary source and cite the exact title/year it mentions rather than guessing from training data.";
 
 export async function aiSuggest(
   key: string,
   model: string,
+  isGroq: boolean,
   query: string,
   webContext?: string,
 ): Promise<AiSuggestion[]> {
   const q = query.trim();
   if (!key.trim() || !q) return [];
-  const isGroq = providerForModel(model) === "groq";
   const url = isGroq ? GROQ_URL : OPENROUTER_URL;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${key.trim()}`,
@@ -52,6 +52,7 @@ export async function aiSuggest(
     body: JSON.stringify({
       model: migrateModelId(model.trim()) || DEFAULT_AI_MODEL,
       temperature: 0.4,
+      max_tokens: 2000,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: q },
@@ -60,12 +61,41 @@ export async function aiSuggest(
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`AI search failed (${res.status}). ${detail.slice(0, 160)}`);
+    throw new Error(friendlyAiError(res.status, detail));
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string; code?: number };
   };
-  return parseSuggestions(data?.choices?.[0]?.message?.content ?? "");
+  if (data?.error) {
+    const code = typeof data.error.code === "number" ? data.error.code : 0;
+    throw new Error(friendlyAiError(code, data.error.message ?? ""));
+  }
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== "string" || content.trim() === "") {
+    throw new Error(
+      "The model replied with nothing usable. Try another model (hold the AI button) or rephrase.",
+    );
+  }
+  return parseSuggestions(content);
+}
+
+export function friendlyAiError(status: number, detail = ""): string {
+  const friendly =
+    status === 401
+      ? "Your API key was rejected. Check it in Settings, AI search."
+      : status === 402
+        ? "Your account is out of credits for this model. Pick a free model or top up."
+        : status === 404
+          ? "This model no longer exists at the provider. Pick another model (hold the AI button)."
+          : status === 413
+            ? "That request was too big for this model. Pick a model with a larger context."
+            : status === 429
+              ? "The model is rate-limited right now. Try again in a moment or switch models."
+              : status
+                ? `AI search failed (${status}).`
+                : "AI search failed.";
+  return `${friendly} ${detail.slice(0, 140)}`.trim();
 }
 
 export function extractJsonArray(raw: string): string | null {

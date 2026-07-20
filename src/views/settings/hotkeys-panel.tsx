@@ -80,22 +80,10 @@ export function HotkeysPanel() {
         )}
       </div>
 
-      <Section title={t("Behavior")} subtitle={t("How keys behave during playback.")}>
-        <ToggleRow
-          label={t("Esc exits fullscreen first")}
-          sub={t("When in fullscreen, Esc leaves fullscreen instead of closing the player. Press Esc again to close. Turn off to make Esc always close.")}
-          value={settings.playerEscExitsFullscreen}
-          onChange={(v) => update({ playerEscExitsFullscreen: v })}
-        />
-        <ToggleRow
-          label={t("Ask before leaving")}
-          sub={t("When Esc would close the player, show a quick confirm first. You can tick \"Don't ask me again\" in that prompt to always leave on Esc.")}
-          value={settings.playerConfirmLeave}
-          onChange={(v) => update({ playerConfirmLeave: v })}
-        />
+      <Section title={t("Navigation")} subtitle={t("Move focus with the keyboard, like a TV remote.")}>
         <ToggleRow
           label={t("TV navigation")}
-          sub={t("Use arrow keys and Select/Enter to move focus through Harbor. Turn this off to disable TV-style focus navigation everywhere.")}
+          sub={t("Use the arrow keys and Enter to move focus through Harbor. Turn this off to keep arrow keys free and disable focus navigation everywhere.")}
           value={settings.tvNavigation}
           onChange={(v) => update({ tvNavigation: v })}
         />
@@ -110,11 +98,36 @@ export function HotkeysPanel() {
               : undefined
           }
         />
+      </Section>
+
+      <Section title={t("Behavior")} subtitle={t("How keys behave during playback.")}>
+        <ToggleRow
+          label={t("Esc exits fullscreen first")}
+          sub={t("When in fullscreen, Esc leaves fullscreen instead of closing the player. Press Esc again to close. Turn off to make Esc always close.")}
+          value={settings.playerEscExitsFullscreen}
+          onChange={(v) => update({ playerEscExitsFullscreen: v })}
+        />
+        <ToggleRow
+          label={t("Ask before leaving")}
+          sub={t("When Esc would close the player, show a quick confirm first. You can tick \"Don't ask me again\" in that prompt to always leave on Esc.")}
+          value={settings.playerConfirmLeave}
+          onChange={(v) => update({ playerConfirmLeave: v })}
+        />
         <SeekStepRow
+          label={t("Seek step")}
+          sub={t("Choose how far the keyboard arrows and player seek buttons jump.")}
           back={settings.seekBackStepSec}
           forward={settings.seekForwardStepSec}
           onBack={(seekBackStepSec) => update({ seekBackStepSec })}
           onForward={(seekForwardStepSec) => update({ seekForwardStepSec })}
+        />
+        <SeekStepRow
+          label={t("Short seek (Shift + arrows)")}
+          sub={t("A shorter jump on Shift plus the arrow keys, for nudging a few seconds at a time.")}
+          back={settings.seekBackStepShortSec}
+          forward={settings.seekForwardStepShortSec}
+          onBack={(seekBackStepShortSec) => update({ seekBackStepShortSec })}
+          onForward={(seekForwardStepShortSec) => update({ seekForwardStepShortSec })}
         />
       </Section>
 
@@ -175,11 +188,15 @@ export function HotkeysPanel() {
 }
 
 function SeekStepRow({
+  label,
+  sub,
   back,
   forward,
   onBack,
   onForward,
 }: {
+  label: string;
+  sub: string;
   back: number;
   forward: number;
   onBack: (seconds: number) => void;
@@ -189,10 +206,8 @@ function SeekStepRow({
   return (
     <div className="grid gap-4 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3 xl:grid-cols-[minmax(220px,1fr)_minmax(0,640px)] xl:items-center">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[14px] font-medium text-ink">{t("Seek step")}</span>
-        <span className="text-[12.5px] text-ink-subtle">
-          {t("Choose how far the keyboard arrows and player seek buttons jump.")}
-        </span>
+        <span className="text-[14px] font-medium text-ink">{label}</span>
+        <span className="text-[12.5px] text-ink-subtle">{sub}</span>
       </div>
       <div className="grid min-w-0 gap-2">
         <SeekStepPicker label={t("Back")} value={back} onChange={onBack} />
@@ -216,7 +231,7 @@ function SeekStepPicker({
       <span className="ps-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
         {label}
       </span>
-      <div className="grid min-w-0 grid-cols-6 gap-1 rounded-md bg-canvas/45 p-0.5">
+      <div className="grid min-w-0 grid-cols-4 gap-1 rounded-md bg-canvas/45 p-0.5">
         {SEEK_STEP_OPTIONS.map((seconds) => {
           const selected = seconds === value;
           return (

@@ -1,3 +1,5 @@
+import { persistCritical } from "./storage-recovery";
+
 const KEY = "harbor.moviewatched.v1";
 
 const subs = new Set<() => void>();
@@ -18,16 +20,16 @@ function load(): Set<string> {
 function persist(next: Set<string>): void {
   cache = next;
   version += 1;
-  try {
-    localStorage.setItem(KEY, JSON.stringify([...next]));
-  } catch {
-    /* quota */
-  }
+  persistCritical(KEY, JSON.stringify([...next]));
   for (const fn of subs) fn();
 }
 
 export function isMovieWatchedLocal(metaId: string): boolean {
   return load().has(metaId);
+}
+
+export function movieWatchedIds(): Set<string> {
+  return load();
 }
 
 export function setMovieWatchedLocal(metaId: string, watched: boolean): void {

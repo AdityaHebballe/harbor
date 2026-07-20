@@ -1,4 +1,5 @@
 import { Check, Eye } from "lucide-react";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import { useMemo } from "react";
 import { DragStrip } from "@/components/drag-strip";
 import { Poster } from "@/components/poster";
@@ -59,9 +60,7 @@ export function AnimeEpisodeStrip({
           season: animeSeasonKey(ep),
           seasonLabel: showSeason ? `S${ep.imdbSeason ?? ep.seasonNumber ?? 1}` : undefined,
           title: ep.title || t("Episode {n}", { n: ep.number }),
-          stills: [ep.thumbnail, ep.thumbnailFallback, meta.background].filter(
-            (u): u is string => !!u,
-          ),
+          stills: [ep.thumbnail, ep.thumbnailFallback, meta.background].filter((u): u is string => !!u),
           runtime: ep.length,
           airDate: ep.airdate,
           overview: ep.synopsis || undefined,
@@ -84,6 +83,8 @@ export function AnimeEpisodeStrip({
                 imdbId: ep.imdbId,
                 imdbSeason: ep.imdbSeason,
                 imdbEpisode: ep.imdbEpisode,
+                absoluteNumber: ep.absoluteNumber ?? ep.number,
+                tvdbEpisodeId: ep.tvdbEpisodeId,
               },
               { autoPlay: settings.instantPlay, resume: opts?.resume },
             ),
@@ -111,7 +112,11 @@ export function AnimeEpisodeStrip({
   return (
     <DragStrip itemCount={episodes.length} onReachEnd={onReachEnd}>
       {episodes.map((ep) => (
-        <div key={ep.id} className="w-[244px] shrink-0">
+        <div
+          key={ep.id}
+          className="shrink-0"
+          style={{ width: Math.round(244 * (settings.episodeCardScale || 1)) }}
+        >
           <AnimeEpisodeStripCard
             meta={metaForEp ? metaForEp(ep) : meta}
             ep={ep}
@@ -165,11 +170,10 @@ function AnimeEpisodeStripCard({
         imdbId: ep.imdbId,
         imdbSeason: ep.imdbSeason,
         imdbEpisode: ep.imdbEpisode,
+        absoluteNumber: ep.absoluteNumber ?? ep.number,
+        tvdbEpisodeId: ep.tvdbEpisodeId,
       },
-      {
-        autoPlay: settings.instantPlay,
-        resume: !progress.watched && progress.ratio > 0.01,
-      },
+      { autoPlay: settings.instantPlay, resume: !progress.watched && progress.ratio > 0.01 },
     );
   };
 
@@ -187,17 +191,8 @@ function AnimeEpisodeStripCard({
         onClick={handlePlayClick}
         className="relative aspect-video overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
       >
-        <div
-          className={`${spoiler?.thumb ? SPOILER_THUMB_CLASS : ""} ${upcoming ? "opacity-55 saturate-50" : ""}`}
-        >
-          <Poster
-            src={ep.thumbnail ?? undefined}
-            seed={String(ep.id)}
-            ratio="landscape"
-            className=""
-            lazy
-            fallbacks={[ep.thumbnailFallback, meta.background]}
-          />
+        <div className={`${spoiler?.thumb ? SPOILER_THUMB_CLASS : ""} ${upcoming ? "opacity-55 saturate-50" : ""}`}>
+          <Poster src={ep.thumbnail ?? undefined} seed={String(ep.id)} ratio="landscape" className="" lazy fallbacks={[ep.thumbnailFallback, meta.background]} />
         </div>
         {upcoming && (
           <span className="absolute bottom-2 start-2 transition-opacity group-hover:opacity-0">
@@ -228,10 +223,7 @@ function AnimeEpisodeStripCard({
         )}
         {progress.ratio > 0.01 && (
           <div className="absolute inset-x-0 bottom-0 z-10 h-[3px] bg-black/55 transition-opacity group-hover:opacity-0">
-            <div
-              className="h-full bg-accent"
-              style={{ width: `${Math.max(2, progress.ratio * 100)}%` }}
-            />
+            <div className="h-full bg-accent" style={{ width: `${Math.max(2, progress.ratio * 100)}%` }} />
           </div>
         )}
       </button>
@@ -242,30 +234,27 @@ function AnimeEpisodeStripCard({
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-start focus-visible:outline-none"
         >
           <span className="flex items-center gap-2">
-            <span
-              className={`truncate text-[13.5px] font-semibold text-ink ${spoiler?.title ? SPOILER_TEXT_CLASS : ""}`}
-            >
+            <span className={`truncate text-[13.5px] font-semibold text-ink ${spoiler?.title ? SPOILER_TEXT_CLASS : ""}`}>
               {ep.title || t("Episode {n}", { n: ep.number })}
             </span>
             {ep.filler && <FillerBadge />}
           </span>
           <span className="text-[11.5px] text-ink-subtle">
-            {showSeason
-              ? `S${ep.imdbSeason ?? ep.seasonNumber ?? 1} · E${ep.number}`
-              : `E${ep.number}`}
+            {showSeason ? `S${ep.imdbSeason ?? ep.seasonNumber ?? 1} · E${ep.number}` : `E${ep.number}`}
             {ep.length ? ` · ${t("{n} min", { n: ep.length })}` : ""}
             {upcoming && ep.airdate ? ` · ${formatAirDate(ep.airdate)}` : ""}
           </span>
         </button>
-        <button
-          type="button"
-          onClick={() => openEpisodeDetail(meta.id, animeSeasonKey(ep), ep.number, meta)}
-          aria-label={t("Episode details")}
-          title={t("Episode details")}
-          className="flex shrink-0 items-center justify-center rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
-        >
-          <Eye size={16} strokeWidth={2} />
-        </button>
+        <HoverTooltip label={t("Episode details")} align="center" className="shrink-0">
+          <button
+            type="button"
+            onClick={() => openEpisodeDetail(meta.id, animeSeasonKey(ep), ep.number, meta)}
+            aria-label={t("Episode details")}
+            className="flex items-center justify-center rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+          >
+            <Eye size={16} strokeWidth={2} />
+          </button>
+        </HoverTooltip>
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { Bookmark, BookmarkCheck, CheckCheck, ClipboardPaste, Copy, Download, EyeOff, Info, ListChecks, ListPlus, Maximize, Navigation, RotateCcw, Star, UserPlus, Wallpaper } from "lucide-react";
+import { ArrowDownToLine, Bookmark, BookmarkCheck, CheckCheck, ClipboardPaste, Copy, Download, EyeOff, Info, Maximize, Navigation, RotateCcw, Star, UserPlus, Wallpaper } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useActiveAddon } from "@/lib/active-addon";
 import { useContextMenu, type ViewSummonable } from "@/lib/context-menu";
@@ -12,8 +12,9 @@ import { markMetaWatched, unmarkMetaWatched } from "@/lib/mark-watched";
 import { useMetaWatched } from "@/lib/watched-flag";
 import { useTmdbImdbId } from "@/lib/providers/tmdb";
 import { useIsFavorite, useMediaFavorites } from "@/lib/media-favorites";
-import { useInLocalWatchlist, useLocalWatchlist } from "@/lib/local-watchlist";
+import { toggleAutoDownload, useIsAutoDownloaded } from "@/lib/auto-download";
 import { clearTitleBackdrop, getTitleBackdrop, setTitleBackdrop } from "@/lib/title-backdrop";
+import { MyListSubmenu } from "./context-menu/my-list-submenu";
 
 const MENU_WIDTH = 220;
 const MENU_HEIGHT = 120;
@@ -62,12 +63,11 @@ export function ContextMenu() {
   const targetMetaId = state?.target.kind === "meta" ? state.target.meta.id : undefined;
   const targetType = state?.target.kind === "meta" ? state.target.meta.type : undefined;
   const targetImdb = useTmdbImdbId(targetMetaId);
-  const isWatched = useMetaWatched(targetMetaId, targetType);
+  const isWatched = useMetaWatched(targetMetaId, targetType, targetImdb);
   const isWatchlisted = useInWatchlist(targetMetaId, [targetImdb]);
   const { toggle: toggleFavorite } = useMediaFavorites();
   const isFav = useIsFavorite(targetMetaId);
-  const { toggle: toggleLocalList } = useLocalWatchlist();
-  const isLocal = useInLocalWatchlist(targetMetaId);
+  const isAutoDl = useIsAutoDownloaded(targetMetaId ?? "");
 
   const goToHost = () => {
     if (!hostLocation) return;
@@ -214,17 +214,26 @@ export function ContextMenu() {
       />,
     );
     items.push(
-      <Item
+      <MyListSubmenu
         key="local-list"
-        icon={isLocal ? <ListChecks size={14} strokeWidth={2} /> : <ListPlus size={14} strokeWidth={2} />}
-        label={isLocal ? "In my list" : "Add to my list"}
-        onClick={() => {
-          toggleLocalList({ id: meta.id, type: meta.type, name: meta.name, poster: meta.poster });
-          close();
-        }}
-        accent={isLocal}
+        item={{ id: meta.id, type: meta.type, name: meta.name, poster: meta.poster }}
+        onClose={close}
       />,
     );
+    if (meta.type === "series" && !playerActions) {
+      items.push(
+        <Item
+          key="auto-download"
+          icon={<ArrowDownToLine size={14} strokeWidth={2} />}
+          label={isAutoDl ? "Auto-downloading" : "Auto-download new episodes"}
+          onClick={() => {
+            toggleAutoDownload(meta);
+            close();
+          }}
+          accent={isAutoDl}
+        />,
+      );
+    }
     if (!playerActions) {
       items.push(
         <Item
@@ -238,7 +247,7 @@ export function ContextMenu() {
                 : "Mark as watched"
           }
           onClick={() => {
-            if (isWatched) void unmarkMetaWatched(meta);
+            if (isWatched) void unmarkMetaWatched(meta, targetImdb);
             else void markMetaWatched(meta, targetImdb);
             close();
           }}

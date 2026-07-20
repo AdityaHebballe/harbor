@@ -95,15 +95,20 @@ export async function syncMalProgress(
   harborId: string,
   episode: number | undefined,
   title: string,
+  absoluteEpisode?: number,
 ): Promise<void> {
   if (!isAuthenticated()) return;
   const ep = episode ?? 1;
   if (!Number.isFinite(ep) || ep < 1) return;
+  const abs =
+    absoluteEpisode != null && Number.isFinite(absoluteEpisode) && absoluteEpisode > ep
+      ? absoluteEpisode
+      : null;
 
   const sent = loadSent();
-  if ((sent[harborId] ?? 0) >= ep) return;
+  if ((sent[harborId] ?? 0) >= (abs ?? ep)) return;
 
-  const flightKey = `${harborId}|${ep}`;
+  const flightKey = `${harborId}|${ep}|${abs ?? ""}`;
   if (inflight.has(flightKey)) return;
   inflight.add(flightKey);
 
@@ -114,32 +119,37 @@ export async function syncMalProgress(
     const cur = await malRequest<EntryResponse>(`/anime/${malId}?fields=num_episodes,my_list_status`);
 
     const current = cur?.my_list_status?.num_episodes_watched ?? 0;
-    if (ep <= current) {
-      sent[harborId] = current;
+    const total = cur?.num_episodes ?? 0;
+    let target = ep;
+    if (abs != null && total > 0 && abs <= total && ep <= current && abs > current) target = abs;
+    if (total > 0 && target > total) target = total;
+    if (target <= current) {
+      sent[harborId] = Math.max(sent[harborId] ?? 0, current);
       saveSent(sent);
       return;
     }
 
-    const total = cur?.num_episodes ?? 0;
-    const status = total > 0 && ep >= total ? "completed" : "watching";
-    emit({ kind: "syncing", title, episode: ep });
+    const status = total > 0 && target >= total ? "completed" : "watching";
+    emit({ kind: "syncing", title, episode: target });
 
     const saved = await malRequest<{ num_episodes_watched: number }>(
       `/anime/${malId}/my_list_status`,
       {
         method: "PATCH",
         body: new URLSearchParams({
-          num_watched_episodes: String(ep),
+          num_watched_episodes: String(target),
           status,
         }),
       },
     );
 
-    if (saved?.num_episodes_watched === ep) {
-      sent[harborId] = ep;
+    if (saved?.num_episodes_watched === target) {
+      sent[harborId] = target;
       saveSent(sent);
-      emit({ kind: "ok", title, episode: ep });
+      emit({ kind: "ok", title, episode: target });
     } else {
+      sent[harborId] = Math.max(sent[harborId] ?? 0, target);
+      saveSent(sent);
       emit({ kind: "error", title, message: "MAL did not confirm the update." });
     }
   } catch (e) {

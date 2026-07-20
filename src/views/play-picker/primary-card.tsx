@@ -2,7 +2,7 @@ import { Check, Download, ExternalLink, Loader2, Play, Zap } from "lucide-react"
 import { Flag } from "@/components/flag";
 import { DubSubPill, streamDubSub } from "@/components/dub-sub-pill";
 import { CopyLinkButton, resolveStreamLink } from "@/components/player/copy-link-button";
-import { FormatBadge, streamBadges } from "@/components/format-badge";
+import { FormatBadge, RuleBadges, streamBadges } from "@/components/format-badge";
 import { HostMatchChip } from "@/components/host-match-chip";
 import type { Meta } from "@/lib/cinemeta";
 import { useDebridClients } from "@/lib/debrid/registry";
@@ -105,10 +105,11 @@ export function PrimaryCard({
                 aria-hidden
                 className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/65 via-black/20 to-transparent"
               />
-              <div className="absolute end-2 top-2 flex flex-col items-end gap-1 drop-shadow-[0_4px_10px_rgba(0,0,0,0.55)]">
+              <div className="absolute inset-y-2 end-2 flex flex-col items-end gap-0.5 overflow-hidden drop-shadow-[0_4px_10px_rgba(0,0,0,0.55)]">
                 {badges.map((k) => (
-                  <FormatBadge key={k} kind={k} size="sm" />
+                  <FormatBadge key={k} kind={k} size="xs" />
                 ))}
+                <RuleBadges stream={stream} size="xs" />
               </div>
             </>
           )}

@@ -57,7 +57,6 @@ export function TextSyncOverlay({
     <div className="pointer-events-none absolute inset-0 z-[70]">
       <aside
         role="dialog"
-        data-tv-focus-scope
         aria-label={t("Sync subtitles")}
         className="pointer-events-auto absolute end-0 top-0 flex h-full w-full max-w-[480px] flex-col overflow-hidden border-s border-edge-soft/70 bg-surface/85 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.85)] backdrop-blur-2xl duration-300 animate-in slide-in-from-right"
       >
@@ -72,7 +71,6 @@ export function TextSyncOverlay({
           </div>
           <button
             aria-label={t("Close")}
-            data-tv-modal-close
             onClick={api.discard}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-elevated text-ink-muted transition-colors hover:bg-raised hover:text-ink"
           >

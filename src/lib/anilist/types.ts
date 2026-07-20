@@ -35,6 +35,7 @@ export type AnilistMedia = {
   bannerImage: string | null;
   format: string | null;
   episodes: number | null;
+  chapters?: number | null;
   averageScore: number | null;
   seasonYear: number | null;
   countryOfOrigin?: string | null;

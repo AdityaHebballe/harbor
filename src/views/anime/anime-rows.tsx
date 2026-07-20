@@ -1,3 +1,4 @@
+import type { AddonRow } from "@/lib/addons";
 import type { Meta } from "@/lib/cinemeta";
 import {
   GENRE,
@@ -12,6 +13,7 @@ import {
   jikanUnderratedGems,
   jikanUpcoming,
 } from "@/lib/providers/jikan";
+import { useSettings } from "@/lib/settings";
 
 export type RowPool = "general" | "era" | "genre";
 
@@ -56,54 +58,14 @@ export const SPECS: Spec[] = [
     pool: "era",
     fetcher: (p) => jikanByEra("1990-01-01", "1999-12-31", p),
   },
-  {
-    key: "genre-action",
-    title: "Action & Adventure",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Action, p),
-  },
-  {
-    key: "genre-romance",
-    title: "Romance",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Romance, p),
-  },
-  {
-    key: "genre-slice",
-    title: "Slice of Life",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.SliceOfLife, p),
-  },
-  {
-    key: "genre-mecha",
-    title: "Mecha",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Mecha, p),
-  },
-  {
-    key: "genre-fantasy",
-    title: "Fantasy",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Fantasy, p),
-  },
-  {
-    key: "genre-scifi",
-    title: "Sci-Fi",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.SciFi, p),
-  },
-  {
-    key: "genre-psych",
-    title: "Psychological",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Psychological, p),
-  },
-  {
-    key: "genre-horror",
-    title: "Horror & Supernatural",
-    pool: "genre",
-    fetcher: (p) => jikanByGenre(GENRE.Horror, p),
-  },
+  { key: "genre-action", title: "Action & Adventure", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Action, p) },
+  { key: "genre-romance", title: "Romance", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Romance, p) },
+  { key: "genre-slice", title: "Slice of Life", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.SliceOfLife, p) },
+  { key: "genre-mecha", title: "Mecha", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Mecha, p) },
+  { key: "genre-fantasy", title: "Fantasy", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Fantasy, p) },
+  { key: "genre-scifi", title: "Sci-Fi", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.SciFi, p) },
+  { key: "genre-psych", title: "Psychological", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Psychological, p) },
+  { key: "genre-horror", title: "Horror & Supernatural", pool: "genre", fetcher: (p) => jikanByGenre(GENRE.Horror, p) },
 ];
 
 export const HERO_KEYS = new Set(["airing", "top-airing", "upcoming", "popular"]);
@@ -116,18 +78,32 @@ export type RowState = { metas: Meta[]; page: number; hasMore: boolean; ready: b
 
 export const EMPTY_ROW: RowState = { metas: [], page: 1, hasMore: false, ready: false };
 
+export function isAnimeRow(row: AddonRow): boolean {
+  if (row.type === "anime") return true;
+  const nameLower = (row.name ?? "").toLowerCase();
+  if (/\b(anime|mal|anilist|kitsu|aniworld|crunchyroll|funimation)\b/.test(nameLower)) return true;
+  const sample = row.metas.slice(0, 6);
+  if (sample.length === 0) return false;
+  const animeIds = sample.filter(
+    (m) => m.id.startsWith("kitsu:") || m.id.startsWith("mal:") || m.id.startsWith("anilist:"),
+  ).length;
+  return animeIds / sample.length >= 0.5;
+}
+
 export function RowSkeleton({ title }: { title: string }) {
+  const { settings } = useSettings();
+  const w = Math.round(144 * settings.posterScale);
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-baseline justify-between px-1">
         <h2 className="font-display text-[26px] font-medium text-ink/85">{title}</h2>
       </div>
       <div className="flex gap-5 overflow-hidden px-1">
-        {Array.from({ length: 7 }).map((_, i) => (
+        {Array.from({ length: 14 }).map((_, i) => (
           <div
             key={i}
-            className="flex-shrink-0 animate-pulse rounded-2xl bg-elevated/60"
-            style={{ width: 144, aspectRatio: "2 / 3", animationDelay: `${i * 80}ms` }}
+            className="harbor-skel flex-shrink-0 bg-elevated/50"
+            style={{ width: w, aspectRatio: "2 / 3", borderRadius: settings.posterRadius }}
           />
         ))}
       </div>

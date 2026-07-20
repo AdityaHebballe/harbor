@@ -1,7 +1,7 @@
 import { Cast, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fetchTrailer, resolveTrailerQuality, trailerSrc } from "@/lib/trailer";
+import { fetchTrailer, getQualityHint, trailerSrc } from "@/lib/trailer";
 import { isMacDesktop } from "@/lib/platform";
 import { openUrl } from "@/lib/window";
 import { useSettings } from "@/lib/settings";
@@ -42,7 +42,9 @@ export function TrailerOverlay({
 
   useEffect(() => {
     let cancelled = false;
-    fetchTrailer(id, resolveTrailerQuality(settings.trailerQuality)).then((info) => {
+    const pref = settings.trailerQuality;
+    const quality = pref === "auto" ? (getQualityHint() === "360p" ? "360p" : "1080p") : pref;
+    fetchTrailer(id, quality).then((info) => {
       if (cancelled) return;
       if (info) setStreamUrl(trailerSrc(info));
       else setExtractFailed(true);
@@ -68,7 +70,10 @@ export function TrailerOverlay({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") dismiss();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      dismiss();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -77,11 +82,14 @@ export function TrailerOverlay({
   return createPortal(
     <div
       onClick={dismiss}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t("Trailer")}
       className="fixed inset-0 z-[120] flex cursor-zoom-out items-center justify-center"
       style={{
         backgroundColor: open ? (isMacDesktop() ? "rgba(0,0,0,1)" : "rgba(0,0,0,0.82)") : "rgba(0,0,0,0)",
-        backdropFilter: open ? "blur(32px) saturate(1.2)" : "blur(0px)",
-        WebkitBackdropFilter: open ? "blur(32px) saturate(1.2)" : "blur(0px)",
+        backdropFilter: isMacDesktop() ? "none" : open ? "blur(32px) saturate(1.2)" : "blur(0px)",
+        WebkitBackdropFilter: isMacDesktop() ? "none" : open ? "blur(32px) saturate(1.2)" : "blur(0px)",
         transition:
           "background-color 360ms cubic-bezier(0.32,0.72,0.24,1), backdrop-filter 360ms cubic-bezier(0.32,0.72,0.24,1)",
       }}

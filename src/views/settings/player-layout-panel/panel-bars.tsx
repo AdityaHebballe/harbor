@@ -1,15 +1,18 @@
 import { Pencil, RotateCcw, Save, Undo2 } from "lucide-react";
-import type { ThemeId } from "@/lib/player-chrome";
+import type { PlayerChromeConfig, ThemeId } from "@/lib/player-chrome";
 import { useT } from "@/lib/i18n";
+import { ChromeMiniPreview } from "./chrome-mini-preview";
 
 export function EditLayoutCard({
   theme,
+  config,
   visibleCount,
   hiddenCount,
   activeProfileName,
   onOpen,
 }: {
   theme: ThemeId;
+  config: PlayerChromeConfig;
   visibleCount: number;
   hiddenCount: number;
   activeProfileName: string | null;
@@ -18,33 +21,41 @@ export function EditLayoutCard({
   const t = useT();
   const themeName = theme === "stremio" ? t("Stremio") : t("Default");
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-edge-soft bg-canvas/40 p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-[14.5px] font-semibold text-ink">{t("Player layout")}</h3>
-        <p className="text-[12.5px] leading-relaxed text-ink-muted">
-          {t("Click any control in the live preview to move, hide, or reorder it.")}
-        </p>
-        <p className="text-[11.5px] text-ink-subtle">
-          {activeProfileName ? (
-            <>
-              {t("Profile")} <span className="text-ink-muted">{activeProfileName}</span> · {visibleCount} {t("visible")}
-            </>
-          ) : (
-            <>
+    <div className="group relative overflow-hidden rounded-2xl border border-edge-soft bg-canvas transition-transform duration-200 hover:-translate-y-0.5">
+      <div className="relative h-[212px] w-full">
+        <ChromeMiniPreview theme={theme} config={config} />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-2/3 bg-gradient-to-b from-black/55 via-black/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-4 p-5">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-[16px] font-semibold tracking-tight text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
+              {t("Player layout")}
+            </h3>
+            <p className="max-w-[44ch] text-[12.5px] leading-relaxed text-white/80 drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]">
+              {t("A live preview of your player. Open the editor to move, hide, or reorder any control.")}
+            </p>
+            <p className="mt-0.5 text-[11.5px] text-white/60 drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]">
+              {activeProfileName ? (
+                <>
+                  {t("Profile")} <span className="text-white/85">{activeProfileName}</span> ·{" "}
+                </>
+              ) : null}
               {visibleCount} {t("visible")}
-            </>
-          )}
-          {hiddenCount > 0 ? t(", {hiddenCount} hidden", { hiddenCount: String(hiddenCount) }) : ""} {t("on the {themeName} theme.", { themeName: themeName })}
-        </p>
+              {hiddenCount > 0 ? t(", {hiddenCount} hidden", { hiddenCount: String(hiddenCount) }) : ""} ·{" "}
+              {t("{themeName} theme", { themeName: themeName })}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-[13px] font-semibold text-canvas shadow-[0_6px_20px_-8px_rgba(0,0,0,0.7)] transition-transform duration-200 group-hover:scale-[1.03]">
+            <Pencil size={14} strokeWidth={2.4} />
+            {t("Edit layout")}
+          </span>
+        </div>
       </div>
       <button
         type="button"
         onClick={onOpen}
-        className="flex shrink-0 items-center gap-2 self-start rounded-xl bg-ink px-5 py-3 text-[13.5px] font-semibold text-canvas transition-all duration-150 hover:scale-[1.02] active:scale-[0.97] sm:self-auto"
-      >
-        <Pencil size={14} strokeWidth={2.4} />
-        {t("Edit player layout")}
-      </button>
+        aria-label={t("Edit player layout")}
+        className="absolute inset-0 z-40 transition-transform duration-150 active:scale-[0.997]"
+      />
     </div>
   );
 }
@@ -98,7 +109,7 @@ export function FooterBar({
 }) {
   const t = useT();
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge-soft bg-canvas/40 px-5 py-4">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-edge-soft bg-elevated/40 px-5 py-4">
       <button
         type="button"
         onClick={onResetAll}

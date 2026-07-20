@@ -12,9 +12,18 @@ const AWARDS: Array<{ type: AwardType; name: string; sub: string }> = [
   { type: "emmy", name: "Emmys", sub: "Television's finest" },
   { type: "sag", name: "SAG Awards", sub: "Chosen by actors" },
   { type: "critics_choice", name: "Critics' Choice", sub: "The critics' cut" },
+  { type: "bafta_tv", name: "BAFTA Television", sub: "British TV's biggest night" },
+  { type: "annie", name: "Annie Awards", sub: "Animation's finest" },
+  { type: "spirit", name: "Spirit Awards", sub: "Independent film" },
+  { type: "saturn", name: "Saturn Awards", sub: "Sci-fi, fantasy & horror" },
   { type: "cannes", name: "Cannes", sub: "Palme d'Or" },
   { type: "venice", name: "Venice", sub: "Golden Lion" },
   { type: "berlin", name: "Berlinale", sub: "Golden Bear" },
+  { type: "cesar", name: "César Awards", sub: "French cinema" },
+  { type: "goya", name: "Goya Awards", sub: "Spanish cinema" },
+  { type: "blue_dragon", name: "Blue Dragon", sub: "Korean cinema" },
+  { type: "baeksang", name: "Baeksang", sub: "Korean film & drama" },
+  { type: "bifa", name: "BIFA", sub: "British independent film" },
 ];
 
 export function AwardTiles() {

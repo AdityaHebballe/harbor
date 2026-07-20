@@ -1,10 +1,16 @@
 import { useEffect, useRef } from "react";
-import { cloudWriteId, libraryGetOne, libraryPut, type LibraryItem } from "@/lib/stremio";
+import { cloudWriteId, libraryGetOne, libraryGetOneStrict, type LibraryItem } from "@/lib/stremio";
+import { cloudLibraryPut, flushWriteQueue, queuedWatched } from "@/lib/stremio-write-queue";
+import { withItemLock } from "@/lib/stremio-item-lock";
+import { freshestWatched } from "@/lib/stremio-watched-sync";
 import type { PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition, subscribePlaybackClock } from "@/lib/player/playback-clock";
 import { useProfiles } from "@/lib/profiles";
 import { recordWatchedBy } from "@/lib/watched-by";
+import { recordAnimeCwId } from "@/lib/anime-cw-ids";
 import type { PlayerSrc } from "@/lib/view";
+
+const ANIME_SCHEME = /^(kitsu|mal|anilist|anidb):/;
 
 const TICK_MS = 30000;
 const BASE_REFRESH_MS = 30000;
@@ -16,6 +22,7 @@ let activeFlusher: (() => Promise<void>) | null = null;
 
 export async function flushCloudSync(): Promise<void> {
   if (activeFlusher) await activeFlusher().catch(() => {});
+  await flushWriteQueue().catch(() => {});
 }
 
 export function useStremioSync(params: {
@@ -34,6 +41,11 @@ export function useStremioSync(params: {
     if (!resolutionSettled || !canonicalId) return;
     recordWatchedBy(canonicalId, watcherProfileId);
   }, [resolutionSettled, canonicalId, watcherProfileId]);
+  useEffect(() => {
+    if (canonicalId && canonicalId.startsWith("tt") && ANIME_SCHEME.test(src.meta.id)) {
+      recordAnimeCwId(canonicalId, src.meta.id);
+    }
+  }, [canonicalId, src.meta.id]);
   const sessionStartRef = useRef<number>(Date.now());
   const lastSyncedRef = useRef(0);
   const baseItemRef = useRef<LibraryItem | null>(null);
@@ -142,8 +154,8 @@ export function useStremioSync(params: {
     if (fresh) baseItemRef.current = fresh;
     const base = fresh ?? (baseItemRef.current?._id === cid ? baseItemRef.current : null);
     const remoteMs = (base?.state?.timeOffset ?? 0) as number;
-    const remoteMtimeStr = (base as { _mtime?: string } | null)?._mtime ?? "";
-    const remoteMtime = Date.parse(remoteMtimeStr);
+    const remoteMtimeStr = String((base as { _mtime?: string } | null)?._mtime ?? "");
+    const remoteMtime = /^\d+$/.test(remoteMtimeStr) ? Number(remoteMtimeStr) : Date.parse(remoteMtimeStr);
     const remoteVid =
       ((base?.state as Record<string, unknown> | undefined)?.video_id as string | undefined) ?? cid;
     const ourMs = Math.floor(pos * 1000);
@@ -296,6 +308,13 @@ async function writeLibraryItem(
   vidOverride?: string,
 ): Promise<string | null> {
   if (snap.durationSec > 0 && snap.durationSec < STUB_MAX_SEC) return null;
+  if (!base) {
+    try {
+      base = await libraryGetOneStrict(authKey, canonicalId);
+    } catch {
+      return null;
+    }
+  }
   const baseName = typeof base?.name === "string" ? base.name.trim() : "";
   const metaName = (src.meta.name ?? "").trim();
   const isAnimeWrite = /^(kitsu|mal|anilist|anidb):/.test(canonicalId) || src.meta.type === "anime";
@@ -325,13 +344,30 @@ async function writeLibraryItem(
   const durationShrunk =
     !src.episode && priorDuration > 0 && durationMs > 0 && durationMs < priorDuration * 0.7;
   const playedReal = snap.status !== "error" && !durationShrunk;
-  const nowFlagged = durationMs > 0 && watchedRatio > 0.7 && playedReal;
-  const creditsReset = isTerminal && watchedRatio > CREDITS_RATIO && !src.episode && playedReal;
+  const nowFlagged = durationMs > 0 && watchedRatio > CREDITS_RATIO && playedReal;
+  let finaleDone = false;
+  if (isTerminal && nowFlagged && isSeries && src.episode) {
+    const vids = (src.meta.videos ?? []).filter(
+      (v) => typeof v.episode === "number" && (v.season ?? 0) >= 1,
+    );
+    if (vids.length > 0) {
+      const key = (s: number, e: number) => s * 100000 + e;
+      const maxKey = vids.reduce((m, v) => Math.max(m, key(v.season ?? 1, v.episode ?? 0)), 0);
+      const metaIsTt = src.meta.id.startsWith("tt");
+      const curSeason = metaIsTt
+        ? src.episode.imdbSeason ?? src.episode.season
+        : src.episode.season;
+      const curEpisode = metaIsTt
+        ? src.episode.imdbEpisode ?? src.episode.episode
+        : src.episode.episode;
+      finaleDone = key(curSeason, curEpisode) >= maxKey;
+    }
+  }
 
   const state: StremioLibraryItemState = {
     lastWatched: now,
     timeWatched: offsetMs,
-    timeOffset: creditsReset ? 0 : offsetMs,
+    timeOffset: finaleDone ? 0 : offsetMs,
     overallTimeWatched: prevOverall + (videoChanged ? prevTimeWatched : 0),
     timesWatched: nowFlagged && effPrevFlagged === 0 ? prevTimesWatched + 1 : prevTimesWatched,
     flaggedWatched: nowFlagged ? 1 : effPrevFlagged,
@@ -361,25 +397,52 @@ async function writeLibraryItem(
   let temp = base ? base.temp === true : true;
   if (temp && state.timesWatched === 0) removed = true;
   if (removed) temp = true;
-  const item: StremioLibraryItem = {
-    _id: canonicalId,
-    name,
-    type: src.episode ? "series" : baseType ?? (isSeries ? "series" : "movie"),
-    poster: metaPoster ?? basePoster,
-    posterShape: pickPosterShape(baseRecord?.posterShape),
-    removed,
-    temp,
-    _ctime: ctime,
-    _mtime: now,
-    state,
-    behaviorHints,
-  };
 
-  try {
-    await libraryPut(authKey, item as unknown as LibraryItem);
-    return now;
-  } catch (e) {
-    console.warn("[stremio-sync] put failed", e);
-    return null;
-  }
+  return withItemLock(canonicalId, async () => {
+    if (isSeries && !isAnimeWrite) {
+      const baseMtimeRaw = (baseRecord as { _mtime?: unknown } | null)?._mtime;
+      const baseMtime =
+        typeof baseMtimeRaw === "number" ? baseMtimeRaw : Date.parse(String(baseMtimeRaw ?? "")) || 0;
+      let bestWatched = prevWatched;
+      let bestMtime = Number.isFinite(baseMtime) ? baseMtime : 0;
+      const cached = freshestWatched(canonicalId);
+      if (cached && cached.watched != null && cached.mtime >= bestMtime) {
+        bestWatched = cached.watched;
+        bestMtime = cached.mtime;
+      }
+      const queued = queuedWatched(canonicalId);
+      if (queued && queued.watched != null && queued.mtime >= bestMtime) {
+        bestWatched = queued.watched;
+        bestMtime = queued.mtime;
+      }
+      if (!isTerminal) {
+        const fresh = await libraryGetOneStrict(authKey, canonicalId).catch(() => null);
+        const fw = fresh?.state?.watched;
+        if (typeof fw === "string" && fw.length > 0) {
+          const fmRaw = (fresh as { _mtime?: unknown } | null)?._mtime;
+          const fm = typeof fmRaw === "number" ? fmRaw : Date.parse(String(fmRaw ?? "")) || 0;
+          if (Number.isFinite(fm) && fm >= bestMtime) {
+            bestWatched = fw;
+            bestMtime = fm;
+          }
+        }
+      }
+      state.watched = bestWatched;
+    }
+    const item: StremioLibraryItem = {
+      _id: canonicalId,
+      name,
+      type: src.episode ? "series" : baseType ?? (isSeries ? "series" : "movie"),
+      poster: metaPoster ?? basePoster,
+      posterShape: pickPosterShape(baseRecord?.posterShape),
+      removed,
+      temp,
+      _ctime: ctime,
+      _mtime: now,
+      state,
+      behaviorHints,
+    };
+    const ok = await cloudLibraryPut(authKey, item as unknown as LibraryItem);
+    return ok ? now : null;
+  });
 }

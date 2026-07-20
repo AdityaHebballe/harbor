@@ -1,18 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { alertDialog, confirmDialog } from "@/lib/dialog";
 import {
-  DEFAULT_DEFAULT_CONFIG,
-  DEFAULT_STREMIO_CONFIG,
   notifyPlayerChromeChanged,
-  PANEL_META,
   readPlayerChromeConfig,
   resetPlayerChromeConfig,
   writePlayerChromeConfig,
-  type ControlVariant,
-  type PanelCorner,
   type PanelId,
   type PlayerChromeConfig,
-  type PlayerControlConfig,
   type PlayerControlId,
   type ThemeId,
   type TimeFormat,
@@ -31,22 +25,16 @@ import {
 } from "@/lib/player-chrome-profiles";
 import { useSettings } from "@/lib/settings";
 import { resolveChromeTheme } from "@/lib/theme";
-import {
-  moveControlOrder,
-  moveControlSlot,
-  sameConfig,
-} from "./config-helpers";
+import { sameConfig } from "./config-helpers";
 import { EditorOverlay } from "./editor-overlay";
 import { OptionsSection } from "./options-section";
 import { EditLayoutCard, FooterBar, ThemeTabs } from "./panel-bars";
-import { ToggleRow } from "../shared";
+import { useChromeEdits } from "./use-chrome-edits";
+import { AdvisoryPreview } from "./advisory-preview";
+import { SeekBarPanel } from "../player-panel";
+import { Section, ToggleRow } from "../shared";
 import { pushActivityHint } from "@/lib/discord/activity-hint";
 import { useT } from "@/lib/i18n";
-
-const THEME_BASELINES: Record<ThemeId, PlayerChromeConfig> = {
-  default: DEFAULT_DEFAULT_CONFIG,
-  stremio: DEFAULT_STREMIO_CONFIG,
-};
 
 function themeIdFromSettings(settings: ReturnType<typeof useSettings>["settings"]): ThemeId {
   return resolveChromeTheme(settings.theme, settings.playerChromeTheme);
@@ -106,108 +94,17 @@ export function PlayerLayoutPanel() {
 
   const dirty = useMemo(() => !sameConfig(draft, saved), [draft, saved]);
 
-  const moveSlot = useCallback(
-    (dir: -1 | 1) => {
-      if (!selectedId) return;
-      setDraft((cur) => moveControlSlot(cur, selectedId, dir));
-    },
-    [selectedId],
-  );
-
-  const moveOrder = useCallback(
-    (dir: -1 | 1) => {
-      if (!selectedId) return;
-      setDraft((cur) => moveControlOrder(cur, selectedId, dir));
-    },
-    [selectedId],
-  );
-
-  const toggleHidden = useCallback(() => {
-    if (!selectedId) return;
-    setDraft((cur) => ({
-      ...cur,
-      controls: cur.controls.map((c) =>
-        c.id === selectedId ? { ...c, hidden: !c.hidden } : c,
-      ),
-    }));
-  }, [selectedId]);
-
-  const unhideControl = useCallback((id: PlayerControlId) => {
-    setDraft((cur) => ({
-      ...cur,
-      controls: cur.controls.map((c) => (c.id === id ? { ...c, hidden: false } : c)),
-    }));
-  }, []);
-
-  const resetControl = useCallback(() => {
-    if (!selectedId) return;
-    const baseline = THEME_BASELINES[theme].controls.find((c) => c.id === selectedId);
-    if (!baseline) return;
-    setDraft((cur) => {
-      const nextIcons = { ...(cur.customIcons ?? {}) };
-      for (const k of Object.keys(nextIcons)) {
-        if (k === selectedId || k.startsWith(`${selectedId}:`)) delete nextIcons[k];
-      }
-      return {
-        ...cur,
-        controls: cur.controls.map((c) => (c.id === selectedId ? { ...baseline } : c)),
-        customIcons: nextIcons,
-      };
-    });
-  }, [selectedId, theme]);
-
-  const setCustomIcon = useCallback(
-    (id: PlayerControlId, dataUrl: string | null, state?: string) => {
-      setDraft((cur) => {
-        const nextIcons = { ...(cur.customIcons ?? {}) };
-        const k = state ? `${id}:${state}` : id;
-        if (dataUrl == null) {
-          delete nextIcons[k];
-        } else {
-          nextIcons[k] = dataUrl;
-        }
-        return { ...cur, customIcons: nextIcons };
-      });
-    },
-    [],
-  );
-
-  const setVariant = useCallback(
-    (id: PlayerControlId, variant: ControlVariant | null) => {
-      setDraft((cur) => ({
-        ...cur,
-        controls: cur.controls.map((c) => {
-          if (c.id !== id) return c;
-          const next: PlayerControlConfig = { ...c };
-          if (variant == null) delete next.variant;
-          else next.variant = variant;
-          return next;
-        }),
-      }));
-    },
-    [],
-  );
-
-  const setPanelCorner = useCallback((id: PanelId, corner: PanelCorner) => {
-    setDraft((cur) => {
-      const panels = { ...(cur.panels ?? {}) };
-      const prev = panels[id];
-      panels[id] = { corner, hidden: prev?.hidden ?? false };
-      return { ...cur, panels };
-    });
-  }, []);
-
-  const togglePanelHidden = useCallback((id: PanelId) => {
-    setDraft((cur) => {
-      const panels = { ...(cur.panels ?? {}) };
-      const prev = panels[id];
-      panels[id] = {
-        corner: prev?.corner ?? PANEL_META[id].defaultCorner,
-        hidden: !prev?.hidden,
-      };
-      return { ...cur, panels };
-    });
-  }, []);
+  const {
+    moveSlot,
+    moveOrder,
+    toggleHidden,
+    unhideControl,
+    resetControl,
+    setCustomIcon,
+    setVariant,
+    setPanelCorner,
+    togglePanelHidden,
+  } = useChromeEdits(setDraft, selectedId, theme);
 
   const onSave = useCallback(() => {
     const res = writePlayerChromeConfig(theme, draft);
@@ -344,53 +241,76 @@ export function PlayerLayoutPanel() {
   const hiddenCount = draft.controls.length - visibleCount;
 
   return (
-    <div className="flex flex-col gap-7">
-      <ThemeTabs
-        value={theme}
-        onChange={(id) => {
-          update({ playerChromeTheme: id });
-          setTheme(id);
-        }}
-      />
-
-      <ToggleRow
-        label="True black menus"
-        sub="Force player menus and panels to pure black, ignoring your theme tint."
-        value={settings.playerMenuBlack}
-        onChange={(v) => update({ playerMenuBlack: v })}
-      />
-
+    <div className="flex flex-col gap-6">
       <EditLayoutCard
         theme={theme}
+        config={draft}
         visibleCount={visibleCount}
         hiddenCount={hiddenCount}
         activeProfileName={profiles.find((p) => p.id === activeProfileId)?.name ?? null}
         onOpen={() => setEditorOpen(true)}
       />
 
-      <OptionsSection
-        config={draft}
-        onTimeFormat={(v: TimeFormat) =>
-          setDraft((cur) => ({ ...cur, options: { ...cur.options, timeFormat: v } }))
-        }
-        onVolumeStyle={(v: VolumeStyle) =>
-          setDraft((cur) => ({ ...cur, options: { ...cur.options, volumeStyle: v } }))
-        }
-      />
+      <Section
+        title={t("Player style")}
+        subtitle={t("The button set your layout is built on. Your customizations are kept separately for each style.")}
+      >
+        <ThemeTabs
+          value={theme}
+          onChange={(id) => {
+            update({ playerChromeTheme: id });
+            setTheme(id);
+          }}
+        />
+      </Section>
 
-      <ToggleRow
-        label={t("Show P2P status chip")}
-        sub={t("Peers, speed and progress while a torrent streams. Sits clear of the exit button, top left.")}
-        value={settings.playerP2pChip}
-        onChange={(v) => update({ playerP2pChip: v })}
-      />
+      <Section
+        title={t("Control bar")}
+        subtitle={t("How the on-screen controls read while you watch.")}
+      >
+        <OptionsSection
+          config={draft}
+          onTimeFormat={(v: TimeFormat) =>
+            setDraft((cur) => ({ ...cur, options: { ...cur.options, timeFormat: v } }))
+          }
+          onVolumeStyle={(v: VolumeStyle) =>
+            setDraft((cur) => ({ ...cur, options: { ...cur.options, volumeStyle: v } }))
+          }
+        />
+        <ToggleRow
+          label={t("True black menus")}
+          sub={t("Force player menus and panels to pure black, ignoring your theme tint.")}
+          value={settings.playerMenuBlack}
+          onChange={(v) => update({ playerMenuBlack: v })}
+        />
+      </Section>
 
-      <ToggleRow
-        label={t("Content advisory on start")}
-        sub={t("When a movie or episode starts, briefly show its IMDb parental guide (violence, profanity, substances, frightening scenes and more) with severity. Fades on its own.")}
-        value={settings.contentAdvisoryToast}
-        onChange={(v) => update({ contentAdvisoryToast: v })}
-      />
+      <Section
+        title={t("While you watch")}
+        subtitle={t("Optional overlays that appear over the video.")}
+      >
+        <ToggleRow
+          label={t("Show P2P status chip")}
+          sub={t("Peers, speed and progress while a torrent streams. Sits clear of the exit button, top left.")}
+          value={settings.playerP2pChip}
+          onChange={(v) => update({ playerP2pChip: v })}
+        />
+        <ToggleRow
+          label={t("Content advisory on start")}
+          sub={t("When a movie or episode starts, briefly show its IMDb parental guide (violence, profanity, substances, frightening scenes and more) with severity. Fades on its own.")}
+          value={settings.contentAdvisoryToast}
+          onChange={(v) => update({ contentAdvisoryToast: v })}
+        />
+        <AdvisoryPreview />
+      </Section>
+
+      <Section
+        title={t("Seek bar")}
+        subtitle={t("Style the timeline at the bottom of the player. Swap the dot for a sticker, change the bar height, recolor it. Settings live-preview right here.")}
+        newId="playerLayout:seek-bar"
+      >
+        <SeekBarPanel />
+      </Section>
 
       <FooterBar
         dirty={dirty}
@@ -400,6 +320,7 @@ export function PlayerLayoutPanel() {
         onDiscard={onDiscard}
         onResetAll={onResetAll}
       />
+
 
       {editorOpen && (
         <EditorOverlay

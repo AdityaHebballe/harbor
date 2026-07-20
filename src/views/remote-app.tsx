@@ -542,7 +542,7 @@ function RemoteBody({
     !textDismissed && (textEntryActive || typing) && !!heldTextEntry.current;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-[clamp(0.75rem,2.2vh,1.25rem)] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-[max(0.75rem,env(safe-area-inset-top))]">
+    <div className="flex min-h-0 flex-1 flex-col gap-[clamp(0.75rem,2.2vh,1.25rem)] px-4 pb-[calc(env(safe-area-inset-bottom,0px)+96px)] pt-[max(0.75rem,env(safe-area-inset-top))]">
       {showTextOverlay && heldTextEntry.current ? (
         <FullscreenTextEntry
           entry={heldTextEntry.current}

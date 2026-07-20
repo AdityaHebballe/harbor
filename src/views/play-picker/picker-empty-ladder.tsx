@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import { EmptyState, FilteredOutState, NoSourcesState, TheatresEmptyState } from "./empty-states";
 import type { usePipelineResult } from "./use-pipeline-result";
@@ -38,7 +38,6 @@ export function PickerEmptyLadder({
   onShowAll: () => void;
   onSearchWider: () => void;
 }) {
-  const [openedAt] = useState(Date.now);
   const isStillInTheatres = useMemo(() => {
     if (!result || meta.type !== "movie") return false;
     if (allCount > 0) return false;
@@ -47,7 +46,7 @@ export function PickerEmptyLadder({
       if (meta.releaseDate) {
         const d = new Date(meta.releaseDate);
         if (!Number.isNaN(d.getTime())) {
-          const days = (openedAt - d.getTime()) / (1000 * 60 * 60 * 24);
+          const days = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
           return days >= -30 && days < 90;
         }
       }
@@ -64,7 +63,7 @@ export function PickerEmptyLadder({
         r.reason.startsWith("suspicious-extension:"),
     ).length;
     return trashRejections >= Math.max(3, Math.floor(rawCount * 0.5));
-  }, [result, meta.type, meta.inTheaters, meta.releaseDate, allCount, rawCount, openedAt]);
+  }, [result, meta.type, meta.inTheaters, meta.releaseDate, allCount, rawCount]);
 
   return (
     <>
@@ -74,52 +73,34 @@ export function PickerEmptyLadder({
           action={{ label: "Open Library settings", onClick: onOpenLibrarySettings }}
         />
       )}
-      {addonsSettled &&
-        streamIds &&
-        streamIds.length > 0 &&
-        debridCount === 0 &&
-        allCount === 0 && (
-          <EmptyState
-            message="No playable streams turned up, and no debrid is configured. Real-Debrid, TorBox, AllDebrid, Premiumize, or Debrid-Link will unlock raw torrent results. Some addons bake debrid in (Sootio, Comet/ElfHosted, MediaFusion/ElfHosted) and play without your own keys."
-            action={{ label: "Set up a debrid", onClick: onOpenStreamingSettings }}
-          />
-        )}
-      {addonsSettled &&
-        streamIds &&
-        streamIds.length > 0 &&
-        allCount === 0 &&
-        debridCount > 0 &&
-        rawCount === 0 && (
-          <NoSourcesState
-            addonCount={addonCount}
-            hasDebrid={debridCount > 0}
-            streamIds={streamIds}
-            isAnime={meta.id.startsWith("kitsu:") || meta.id.startsWith("mal:")}
-          />
-        )}
-      {addonsSettled &&
-        streamIds &&
-        streamIds.length > 0 &&
-        allCount === 0 &&
-        debridCount > 0 &&
-        rawCount > 0 &&
-        isStillInTheatres && (
-          <TheatresEmptyState meta={meta} onShowAll={onShowAll} showingAll={forceShowAll} />
-        )}
-      {addonsSettled &&
-        streamIds &&
-        streamIds.length > 0 &&
-        allCount === 0 &&
-        debridCount > 0 &&
-        rawCount > 0 &&
-        !isStillInTheatres && (
-          <FilteredOutState
-            rawCount={rawCount}
-            rejected={result?.rejected ?? []}
-            strictMode={strictMode || !forceShowAll}
-            onSearchWider={onSearchWider}
-          />
-        )}
+      {addonsSettled && streamIds && streamIds.length > 0 && debridCount === 0 && allCount === 0 && (
+        <EmptyState
+          message="No playable streams turned up, and no debrid is configured. Real-Debrid, TorBox, AllDebrid, Premiumize, or Debrid-Link will unlock raw torrent results. Some addons bake debrid in (Sootio, Comet/ElfHosted, MediaFusion/ElfHosted) and play without your own keys."
+          action={{ label: "Set up a debrid", onClick: onOpenStreamingSettings }}
+        />
+      )}
+      {addonsSettled && streamIds && streamIds.length > 0 && allCount === 0 && debridCount > 0 && rawCount === 0 && (
+        <NoSourcesState
+          addonCount={addonCount}
+          streamIds={streamIds}
+          isAnime={meta.id.startsWith("kitsu:") || meta.id.startsWith("mal:")}
+        />
+      )}
+      {addonsSettled && streamIds && streamIds.length > 0 && allCount === 0 && debridCount > 0 && rawCount > 0 && isStillInTheatres && (
+        <TheatresEmptyState
+          meta={meta}
+          onShowAll={onShowAll}
+          showingAll={forceShowAll}
+        />
+      )}
+      {addonsSettled && streamIds && streamIds.length > 0 && allCount === 0 && debridCount > 0 && rawCount > 0 && !isStillInTheatres && (
+        <FilteredOutState
+          rawCount={rawCount}
+          rejected={result?.rejected ?? []}
+          strictMode={strictMode || !forceShowAll}
+          onSearchWider={onSearchWider}
+        />
+      )}
 
       {pipelineDone && allCount > 0 && allCount <= 2 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/[0.06] px-5 py-3.5 text-[13px] text-ink">

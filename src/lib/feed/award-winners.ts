@@ -97,9 +97,29 @@ async function resolveAll(tmdbKey: string): Promise<Meta[]> {
   }
 }
 
+const HOSTED_URL = "https://harbor.site/feed/award-winners.json";
+let hostedMemo: Meta[] | null = null;
+let hostedTried = false;
+
+async function resolveHosted(): Promise<Meta[] | null> {
+  if (hostedMemo) return hostedMemo;
+  if (hostedTried) return null;
+  hostedTried = true;
+  try {
+    const res = await fetch(HOSTED_URL);
+    if (!res.ok) return null;
+    const arr = (await res.json()) as unknown;
+    if (Array.isArray(arr) && arr.length >= 20) {
+      hostedMemo = arr as Meta[];
+      return hostedMemo;
+    }
+  } catch {}
+  return null;
+}
+
 export async function fetchAwardWinners(tmdbKey: string, page = 1): Promise<Meta[]> {
-  if (!tmdbKey) return [];
-  const all = await resolveAll(tmdbKey);
+  const hosted = await resolveHosted();
+  const all = hosted ?? (tmdbKey ? await resolveAll(tmdbKey) : []);
   const start = (page - 1) * PER_PAGE;
   return all.slice(start, start + PER_PAGE);
 }

@@ -25,7 +25,7 @@ export function ProfileIdentitySync() {
   }, [activeProfile?.id, activeProfile?.color]);
 
   useEffect(() => {
-    if (!activeProfile || activeProfile.kid) return;
+    if (!activeProfile || activeProfile.kid || !activeProfile.isPrimary) return;
     if (settings.harborAvatar !== activeProfile.avatar) {
       update({ harborAvatar: activeProfile.avatar });
     }

@@ -3,7 +3,7 @@ import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
 import { ElegantHoverActions } from "./elegant-hover";
 
-export type CardHoverStyle = "none" | "default" | "elegant" | "frosted" | "cinema" | "spotlight" | "custom";
+export type CardHoverStyle = "none" | "default" | "marquee" | "elegant" | "frosted" | "cinema" | "spotlight" | "custom";
 
 const EASE = "ease-[cubic-bezier(0.22,1,0.36,1)]";
 

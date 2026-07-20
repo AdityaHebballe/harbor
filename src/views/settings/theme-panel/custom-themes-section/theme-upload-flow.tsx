@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, ArrowRight, Check, Copy, ImagePlus, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Check, Copy, Globe, ImagePlus, KeyRound, Loader2, type LucideIcon, Palette, Plus, ShieldCheck, Trash2, Upload, X } from "lucide-react";
 import { exportThemeJson, getCustomThemes, type CustomTheme } from "@/lib/custom-themes";
+import { currentAuthor, subscribeAuthor, type Author } from "@/lib/theme-auth";
 import { recordUpload, uploadTheme } from "@/lib/theme-store";
+import { CheatSheet } from "../theme-studio/cheat-sheet";
+import { AuthorAccountPanel } from "./author-account-panel";
 import { CoverCropper } from "./theme-upload/cover-cropper";
 import { ListingPreview } from "./theme-upload/listing-preview";
 import { scaleToBlob } from "./theme-upload/upload-utils";
@@ -23,6 +26,9 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ share: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [account, setAccount] = useState<Author | null>(currentAuthor);
+  useEffect(() => subscribeAuthor(() => setAccount(currentAuthor())), []);
 
   useEffect(() => {
     if (theme) {
@@ -30,7 +36,9 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
       setBlurb(theme.blurb || "");
     }
   }, [theme]);
-  useEffect(() => setAuthor(localStorage.getItem("harbor.theme-author") || ""), []);
+  useEffect(() => {
+    setAuthor(account?.username || localStorage.getItem("harbor.theme-author") || "");
+  }, [account]);
   useEffect(() => {
     if (!coverBlob) return setCoverUrl(null);
     const u = URL.createObjectURL(coverBlob);
@@ -86,21 +94,48 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
   return createPortal(
     <div className="fixed inset-0 z-[220] flex flex-col bg-canvas" role="dialog" aria-label="Share a theme">
       <header data-tauri-drag-region className="flex shrink-0 items-center justify-between gap-4 border-b border-edge-soft bg-surface/40 px-10 py-5">
-        <div data-tauri-drag-region className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/15 text-accent">
-            <Sparkles size={18} strokeWidth={2} />
-          </span>
-          <div className="flex flex-col">
-            <h1 className="pointer-events-none text-[20px] font-semibold tracking-tight text-ink">Share a theme</h1>
-            <p className="pointer-events-none text-[12.5px] text-ink-subtle">It goes to a quick review, then it's live for everyone.</p>
-          </div>
+        <div data-tauri-drag-region className="flex flex-col">
+          <h1 className="pointer-events-none text-[20px] font-semibold tracking-tight text-ink">Share a theme</h1>
+          <p className="pointer-events-none text-[12.5px] text-ink-subtle">It goes to a quick review, then it's live for everyone.</p>
         </div>
         <button onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-elevated hover:text-ink">
           <X size={18} strokeWidth={2.2} />
         </button>
       </header>
 
-      {result ? (
+      {!account ? (
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto px-8 py-10">
+          <div className="grid w-full max-w-md items-center gap-x-14 gap-y-9 lg:max-w-[860px] lg:grid-cols-[1fr_minmax(0,376px)]">
+            <div className="flex flex-col gap-7">
+              <div className="flex flex-col gap-3.5">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/15 text-accent">
+                  <Palette size={24} strokeWidth={1.9} />
+                </span>
+                <div className="flex flex-col gap-2">
+                  <h2 className="text-balance text-[22px] font-semibold leading-tight tracking-tight text-ink">
+                    Your theme, in everyone's library
+                  </h2>
+                  <p className="text-balance text-[14px] leading-relaxed text-ink-muted">
+                    Create a free account to publish. No email required.
+                  </p>
+                </div>
+              </div>
+              <ul className="flex flex-col gap-4">
+                <Benefit icon={ShieldCheck} title="Always yours">
+                  Update the look or take it down whenever you want.
+                </Benefit>
+                <Benefit icon={Globe} title="Live for everyone">
+                  Appears in the community library once approved.
+                </Benefit>
+                <Benefit icon={KeyRound} title="Simple recovery">
+                  You get a one-time code to restore access later.
+                </Benefit>
+              </ul>
+            </div>
+            <AuthorAccountPanel />
+          </div>
+        </div>
+      ) : result ? (
         <SuccessView
           share={result.share}
           copied={copied}
@@ -137,13 +172,20 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {!result && (
+      {account && !result && (
         <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-edge-soft bg-surface/40 px-10 py-4">
           <button
             onClick={() => (step === 0 ? onClose() : setStep((s) => s - 1))}
             className="flex h-11 items-center gap-2 rounded-xl border border-edge-soft px-4 text-[13.5px] font-medium text-ink-muted transition-colors hover:border-edge hover:text-ink"
           >
             <ArrowLeft size={15} className="dir-icon" /> {step === 0 ? "Cancel" : "Back"}
+          </button>
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="flex h-11 items-center gap-2 rounded-xl px-4 text-[13px] font-medium text-ink-subtle transition-colors hover:bg-elevated/60 hover:text-ink"
+          >
+            <BookOpen size={14} strokeWidth={2.1} />
+            API cheat sheet
           </button>
           {step < STEPS.length - 1 ? (
             <button
@@ -159,12 +201,13 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
               disabled={submitting || !theme || !coverBlob || !name.trim()}
               className="flex h-11 items-center gap-2 rounded-xl bg-accent px-6 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Upload size={15} strokeWidth={2.2} />}
               {submitting ? "Submitting…" : "Submit for review"}
             </button>
           )}
         </footer>
       )}
+      {sheetOpen && <CheatSheet onClose={() => setSheetOpen(false)} />}
     </div>,
     document.body,
   );
@@ -301,6 +344,20 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
       {children}
       {hint && <span className="text-[11.5px] text-ink-subtle">{hint}</span>}
     </label>
+  );
+}
+
+function Benefit({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: React.ReactNode }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="mt-px flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-elevated/60 text-ink-muted">
+        <Icon size={16} strokeWidth={2} />
+      </span>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[13.5px] font-semibold text-ink">{title}</span>
+        <span className="text-[12.5px] leading-relaxed text-ink-subtle">{children}</span>
+      </div>
+    </li>
   );
 }
 

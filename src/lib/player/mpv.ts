@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { subtitleDownloadArgs } from "./subtitle-load";
 import { mpvFailureSnapshot } from "./mpv-failure";
-import { isLinuxDesktop, isMacDesktop, isWindowsDesktop } from "@/lib/platform";
+import { isMacDesktop, isWindowsDesktop } from "@/lib/platform";
 import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -93,9 +93,7 @@ async function applyHeaderProps(headers?: Record<string, string>): Promise<void>
     else fields.push(`${k}: ${v}`);
   }
   await invoke("mpv_set_property", { name: "user-agent", value: ua }).catch(() => {});
-  await invoke("mpv_set_property", { name: "http-header-fields", value: fields.join(",") }).catch(
-    () => {},
-  );
+  await invoke("mpv_set_property", { name: "http-header-fields", value: fields.join(",") }).catch(() => {});
 }
 
 export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
@@ -179,13 +177,11 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
           const id = String(t.id ?? "");
           const lang = (t.lang ?? t.language) as string | undefined;
           const title = t.title as string | undefined;
-          const codecDesc =
-            (t["codec-desc"] as string | undefined) || (t.codec as string | undefined);
+          const codecDesc = (t["codec-desc"] as string | undefined) || (t.codec as string | undefined);
           const channels = t["demux-channels"] as string | undefined;
-          const channelCount =
-            typeof t["demux-channel-count"] === "number"
-              ? (t["demux-channel-count"] as number)
-              : undefined;
+          const channelCount = typeof t["demux-channel-count"] === "number"
+            ? (t["demux-channel-count"] as number)
+            : undefined;
           const external = t.external === true;
           const externalFilename = t["external-filename"] as string | undefined;
           const forced = t.forced === true;
@@ -216,10 +212,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             forced,
             default: isDefault,
             hearingImpaired,
-            url:
-              external && externalFilename
-                ? (urlByExternalFilename.get(externalFilename) ?? undefined)
-                : undefined,
+            url: external && externalFilename ? (urlByExternalFilename.get(externalFilename) ?? undefined) : undefined,
           };
           if (type === "audio") audio.push(info);
           else if (type === "sub") subs.push(info);
@@ -332,13 +325,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             await applyHeaderProps(src.headers);
             const startAt =
               typeof src.startAtSec === "number" && src.startAtSec > 0 ? src.startAtSec : 0;
-            const cmd: Array<string | number> = [
-              "loadfile",
-              src.url,
-              "replace",
-              0,
-              `start=${startAt}`,
-            ];
+            const cmd: Array<string | number> = ["loadfile", src.url, "replace", 0, `start=${startAt}`];
             await invoke("mpv_command", { cmd });
             for (const s of src.subtitles ?? []) {
               try {
@@ -389,13 +376,10 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         });
         mpvStarted = true;
         if (opts.embed) {
-          await invoke("mpv_set_property", { name: "sub-visibility", value: false }).catch(
-            () => {},
-          );
+          await invoke("mpv_set_property", { name: "sub-visibility", value: false }).catch(() => {});
         }
-        if (opts.embed && opts.getEmbedRect && geomTimer == null && !isLinuxDesktop()) {
+        if (opts.embed && opts.getEmbedRect && geomTimer == null) {
           let lastRect: MpvRect | null = null;
-          let geomDebounce: number | null = null;
           const tick = async () => {
             try {
               const r = await opts.getEmbedRect!();
@@ -416,9 +400,16 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             } catch {}
           };
           tick();
+          geomTimer = window.setInterval(() => {
+            void tick();
+          }, 250);
           geomKickHandler = () => {
-            if (geomDebounce != null) window.clearTimeout(geomDebounce);
-            geomDebounce = window.setTimeout(() => void tick(), 40);
+            void tick();
+            window.setTimeout(() => void tick(), 60);
+            window.setTimeout(() => void tick(), 200);
+            window.setTimeout(() => void tick(), 500);
+            window.setTimeout(() => void tick(), 1000);
+            window.setTimeout(() => void tick(), 1800);
           };
           geomForceHandler = () => {
             lastRect = null;
@@ -524,10 +515,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
     },
     setAnime4kShaders(shaders) {
       const sep = isWindowsDesktop() ? ";" : ":";
-      invoke("mpv_set_property", {
-        name: "glsl-shaders",
-        value: shaders.filter(Boolean).join(sep),
-      }).catch(() => {});
+      invoke("mpv_set_property", { name: "glsl-shaders", value: shaders.filter(Boolean).join(sep) }).catch(() => {});
     },
     async addSubtitle(url, lang, title, select, metadata): Promise<boolean> {
       let mpvUrl = url;
@@ -622,12 +610,8 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
       }
     },
     setAbLoop(a, b) {
-      invoke("mpv_set_property", { name: "ab-loop-a", value: a == null ? "no" : a }).catch(
-        () => {},
-      );
-      invoke("mpv_set_property", { name: "ab-loop-b", value: b == null ? "no" : b }).catch(
-        () => {},
-      );
+      invoke("mpv_set_property", { name: "ab-loop-a", value: a == null ? "no" : a }).catch(() => {});
+      invoke("mpv_set_property", { name: "ab-loop-b", value: b == null ? "no" : b }).catch(() => {});
     },
     async requestPiP() {},
     async exitPiP() {},

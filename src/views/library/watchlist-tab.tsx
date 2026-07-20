@@ -2,23 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
 import { type Meta } from "@/lib/cinemeta";
-import {
-  library,
-  libraryMetaType,
-  removeStremioLibraryItem,
-  type LibraryItem,
-} from "@/lib/stremio";
+import { library, libraryMetaType, removeStremioLibraryItem, type LibraryItem } from "@/lib/stremio";
 import { fetchWatchlist } from "@/lib/trakt/watchlist";
 import { useTrakt } from "@/lib/trakt/provider";
 import { traktItemToMeta } from "@/lib/trakt/to-meta";
 import type { TraktItem } from "@/lib/trakt/types";
-import {
-  readLocalEntries,
-  removeFromWatchlist,
-  setWatchlistAggregate,
-  subscribeWatchlist,
-  type LocalEntry,
-} from "@/lib/watchlist";
+import { readLocalEntries, removeFromWatchlist, subscribeWatchlist, type LocalEntry } from "@/lib/watchlist";
 import { useT } from "@/lib/i18n";
 import {
   applyFilter,
@@ -34,7 +23,7 @@ import {
   type WatchlistMerged,
 } from "./shared";
 
-export function WatchlistTab() {
+export function WatchlistTab({ mode }: { mode: "library" | "watchlist" }) {
   const tr = useT();
   const { authKey } = useAuth();
   const { settings } = useSettings();
@@ -62,13 +51,13 @@ export function WatchlistTab() {
       .then((items) => {
         if (cancelled) return;
         setRawCount(items.filter((i) => !i.removed).length);
-        setStremio(filterLibrary(items, settings.libraryBookmarkedOnly));
+        setStremio(filterLibrary(items, settings.libraryBookmarkedOnly, mode));
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [authKey, settings.libraryBookmarkedOnly]);
+  }, [authKey, settings.libraryBookmarkedOnly, mode]);
 
   const handleRemove = useCallback(
     async (stremioId: string) => {
@@ -83,7 +72,7 @@ export function WatchlistTab() {
         library(authKey)
           .then((items) => {
             setRawCount(items.filter((i) => !i.removed).length);
-            setStremio(filterLibrary(items, settings.libraryBookmarkedOnly));
+            setStremio(filterLibrary(items, settings.libraryBookmarkedOnly, mode));
           })
           .catch(() => {});
       }
@@ -118,19 +107,6 @@ export function WatchlistTab() {
     () => mergeWatchlist(localEntries, stremio, trakt),
     [localEntries, stremio, trakt],
   );
-
-  useEffect(() => {
-    const ids = new Set<string>();
-    for (const it of stremio) ids.add(it._id);
-    for (const t of trakt) {
-      if (t.ids.imdb) ids.add(t.ids.imdb);
-      if (t.ids.tmdb) {
-        ids.add(t.type === "movie" ? `tmdb:movie:${t.ids.tmdb}` : `tmdb:tv:${t.ids.tmdb}`);
-      }
-    }
-    for (const e of localEntries) ids.add(e.id);
-    setWatchlistAggregate(ids);
-  }, [stremio, trakt, localEntries]);
 
   const [type, setType] = useState<TypeKey>("all");
   const [query, setQuery] = useState("");
@@ -190,12 +166,7 @@ export function WatchlistTab() {
         <GroupedGrid groups={sortedGroups(visible, settings.librarySort)} onRemove={handleRemove} />
       ) : flat ? (
         <GroupedGrid
-          groups={[
-            {
-              label: "Everything",
-              items: [...visible].sort((a, b) => (b.date ?? -Infinity) - (a.date ?? -Infinity)),
-            },
-          ]}
+          groups={[{ label: "Everything", items: [...visible].sort((a, b) => (b.date ?? -Infinity) - (a.date ?? -Infinity)) }]}
           onRemove={handleRemove}
         />
       ) : (
@@ -229,12 +200,17 @@ function ViewModeToggle({ flat, onToggle }: { flat: boolean; onToggle: () => voi
   );
 }
 
-function filterLibrary(items: LibraryItem[], bookmarkedOnly: boolean): LibraryItem[] {
+function filterLibrary(
+  items: LibraryItem[],
+  bookmarkedOnly: boolean,
+  mode: "library" | "watchlist",
+): LibraryItem[] {
   return items.filter((i) => {
     if (i.removed) return false;
-    if (i.state?.flaggedWatched === 1) return false;
-    if ((i.state?.timeOffset ?? 0) > 0) return false;
+    if (mode === "library") return true;
     if (bookmarkedOnly && i.temp) return false;
+    if ((i.state?.flaggedWatched ?? 0) > 0 || (i.state?.timesWatched ?? 0) > 0) return false;
+    if ((i.state?.timeOffset ?? 0) > 0) return false;
     return true;
   });
 }
@@ -244,11 +220,7 @@ function mergeWatchlist(
   stremio: LibraryItem[],
   trakt: TraktItem[],
 ): WatchlistMerged[] {
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "")
-      .trim();
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
   const byKey = new Map<string, WatchlistMerged>();
   const setOrUpgrade = (key: string, entry: WatchlistMerged) => {
     const existing = byKey.get(key);
@@ -271,12 +243,7 @@ function mergeWatchlist(
       background: item.background,
     };
     const dedupKey = `${item.type}:${norm(item.name ?? "")}`;
-    setOrUpgrade(dedupKey, {
-      key: item._id,
-      meta,
-      date: parseTs(item._mtime),
-      stremioId: item._id,
-    });
+    setOrUpgrade(dedupKey, { key: item._id, meta, date: parseTs(item._mtime), stremioId: item._id });
   }
   for (const t of trakt) {
     const m = traktItemToMeta(t);
@@ -288,10 +255,7 @@ function mergeWatchlist(
   for (const e of localEntries) {
     let dupById = false;
     for (const v of byKey.values()) {
-      if (v.meta.id === e.id) {
-        dupById = true;
-        break;
-      }
+      if (v.meta.id === e.id) { dupById = true; break; }
     }
     if (dupById) continue;
     const nameKey = e.name ? `${e.type}:${norm(e.name)}` : null;

@@ -48,10 +48,11 @@ function SortMenu({ sort, onSort }: { sort: Sort; onSort: (s: Sort) => void }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex h-10 items-center gap-2 rounded-full border border-edge-soft bg-canvas/90 ps-3.5 pe-3 text-[13px] font-medium text-ink transition-colors hover:bg-canvas"
+        aria-label={sort === "newest" ? t("Newest") : t("Oldest")}
+        className="flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-edge-soft bg-canvas/90 px-2.5 text-[13px] font-medium text-ink transition-colors hover:bg-canvas xl:gap-2 xl:ps-3.5 xl:pe-3"
       >
         <ArrowDownUp size={14} className="text-ink-muted" />
-        <span>{sort === "newest" ? t("Newest") : t("Oldest")}</span>
+        <span className="hidden xl:inline">{sort === "newest" ? t("Newest") : t("Oldest")}</span>
         <ChevronDown
           size={14}
           className={`text-ink-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`}

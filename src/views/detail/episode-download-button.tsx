@@ -1,4 +1,5 @@
 import { ArrowDownToLine, Check, RotateCw, X } from "lucide-react";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import type { Meta } from "@/lib/cinemeta";
 import { activeDownloadFor, cancelDownload, useDownloads } from "@/lib/download/downloads-store";
 import { findLocalEpisodeByIds, findLocalMovie } from "@/lib/local-library";
@@ -66,7 +67,15 @@ export function EpisodeDownloadButton({
         persistent ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       } ${stateTone}`;
 
-  return (
+  const tipLabel = downloading
+    ? t("Downloading {pct}%  ·  click to cancel", { pct })
+    : done
+      ? t("Saved offline")
+      : failed
+        ? t("Download failed  ·  click to retry")
+        : t("Download for offline");
+
+  const btn = (
     <button
       type="button"
       onClick={onClick}
@@ -79,15 +88,7 @@ export function EpisodeDownloadButton({
               ? t("Download failed, click to retry")
               : t("Download for offline")
       }
-      title={
-        downloading
-          ? t("Downloading {pct}%  ·  click to cancel", { pct })
-          : done
-            ? t("Saved offline")
-            : failed
-              ? t("Download failed  ·  click to retry")
-              : t("Download for offline")
-      }
+      title={isBar ? undefined : tipLabel}
       className={wrapperClass}
       style={{ width: dim, height: dim }}
     >
@@ -139,5 +140,13 @@ export function EpisodeDownloadButton({
         <ArrowDownToLine size={dim * 0.46} strokeWidth={2} />
       )}
     </button>
+  );
+
+  return isBar ? (
+    <HoverTooltip label={tipLabel} align="center" className="shrink-0">
+      {btn}
+    </HoverTooltip>
+  ) : (
+    btn
   );
 }

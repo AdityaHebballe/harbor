@@ -38,16 +38,12 @@ export function useFullscreen() {
   useEffect(() => {
     if (!fullscreen) return;
     let cancelled = false;
-    let kickDebounce: number | null = null;
     const mpvKick = async () => {
       if (cancelled) return;
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("harbor:mpv-refresh-geom"));
       try {
         const { invoke } = await import("@tauri-apps/api/core");
-        // Windows keeps WebView2 opaque outside embedded mpv. Reapplying
-        // transparency for HTML5 or non-embedded mpv fullscreen would undo
-        // that recovery policy and can reintroduce a black WebView surface.
         if (document.documentElement.dataset.mpvEmbed === "1") {
           await invoke("webview_reapply_transparency").catch(() => {});
         }
@@ -67,15 +63,13 @@ export function useFullscreen() {
     };
     void reassertOs();
     void mpvKick();
-    const onResize = () => {
-      if (kickDebounce != null) window.clearTimeout(kickDebounce);
-      kickDebounce = window.setTimeout(() => void mpvKick(), 80);
-    };
-    window.addEventListener("resize", onResize);
+    const delays = [60, 160, 320, 640, 1100, 1700, 2400, 3200, 4200];
+    const timers = delays.map((d) => window.setTimeout(() => void mpvKick(), d));
+    const sustain = window.setInterval(() => void mpvKick(), 2000);
     return () => {
       cancelled = true;
-      if (kickDebounce != null) window.clearTimeout(kickDebounce);
-      window.removeEventListener("resize", onResize);
+      timers.forEach((t) => window.clearTimeout(t));
+      window.clearInterval(sustain);
     };
   }, [fullscreen]);
 

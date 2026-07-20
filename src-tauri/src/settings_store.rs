@@ -24,32 +24,46 @@ pub fn settings_write(app: tauri::AppHandle, content: String) -> Result<(), Stri
     std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
 }
 
-/// Read the `torrentsDisabled` flag from the settings file without pulling in
-/// a full JSON parser. Returns false if the file is missing, unreadable, or
-/// the field is absent. This is intended to be cheap enough to call from
-/// `torrent_engine::ensure_started_on_setup` and `ensure_session`.
+fn secrets_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir.join("secrets.json"))
+}
+
+#[tauri::command]
+pub fn secrets_read(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = secrets_path(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(s) => Ok(Some(s)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn secrets_write(app: tauri::AppHandle, content: String) -> Result<(), String> {
+    let path = secrets_path(&app)?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, content.as_bytes()).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
 pub fn read_torrents_disabled(app: &tauri::AppHandle) -> bool {
-    let path = match settings_path(app) {
-        Ok(p) => p,
-        Err(_) => return false,
+    let Ok(path) = settings_path(app) else {
+        return false;
     };
-    let s = match std::fs::read_to_string(&path) {
-        Ok(s) => s,
-        Err(_) => return false,
+    let Ok(s) = std::fs::read_to_string(&path) else {
+        return false;
     };
     parse_torrents_disabled(&s)
 }
 
 fn parse_torrents_disabled(json: &str) -> bool {
-    // Cheap field scan. We only need to know whether
-    // `"torrentsDisabled":true` appears in the file. False is the safe
-    // default if we cannot confirm it.
     let needle = "\"torrentsDisabled\"";
     let Some(idx) = json.find(needle) else {
         return false;
     };
     let rest = &json[idx + needle.len()..];
-    // Skip whitespace, optional ':', and any extra whitespace.
     let mut chars = rest.chars().peekable();
     while let Some(c) = chars.peek() {
         if c.is_whitespace() || *c == ':' {

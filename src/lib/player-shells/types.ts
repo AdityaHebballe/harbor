@@ -43,6 +43,7 @@ export type PlayerShellProps = {
   subtitle?: string;
   resolution?: string | null;
   quality?: string | null;
+  releaseName?: string | null;
   hoverTitle?: string;
   hoverSub?: string;
   hasPrevEp: boolean;

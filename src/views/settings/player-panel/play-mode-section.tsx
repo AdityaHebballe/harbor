@@ -31,7 +31,7 @@ export function PlayModePanel() {
     {
       id: "season",
       label: t("Lock to season server"),
-      sub: t("Pick a source once and Harbor keeps playing the rest of that season from the same release, no re-picking. Works best with a debrid season pack. Skipped for anime."),
+      sub: t("Pick a source once and Harbor keeps playing the rest of that season from the same release, no re-picking. Works best with a debrid season pack. For anime it locks the whole series to that release."),
     },
   ];
 

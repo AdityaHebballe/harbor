@@ -21,7 +21,10 @@ export type TmdbLookup = {
   matchedYear?: number | null;
   rating?: number;
   runtime?: number;
+  isAnime?: boolean;
 };
+
+const ANIMATION_GENRE_ID = 16;
 
 export function hashPath(path: string): string {
   let hash = 5381;
@@ -58,6 +61,7 @@ export async function buildTmdbEntry(
     addedAt: Date.now(),
     source: "tmdb",
     needsReview: needsReview || undefined,
+    isAnime: tmdb.isAnime || undefined,
   };
 }
 
@@ -94,6 +98,7 @@ export async function buildNfoEntry(
   let poster: string | null = null;
   let rating = meta?.rating ?? null;
   let runtime = meta?.runtime ?? null;
+  let isAnime = false;
 
   if (tmdbKey && !tmdbId) {
     const look = await tmdbLookup(tmdbKey, title, year, parsed.type).catch(() => ({} as TmdbLookup));
@@ -102,6 +107,7 @@ export async function buildNfoEntry(
     if (!art.poster && look.poster) poster = look.poster;
     if (rating == null && look.rating != null) rating = look.rating;
     if (runtime == null && look.runtime != null) runtime = look.runtime;
+    if (look.isAnime) isAnime = true;
     const hadNfoTitle = isShow ? !!(meta?.title || nfo?.showTitle) : !!nfo?.title;
     if (!hadNfoTitle && look.matchedTitle) title = look.matchedTitle.trim();
   }
@@ -128,6 +134,7 @@ export async function buildNfoEntry(
     source: "nfo",
     localArt,
     needsReview: needsReview || undefined,
+    isAnime: isAnime || undefined,
   };
 }
 
@@ -176,6 +183,7 @@ async function tmdbLookup(
   let imdbId: string | undefined;
   let rating: number | undefined;
   let runtime: number | undefined;
+  let isAnime = Array.isArray(top.genre_ids) && top.genre_ids.includes(ANIMATION_GENRE_ID);
   try {
     const dparams = new URLSearchParams({ api_key: key, append_to_response: "external_ids" });
     if (lang) dparams.set("language", lang);
@@ -188,6 +196,10 @@ async function tmdbLookup(
       if (type === "movie" && typeof dj.runtime === "number" && dj.runtime > 0) runtime = dj.runtime;
       if (type === "show" && Array.isArray(dj.episode_run_time) && dj.episode_run_time[0] > 0) {
         runtime = dj.episode_run_time[0];
+      }
+      if (Array.isArray(dj.genres)) {
+        isAnime =
+          isAnime || dj.genres.some((g: { id?: number }) => g.id === ANIMATION_GENRE_ID);
       }
     }
   } catch {
@@ -205,5 +217,6 @@ async function tmdbLookup(
     matchedYear: date ? parseInt(date.slice(0, 4), 10) : null,
     rating,
     runtime,
+    isAnime,
   };
 }

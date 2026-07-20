@@ -6,7 +6,9 @@ mod cast_hls;
 mod cast_server;
 mod cast_subs;
 mod crash_report;
+mod diagnostics;
 mod cf_relay;
+mod cf_solver;
 mod discord_rp;
 mod dlna;
 mod download;
@@ -16,9 +18,11 @@ mod fullscreen;
 mod hdr_overlay;
 mod http_fetch;
 mod local_lib;
+mod media_controls;
 mod modal_overlay;
 mod mpv;
 mod multiview;
+mod proc_guard;
 mod proc_mem;
 mod roku;
 #[cfg(target_os = "macos")]
@@ -29,7 +33,6 @@ mod pip;
 #[cfg(target_os = "macos")]
 mod pip_mac;
 mod power;
-mod process;
 mod airplay;
 mod settings_store;
 mod song_id;
@@ -49,6 +52,8 @@ mod webview_helpers;
 
 pub(crate) fn shutdown_services(app: &tauri::AppHandle) {
     thumbs::shutdown(app);
+    multiview::shutdown(app);
+    dvr::shutdown(app);
     stream_proxy::shutdown(app);
     cast_server::stop();
     torrent_engine::stop();
@@ -58,9 +63,6 @@ pub(crate) fn shutdown_services(app: &tauri::AppHandle) {
 
 pub static CLOSE_FLUSH_DONE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CLOSE_IN_PROGRESS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-/// Tracks WebView2 TrySuspend / SetIsVisible(false) so we can recover on focus.
-#[cfg(windows)]
-static WEBVIEW_SUSPENDED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[tauri::command]
 fn harbor_flush_done() {
@@ -116,35 +118,34 @@ async fn save_text_file(path: String, contents: String) -> Result<(), String> {
     std::fs::write(&target, contents.as_bytes()).map_err(|e| format!("write file: {}", e))
 }
 
-/// Resume WebView2 after TrySuspend / SetIsVisible(false). Safe no-op if not suspended.
 #[cfg(windows)]
-fn resume_webview_if_needed(app: &tauri::AppHandle) {
+fn make_main_transparent(app: &tauri::AppHandle) {
     use tauri::Manager;
-    if !WEBVIEW_SUSPENDED.load(std::sync::atomic::Ordering::SeqCst) {
-        return;
-    }
     let Some(window) = app.get_webview_window("main") else {
+        eprintln!("[harbor::transparent] main window missing");
         return;
     };
     let res = window.with_webview(|webview| unsafe {
-        use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_3;
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2Controller2, COREWEBVIEW2_COLOR,
+        };
         use windows::core::Interface;
         let controller = webview.controller();
-        if let Ok(core) = controller.CoreWebView2() {
-            if let Ok(c3) = core.cast::<ICoreWebView2_3>() {
-                let _ = c3.Resume();
+        match controller.cast::<ICoreWebView2Controller2>() {
+            Ok(controller2) => {
+                let color = COREWEBVIEW2_COLOR { A: 0, R: 0, G: 0, B: 0 };
+                match controller2.SetDefaultBackgroundColor(color) {
+                    Ok(()) => eprintln!("[harbor::transparent] SetDefaultBackgroundColor OK (alpha=0)"),
+                    Err(e) => eprintln!("[harbor::transparent] SetDefaultBackgroundColor FAILED: {:?}", e),
+                }
             }
+            Err(e) => eprintln!("[harbor::transparent] cast to Controller2 FAILED: {:?}", e),
         }
-        let _ = controller.SetIsVisible(true);
     });
-    if res.is_ok() {
-        WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
-        eprintln!("[harbor::webview] auto-resumed after suspend");
+    if let Err(e) = res {
+        eprintln!("[harbor::transparent] with_webview FAILED: {:?}", e);
     }
 }
-
-#[cfg(not(windows))]
-fn resume_webview_if_needed(_app: &tauri::AppHandle) {}
 
 #[cfg(windows)]
 pub(crate) fn force_show_foreground(window: &tauri::WebviewWindow) {
@@ -258,22 +259,36 @@ fn harbor_set_webview_visible(app: tauri::AppHandle, visible: bool) {
         let Some(window) = app.get_webview_window("main") else {
             return;
         };
-        if visible {
-            // Visibility true must always recover from a prior suspend.
-            resume_webview_if_needed(&app);
-        }
         let _ = window.with_webview(move |webview| unsafe {
             let _ = webview.controller().SetIsVisible(visible);
         });
-        if !visible {
-            WEBVIEW_SUSPENDED.store(true, std::sync::atomic::Ordering::SeqCst);
-        } else {
-            WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
-        }
     }
     #[cfg(not(windows))]
     {
         let _ = (&app, visible);
+    }
+}
+
+#[tauri::command]
+fn harbor_set_context_menu(app: tauri::AppHandle, enabled: bool) {
+    #[cfg(windows)]
+    {
+        use tauri::Manager;
+        let Some(window) = app.get_webview_window("main") else {
+            return;
+        };
+        let _ = window.with_webview(move |webview| unsafe {
+            let controller = webview.controller();
+            if let Ok(core) = controller.CoreWebView2() {
+                if let Ok(settings) = core.Settings() {
+                    let _ = settings.SetAreDefaultContextMenusEnabled(enabled);
+                }
+            }
+        });
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (&app, enabled);
     }
 }
 
@@ -298,7 +313,6 @@ fn harbor_try_suspend_webview(app: tauri::AppHandle) {
                 }
             }
         });
-        WEBVIEW_SUSPENDED.store(true, std::sync::atomic::Ordering::SeqCst);
     }
     #[cfg(not(windows))]
     {
@@ -325,7 +339,6 @@ fn harbor_resume_webview(app: tauri::AppHandle) {
             }
             let _ = controller.SetIsVisible(true);
         });
-        WEBVIEW_SUSPENDED.store(false, std::sync::atomic::Ordering::SeqCst);
     }
     #[cfg(not(windows))]
     {
@@ -431,11 +444,7 @@ pub fn run() {
     let dvr_state = dvr::DvrState::new();
     let multiview_state = multiview::MultiviewState::new();
     let modal_overlay_state = modal_overlay::ModalOverlayState::new();
-    let app_builder = tauri::Builder::default();
-    // Let a Linux development build run alongside the installed Harbor app.
-    // Packaged builds keep the normal single-instance behavior.
-    #[cfg(not(all(target_os = "linux", debug_assertions)))]
-    let app_builder = app_builder
+    let app_builder = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             use tauri::{Emitter, Manager};
             if let Some(w) = app.get_webview_window("main") {
@@ -451,8 +460,7 @@ pub fn run() {
             if let Some(path) = media_file_from_args(&args) {
                 let _ = app.emit("harbor:open-file", path);
             }
-        }));
-    let app_builder = app_builder
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
@@ -499,16 +507,15 @@ pub fn run() {
             if webview.label() == "main"
                 && matches!(payload.event(), tauri::webview::PageLoadEvent::Finished)
             {
-                use tauri::Manager;
                 let _ = webview.window().show();
-                // Recover if a prior suspend left the controller invisible.
-                resume_webview_if_needed(webview.window().app_handle());
             }
         })
         .setup(move |app| {
             if let Err(error) = crash_report::initialize(app.handle()) {
                 eprintln!("[harbor::crash-report] initialization failed: {error}");
             }
+            proc_guard::init();
+            proc_guard::reap_orphans();
             #[cfg(windows)]
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -518,9 +525,6 @@ pub fn run() {
             }
             #[cfg(target_os = "linux")]
             {
-                // Flatpak registers the URI handlers from the exported desktop
-                // entry. Runtime registration attempts to write host integration
-                // files and is not permitted inside the sandbox.
                 if std::env::var_os("FLATPAK_ID").is_none() {
                     use tauri_plugin_deep_link::DeepLinkExt;
                     if let Err(e) = app.deep_link().register_all() {
@@ -528,37 +532,11 @@ pub fn run() {
                     }
                 }
             }
-            // Browse with an opaque WebView2 background. Transparent (alpha=0)
-            // is applied only while embedded mpv is active (see use-mpv-embed /
-            // webview_reapply_transparency). Always-on transparency + black HWND
-            // can present as a stuck black window when composition fails.
             #[cfg(windows)]
-            webview_helpers::apply_opaque(&app.handle(), "main");
-            // Recover from WebView2 render-process death by reloading in place,
-            // instead of leaving a blank window until app restart.
-            webview_helpers::install_process_failure_watchdog(&app.handle(), "main");
+            make_main_transparent(&app.handle());
             #[cfg(windows)]
             install_maximize_guard(&app.handle());
             ensure_window_on_screen(&app.handle());
-            // Fail-open: if PageLoadEvent::Finished never arrives (WebView hang),
-            // still show the main window so the user is not stuck on a blank frame.
-            {
-                use tauri::Manager;
-                let handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(2500));
-                    if let Some(window) = handle.get_webview_window("main") {
-                        let visible = window.is_visible().unwrap_or(false);
-                        if !visible {
-                            eprintln!(
-                                "[harbor::window] fail-open: showing main after page-load timeout"
-                            );
-                            let _ = window.show();
-                        }
-                        resume_webview_if_needed(&handle);
-                    }
-                });
-            }
             #[cfg(target_os = "macos")]
             {
                 use tauri::Manager;
@@ -576,6 +554,7 @@ pub fn run() {
             }
             cast_server::ensure_started_on_setup(&app.handle());
             torrent_engine::ensure_started_on_setup(&app.handle());
+            media_controls::ensure_started_on_setup(&app.handle());
             {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || discord_rp::run_loop(handle));
@@ -615,10 +594,11 @@ pub fn run() {
                 }
                 tauri::WindowEvent::Focused(focused) => {
                     use tauri::Emitter;
-                    if *focused {
-                        // Recover stuck-black after TrySuspend / SetIsVisible(false)
-                        // if the frontend never called resume.
-                        resume_webview_if_needed(window.app_handle());
+                    if *focused
+                        && (pip::window_pip_is_active(window.app_handle())
+                            || tray::always_on_top_pref())
+                    {
+                        let _ = window.set_always_on_top(true);
                     }
                     let minimized = if *focused {
                         false
@@ -645,11 +625,20 @@ pub fn run() {
             power::power_inhibit,
             harbor_set_webview_memory_low,
             harbor_set_webview_visible,
+            harbor_set_context_menu,
             harbor_try_suspend_webview,
             harbor_resume_webview,
             save_text_file,
             subsync::moviehash::compute_moviehash,
             subsync::sync_subtitle,
+            subsync::scorer::subsync_score_transform,
+            subsync::torrent_sync::torrent_sync_availability,
+            subsync::torrent_sync::torrent_sync_subtitle,
+            subsync::torrent_sync::torrent_score_transform,
+            subsync::audio_tracks::audio_probe_tracks,
+            subsync::fingerprint::compute_chromaprint,
+            subsync::asr::asr_transcribe_windows,
+            subsync::asr::asr_verify,
             sub_extract::subtitle_extract,
             cast_server::stop_stremio_sidecar,
             cast_server::cast_server_stop,
@@ -666,7 +655,11 @@ pub fn run() {
             svp::svp_apply,
             settings_store::settings_read,
             settings_store::settings_write,
+            settings_store::secrets_read,
+            settings_store::secrets_write,
             proc_mem::harbor_process_memory,
+            diagnostics::diagnostics_collect,
+            diagnostics::diagnostics_cleanup,
             trailer::fetch_trailer,
             download::download_start,
             download::download_cancel,
@@ -689,7 +682,6 @@ pub fn run() {
             mpv::mpv_set_hdr_stage,
             mpv::display_hdr_active,
             webview_helpers::webview_reapply_transparency,
-            webview_helpers::webview_set_opaque,
             mpv::mpv_on_pip_changed,
             mpv::mpv_screenshot_data_url,
             mpv::mpv_save_screenshot,
@@ -739,9 +731,11 @@ pub fn run() {
             multiview::multiview_visibility,
             multiview::multiview_stop_all,
             http_fetch::harbor_fetch,
-            http_fetch::harbor_fetch_cancel,
+            cf_solver::cf_report,
             discord_rp::discord_set_presence,
             discord_rp::discord_clear,
+            media_controls::media_controls_update,
+            media_controls::media_controls_clear,
             discord_rp::discord_set_enabled,
             cast::cast_discover,
             dlna::lan_ip,
@@ -757,6 +751,9 @@ pub fn run() {
             torrent_engine::torrent_engine_add,
             torrent_engine::torrent_engine_select,
             torrent_engine::torrent_engine_stats,
+            torrent_engine::torrent_engine_list,
+            torrent_engine::torrent_engine_pause,
+            torrent_engine::torrent_engine_resume,
             torrent_engine::torrent_engine_remove,
             torrent_engine::torrent_engine_selftest,
             torrent_engine::torrent_engine_restart,
@@ -775,6 +772,11 @@ pub fn run() {
             deeplink_is_stremio_registered,
             harbor_take_pending_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                shutdown_services(app_handle);
+            }
+        });
 }

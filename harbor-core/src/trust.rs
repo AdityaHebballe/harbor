@@ -68,8 +68,6 @@ static SHORT_FORMAT_RX: Lazy<Regex> = Lazy::new(|| {
     .unwrap()
 });
 
-static UNCACHED_EMOJI_RX: Lazy<Regex> = Lazy::new(|| Regex::new(r"[⬇⏳⌛⏬🔽📥☁]").unwrap());
-
 static PLACEHOLDER_BANNER_RX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
         r"(?i)(?:🚫|⚠️?|❗|ℹ️?)\s*(?:no\s+streams?\s+(?:found|available)|streams?\s+filtered|streams?\s+blocked|filtered)",
@@ -92,6 +90,10 @@ static TRAILER_RX: Lazy<Regex> = Lazy::new(|| {
         r"(?i)(?:^|[^a-z0-9])(?:trailer|teaser|tlr|trl|tra(?:iler)?|sneak[\s.\-_]?peek|preview|behind[\s.\-_]?the[\s.\-_]?scenes|featurette|making[\s.\-_]?of|deleted[\s.\-_]?scene|bloopers?|gag[\s.\-_]?reel|extras?|promo)(?:$|[^a-z0-9])",
     )
     .unwrap()
+});
+
+static FAKE_STUDIO_RX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)(?:^|[^a-z0-9])(?:dragon[\s._-]?money|telesynch)(?:$|[^a-z0-9])").unwrap()
 });
 
 static SEQUEL_TAIL_RX: Lazy<Regex> =
@@ -223,8 +225,8 @@ fn check_one(
         return Some("trailer-or-extra".to_string());
     }
 
-    if UNCACHED_EMOJI_RX.is_match(&title_name_desc) {
-        return Some("addon-uncached-emoji".to_string());
+    if is_fake_group(s, &haystack) {
+        return Some("known-fake-group".to_string());
     }
 
     if let Some(sz) = s.size {
@@ -329,6 +331,14 @@ fn check_one(
         {
             return Some("fresh-cinema-fake-4k-web".to_string());
         }
+        if matches!(s.resolution, Resolution::P1080 | Resolution::P720)
+            && matches!(
+                s.source,
+                Source::WebDl | Source::WEBRip | Source::BDRip | Source::HDRip
+            )
+        {
+            return Some("fresh-cinema-fake-web".to_string());
+        }
         if matches!(s.source, Source::HDTV)
             && matches!(s.resolution, Resolution::UHD | Resolution::P1080)
         {
@@ -369,6 +379,25 @@ fn check_one(
         }
     }
 
+    if strict
+        && kind_is_series
+        && opts.is_anime
+        && !opts.expected_titles.is_empty()
+        && !s.parsed_title.is_empty()
+    {
+        let ok = opts.expected_titles.iter().any(|t| {
+            title_matches(
+                t,
+                &s.parsed_title,
+                s.year.map(|y| y as i32),
+                opts.expected_year.map(|y| y as i32),
+            )
+        });
+        if !ok {
+            return Some("anime-title-mismatch".to_string());
+        }
+    }
+
     let has_file_idx = s.stream.file_idx.is_some();
 
     if strict && !opts.is_anime && !has_file_idx && !s.season_pack {
@@ -403,6 +432,18 @@ fn behavior_hint_filename(s: &ParsedStream) -> Option<&str> {
     bh.get("filename")
         .and_then(|v| v.as_str())
         .or_else(|| bh.get("fileName").and_then(|v| v.as_str()))
+}
+
+fn is_fake_group(s: &ParsedStream, haystack: &str) -> bool {
+    if let Some(g) = s.release_group_normalized.as_deref() {
+        if matches!(
+            g,
+            "LAMA" | "DJT" | "TELLY" | "RUDE" | "TELESYNC" | "TELESYNCH" | "DRAGONMONEY"
+        ) {
+            return true;
+        }
+    }
+    FAKE_STUDIO_RX.is_match(haystack)
 }
 
 fn is_short_format(s: &ParsedStream) -> bool {
@@ -851,12 +892,16 @@ mod tests {
 
     #[test]
     fn keeps_real_movie_in_cinema_window() {
+        // Inside the cinema window the only physically-possible legit sources are
+        // theater captures (CAM/TS/HDTS/TC); WEB/BluRay at this stage is a fake.
+        // This asserts the fake-source filters do not over-reject a legit in-window
+        // capture that matches the expected year.
         let days = now_unix_ms() / 86_400_000 - 7;
         let (y, m, d) = civil_from_days(days);
         let mut s = base_stream();
         s.parsed_title = "Obsession".into();
         s.year = Some(2025);
-        s.source = Source::WebDl;
+        s.source = Source::CAM;
         s.resolution = Resolution::P1080;
         let mut opts = opts_strict();
         opts.kind = Some("movie".into());
@@ -898,12 +943,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_uncached_emoji() {
+    fn does_not_hard_reject_uncached_emoji() {
         let mut s = base_stream();
         s.stream.name = Some("⏳ Cloud only".into());
         let result = apply_trust(vec![s], &opts_strict());
-        assert_eq!(result.rejected.len(), 1);
-        assert_eq!(result.rejected[0].reason, "addon-uncached-emoji");
+        assert!(result.rejected.iter().all(|r| r.reason != "addon-uncached-emoji"));
     }
 
     #[test]
@@ -1016,5 +1060,108 @@ mod tests {
         let result = apply_trust(vec![s], &opts_strict());
         assert_eq!(result.rejected.len(), 1);
         assert_eq!(result.rejected[0].reason, "addon-status-card");
+    }
+
+    #[test]
+    fn trust_options_tolerates_null_expected_titles() {
+        // The TS side sends `expectedTitles: null` for every non-anime request
+        // (and anime without resolved aliases). That same object is deserialized
+        // by the Rust core via Tauri invoke, so a literal JSON null must decode
+        // to an empty list, not error out and silently disable the core path.
+        let json = r#"{"kind":"movie","expectedTitles":null,"isAnime":false}"#;
+        let opts: TrustOptions = serde_json::from_str(json).unwrap();
+        assert!(opts.expected_titles.is_empty());
+    }
+
+    #[test]
+    fn anime_title_gate_rejects_wrong_show_keeps_right() {
+        let mut opts = opts_strict();
+        opts.kind = Some("series".into());
+        opts.is_anime = true;
+        opts.expected_titles = vec![
+            "Neon Genesis Evangelion".into(),
+            "Shin Seiki Evangelion".into(),
+        ];
+
+        let mut wrong = base_stream();
+        wrong.parsed_title = "Stranger Things".into();
+        let rejected = apply_trust(vec![wrong], &opts);
+        assert_eq!(rejected.rejected.len(), 1);
+        assert_eq!(rejected.rejected[0].reason, "anime-title-mismatch");
+
+        let mut right = base_stream();
+        right.parsed_title = "Evangelion".into();
+        let kept = apply_trust(vec![right], &opts);
+        assert_eq!(kept.keep.len(), 1);
+        assert!(kept.rejected.is_empty());
+    }
+
+    #[test]
+    fn anime_title_gate_noops_when_titles_empty() {
+        // Empty alias list must never reject legit anime, whatever the parsed title.
+        let mut opts = opts_strict();
+        opts.kind = Some("series".into());
+        opts.is_anime = true;
+        let mut s = base_stream();
+        s.parsed_title = "Totally Unrelated Absolute-Numbered Title".into();
+        let result = apply_trust(vec![s], &opts);
+        assert_eq!(result.keep.len(), 1);
+        assert!(result.rejected.is_empty());
+    }
+
+    #[test]
+    fn rejects_fresh_cinema_fake_web_1080p_and_720p() {
+        let days = now_unix_ms() / 86_400_000 - 7;
+        let (y, m, d) = civil_from_days(days);
+        let mk = |res: Resolution, src: Source| {
+            let mut s = base_stream();
+            s.parsed_title = "New Movie".into();
+            s.year = Some(2025);
+            s.source = src;
+            s.resolution = res;
+            s
+        };
+        let mut opts = opts_strict();
+        opts.kind = Some("movie".into());
+        opts.expected_year = Some(2025);
+        opts.release_date = Some(format!("{y:04}-{m:02}-{d:02}"));
+
+        let a = apply_trust(vec![mk(Resolution::P1080, Source::WEBRip)], &opts);
+        assert_eq!(a.rejected.len(), 1);
+        assert_eq!(a.rejected[0].reason, "fresh-cinema-fake-web");
+
+        let b = apply_trust(vec![mk(Resolution::P720, Source::WebDl)], &opts);
+        assert_eq!(b.rejected.len(), 1);
+        assert_eq!(b.rejected[0].reason, "fresh-cinema-fake-web");
+    }
+
+    #[test]
+    fn rejects_known_fake_group_by_release_group() {
+        let mut s = base_stream();
+        s.release_group_normalized = Some("LAMA".into());
+        let result = apply_trust(vec![s], &opts_strict());
+        assert_eq!(result.rejected.len(), 1);
+        assert_eq!(result.rejected[0].reason, "known-fake-group");
+    }
+
+    #[test]
+    fn rejects_known_fake_group_ad_studio_haystack() {
+        let mut s = base_stream();
+        s.stream.behavior_hints =
+            Some(json!({ "filename": "The.Odyssey.2025.1080p.WEB-DL.Dragon.Money.mkv" }));
+        let result = apply_trust(vec![s], &opts_strict());
+        assert_eq!(result.rejected.len(), 1);
+        assert_eq!(result.rejected[0].reason, "known-fake-group");
+    }
+
+    #[test]
+    fn keeps_legit_group_not_flagged_fake() {
+        let mut s = base_stream();
+        s.release_group_normalized = Some("RARBG".into());
+        s.stream.behavior_hints =
+            Some(json!({ "filename": "Movie.2020.1080p.BluRay.x264-RARBG.mkv" }));
+        let result = apply_trust(vec![s], &opts_strict());
+        assert_eq!(result.keep.len(), 1);
+        assert!(result.rejected.is_empty());
     }
 }

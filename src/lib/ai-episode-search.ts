@@ -1,7 +1,8 @@
-import { extractJsonArray } from "./ai-search";
+import { extractJsonArray, friendlyAiError } from "./ai-search";
 import { DEFAULT_AI_MODEL, migrateModelId } from "./ai-models";
 
 const OPENROUTER = "https://openrouter.ai/api/v1/chat/completions";
+const GROQ = "https://api.groq.com/openai/v1/chat/completions";
 
 export type EpisodeRef = { season: number; episode: number };
 export type EpisodeCandidate = EpisodeRef & { name?: string; overview?: string };
@@ -12,6 +13,7 @@ const SYSTEM_PROMPT =
 export async function aiFindEpisodes(
   key: string,
   model: string,
+  isGroq: boolean,
   showName: string,
   episodes: EpisodeCandidate[],
   query: string,
@@ -24,17 +26,21 @@ export async function aiFindEpisodes(
   const titlesOnly = episodes.map((e) => `s${e.season}e${e.episode}: ${e.name ?? ""}`).join("\n");
   const catalog =
     withOverview.length <= 24000 ? withOverview : titlesOnly.slice(0, 48000);
-  const res = await fetch(OPENROUTER, {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${key.trim()}`,
+    "Content-Type": "application/json",
+  };
+  if (!isGroq) {
+    headers["HTTP-Referer"] = "https://harbor.site";
+    headers["X-Title"] = "Harbor";
+  }
+  const res = await fetch(isGroq ? GROQ : OPENROUTER, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key.trim()}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://harbor.site",
-      "X-Title": "Harbor",
-    },
+    headers,
     body: JSON.stringify({
       model: migrateModelId(model.trim()) || DEFAULT_AI_MODEL,
       temperature: 0.3,
+      max_tokens: 400,
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -46,9 +52,16 @@ export async function aiFindEpisodes(
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`AI episode search failed (${res.status}). ${detail.slice(0, 160)}`);
+    throw new Error(friendlyAiError(res.status, detail));
   }
-  const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
+  const data = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    error?: { message?: string; code?: number };
+  };
+  if (data?.error) {
+    const code = typeof data.error.code === "number" ? data.error.code : 0;
+    throw new Error(friendlyAiError(code, data.error.message ?? ""));
+  }
   return parseRefs(data?.choices?.[0]?.message?.content ?? "");
 }
 

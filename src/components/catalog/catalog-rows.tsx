@@ -4,6 +4,7 @@ import { LazyMount } from "@/components/lazy-mount";
 import { PickCard } from "@/components/pick-card";
 import { Row } from "@/components/row";
 import { RowControls } from "@/views/home/row-controls";
+import { useHideAnimeRows } from "@/lib/anime-hide";
 import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
 import {
@@ -67,8 +68,9 @@ export function CatalogRows({
   injectAfter?: number;
   injectNode?: React.ReactNode;
 }) {
-  const allKeys = useMemo(() => rows.map((r) => r.key), [rows]);
-  const display = useMemo(() => applyPageRows(rows, custom, editMode), [rows, custom, editMode]);
+  const shown = useHideAnimeRows(rows);
+  const allKeys = useMemo(() => shown.map((r) => r.key), [shown]);
+  const display = useMemo(() => applyPageRows(shown, custom, editMode), [shown, custom, editMode]);
   const orderKeys = useMemo(() => orderedRowKeys(allKeys, custom), [allKeys, custom]);
   return (
     <>

@@ -1,5 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Fragment, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackToTop } from "@/components/back-to-top";
 import { CollectionsRow } from "@/components/collections-row";
 import { CriticsPick } from "@/components/critics-pick";
@@ -12,20 +11,17 @@ import { LanguageTiles } from "@/components/language-tiles";
 import { Row, ScrollRootContext } from "@/components/row";
 import { PickCard } from "@/components/pick-card";
 import type { Meta } from "@/lib/cinemeta";
-import { fetchCriticsPickList, getPool, type FeedItem } from "@/lib/feed";
-import {
-  buildFeatured,
-  buildFeaturedFast,
-  rescoreFeatured,
-  type FeaturedResult,
-} from "@/lib/feed/featured";
-import { discoverDailyRows, discoverKeys, discoverScope } from "./discover/discover-queries";
+import { useHideAnime, useHideAnimeMetas, useHideAnimeRows, useHideAnimeSlides } from "@/lib/anime-hide";
+import { metaLooksAnime, useDetectedAnimeVersion } from "@/lib/anime-detect";
+import { fetchCriticsPickList, getPool, selectDailyRows, type FeedItem } from "@/lib/feed";
+import { buildFeatured, buildFeaturedFast, rescoreFeatured, type FeaturedResult } from "@/lib/feed/featured";
 import type { FeaturedItem } from "@/lib/feed/featured/types";
 import { prewarmExternalWatched, subscribeExternalWatched } from "@/lib/feed/external-watched";
-import { subscribe as subscribeTaste } from "@/lib/discover/store";
+import { getStore, subscribe as subscribeTaste } from "@/lib/discover/store";
 import { getDownvotedIds, getUpvotedIds, subscribePrefs } from "@/lib/feed/preferences";
 import { recentlyPlayed, subscribePlayback, watchTitleKey } from "@/lib/playback-history";
 import { useSettings } from "@/lib/settings";
+import { useContentDrag } from "@/lib/window-drag";
 import { useScrollMemory } from "@/lib/view";
 import { useLetterboxd } from "@/lib/stremboxd/provider";
 import { buildLetterboxdHomeRows } from "@/lib/stremboxd/home-rails";
@@ -37,6 +33,7 @@ import type { HomeRow } from "./home/home-types";
 import { CatalogCustomizeBar } from "@/components/catalog/customize-bar";
 import { CatalogBrowser } from "@/views/discover/catalog-browser";
 import { SurpriseMe } from "@/views/discover/surprise-me";
+import { VoyageBanner } from "@/components/voyage/voyage-banner";
 import { SectionEditBar } from "@/views/discover/section-edit-bar";
 import { RowControls } from "@/views/home/row-controls";
 import { useT } from "@/lib/i18n";
@@ -53,6 +50,7 @@ import {
 
 const MAX_RAIL_PAGES = 10;
 const MIN_PAGE_YIELD = 4;
+const ROW_COUNT = 14;
 const DEDUP_PRIORITY = [ANCHOR_TOP_RATED, ANCHOR_AWARDS];
 
 export function Discover({ active = true }: { active?: boolean }) {
@@ -65,12 +63,12 @@ export function Discover({ active = true }: { active?: boolean }) {
   useScrollMemory("discover", scrollRef, active);
 
   const { settings } = useSettings();
-  const queryClient = useQueryClient();
-  const scope = discoverScope(settings);
+  const contentDrag = useContentDrag();
   const letterboxd = useLetterboxd();
   const t = useT();
   const pageRows = usePageRows("discover");
   const [feat, setFeat] = useState<FeaturedResult>({ featured: [], reserve: [], pool: [] });
+  const [featReady, setFeatReady] = useState(false);
   const featured = feat.featured;
   const poolRef = useRef<FeaturedItem[]>([]);
   poolRef.current = feat.pool;
@@ -127,7 +125,7 @@ export function Discover({ active = true }: { active?: boolean }) {
   epochRef.current = epoch;
 
   const dailyRows = useMemo(
-    () => discoverDailyRows(settings),
+    () => selectDailyRows(settings.tmdbKey, getStore().affinity, settings, ROW_COUNT),
     [settings.tmdbKey, settings.region, settings.streaming, tasteVersion],
   );
   const rowSig = useMemo(() => dailyRows.map((r) => r.id).join("|"), [dailyRows]);
@@ -135,29 +133,24 @@ export function Discover({ active = true }: { active?: boolean }) {
   useEffect(() => {
     let cancelled = false;
     let full = false;
-    queryClient
-      .fetchQuery({
-        queryKey: discoverKeys.featuredFast(scope),
-        queryFn: () => buildFeaturedFast(settings.tmdbKey, settings),
-        staleTime: 5 * 60_000,
-      })
+    setFeatReady(false);
+    buildFeaturedFast(settings.tmdbKey, settings)
       .then((r) => !cancelled && !full && setFeat((prev) => (prev.pool.length ? prev : r)))
       .catch(() => {});
-    queryClient
-      .fetchQuery({
-        queryKey: discoverKeys.featured(scope),
-        queryFn: () => buildFeatured(settings.tmdbKey, settings),
-        staleTime: 5 * 60_000,
-      })
+    const fullDone = buildFeatured(settings.tmdbKey, settings)
       .then((r) => {
         if (cancelled) return;
         full = true;
         setFeat(r);
       })
       .catch(() => {});
-    prewarmExternalWatched()
+    const warmDone = prewarmExternalWatched()
       .then(() => !cancelled && setFeat((prev) => rescoreFeatured(prev.pool)))
       .catch(() => {});
+    const warmCap = new Promise<void>((res) => window.setTimeout(res, 4000));
+    void Promise.allSettled([fullDone, Promise.race([warmDone, warmCap])]).then(
+      () => !cancelled && setFeatReady(true),
+    );
     return () => {
       cancelled = true;
     };
@@ -167,8 +160,6 @@ export function Discover({ active = true }: { active?: boolean }) {
     settings.region,
     settings.feedLocaleBias,
     settings.preferredLanguages,
-    queryClient,
-    scope,
   ]);
 
   useEffect(() => {
@@ -179,14 +170,9 @@ export function Discover({ active = true }: { active?: boolean }) {
       const { filterQueuePool } = await import("@/lib/feed/skipped");
       setQueue(filterQueuePool(p).filter((it) => !hidden.has(it.meta.id)));
     });
-    queryClient
-      .fetchQuery({
-        queryKey: discoverKeys.critics(scope),
-        queryFn: () => fetchCriticsPickList(settings.tmdbKey, settings),
-        staleTime: 5 * 60_000,
-      })
-      .then((list) => !cancelled && setCriticsPickList(list.filter((x) => !hidden.has(x.id))))
-      .catch(() => {});
+    fetchCriticsPickList(settings.tmdbKey, settings).then(
+      (list) => !cancelled && setCriticsPickList(list.filter((x) => !hidden.has(x.id))),
+    );
     return () => {
       cancelled = true;
     };
@@ -197,8 +183,6 @@ export function Discover({ active = true }: { active?: boolean }) {
     settings.preferredLanguages,
     settings.tmdbLanguage,
     tasteVersion,
-    queryClient,
-    scope,
   ]);
 
   useEffect(() => {
@@ -250,13 +234,15 @@ export function Discover({ active = true }: { active?: boolean }) {
 
   useEffect(() => {
     if (!active) return;
-    setFeat((prev) => rescoreFeatured(prev.pool));
-    const watched = recentlyPlayed();
-    if (watched.ids.size === 0 && watched.titles.size === 0) return;
-    const isWatched = (m: Meta) =>
-      watched.ids.has(m.id) || watched.titles.has(watchTitleKey(m.name));
-    setQueue((prev) => prev.filter((it) => !isWatched(it.meta)));
-    setCriticsPickList((prev) => prev.filter((m) => !isWatched(m)));
+    startTransition(() => {
+      setFeat((prev) => (prev.pool.length ? rescoreFeatured(prev.pool) : prev));
+      const watched = recentlyPlayed();
+      if (watched.ids.size === 0 && watched.titles.size === 0) return;
+      const isWatched = (m: Meta) =>
+        watched.ids.has(m.id) || watched.titles.has(watchTitleKey(m.name));
+      setQueue((prev) => prev.filter((it) => !isWatched(it.meta)));
+      setCriticsPickList((prev) => prev.filter((m) => !isWatched(m)));
+    });
   }, [active]);
 
   const ensureLoaded = useCallback(
@@ -267,29 +253,25 @@ export function Discover({ active = true }: { active?: boolean }) {
       if (!def) return;
       const myEpoch = epoch;
       railLoadingRef.current[railId] = true;
-      queryClient
-        .fetchQuery({
-          queryKey: discoverKeys.rail(scope, railId, 1),
-          queryFn: () => def.fetch(1),
-          staleTime: 5 * 60_000,
-        })
+      def
+        .fetch(1)
         .then((list) => {
           if (epochRef.current !== myEpoch) return;
           railPagesRef.current[railId] = 1;
           if (list.length < MIN_PAGE_YIELD) railExhaustedRef.current[railId] = true;
-          setRails((prev) => ({ ...prev, [railId]: list }));
+          startTransition(() => setRails((prev) => ({ ...prev, [railId]: list })));
         })
         .catch(() => {
           if (epochRef.current !== myEpoch) return;
           railPagesRef.current[railId] = 1;
           railExhaustedRef.current[railId] = true;
-          setRails((prev) => ({ ...prev, [railId]: [] }));
+          startTransition(() => setRails((prev) => ({ ...prev, [railId]: [] })));
         })
         .finally(() => {
           if (epochRef.current === myEpoch) railLoadingRef.current[railId] = false;
         });
     },
-    [dailyRows, epoch, queryClient, scope],
+    [dailyRows, epoch],
   );
 
   const ensureLoadedRef = useRef(ensureLoaded);
@@ -323,23 +305,19 @@ export function Discover({ active = true }: { active?: boolean }) {
       if (!def) return;
       const next = cur + 1;
       railLoadingRef.current[railId] = true;
-      queryClient
-        .fetchQuery({
-          queryKey: discoverKeys.rail(scope, railId, next),
-          queryFn: () => def.fetch(next),
-          staleTime: 5 * 60_000,
-        })
+      def
+        .fetch(next)
         .then((list) => {
           railPagesRef.current[railId] = next;
           if (list.length < MIN_PAGE_YIELD) railExhaustedRef.current[railId] = true;
-          setRails((prev) => ({ ...prev, [railId]: [...(prev[railId] ?? []), ...list] }));
+          startTransition(() => setRails((prev) => ({ ...prev, [railId]: [...(prev[railId] ?? []), ...list] })));
         })
         .catch(() => {})
         .finally(() => {
           railLoadingRef.current[railId] = false;
         });
     },
-    [dailyRows, queryClient, scope],
+    [dailyRows],
   );
 
   const featuredIds = useMemo(() => new Set(featured.map((m) => m.id)), [featured]);
@@ -359,6 +337,17 @@ export function Discover({ active = true }: { active?: boolean }) {
 
   const order = useMemo(() => dailyRows.map((r) => r.id), [dailyRows]);
   const deduped = useDedupedRows(rails, order, featuredIds, criticsPick?.id, DEDUP_PRIORITY);
+  const hideAnime = useHideAnime();
+  const animeVersion = useDetectedAnimeVersion();
+  const dedupedShown = useMemo(() => {
+    if (!hideAnime) return deduped;
+    const out: Record<string, Meta[] | null> = {};
+    for (const key in deduped) {
+      const v = deduped[key];
+      out[key] = v ? v.filter((m) => !metaLooksAnime(m)) : v;
+    }
+    return out;
+  }, [hideAnime, deduped, animeVersion]);
 
   const railItems = useMemo(
     () => dailyRows.map((r) => ({ key: r.id, title: r.shelf.title })),
@@ -372,10 +361,10 @@ export function Discover({ active = true }: { active?: boolean }) {
   const editRails = useMemo(
     () =>
       applyPageRows(railItems, pageRows.custom, true).filter((item) => {
-        const d = deduped[item.key];
+        const d = dedupedShown[item.key];
         return d == null || d.length > 0;
       }),
-    [railItems, pageRows.custom, deduped],
+    [railItems, pageRows.custom, dedupedShown],
   );
   const orderKeys = useMemo(
     () => orderedRowKeys(railKeys, pageRows.custom),
@@ -391,6 +380,15 @@ export function Discover({ active = true }: { active?: boolean }) {
     }
     return out;
   }, [featured, criticsPickList, rails]);
+  const shownFeatured = useHideAnimeMetas(featured);
+  const shownQueue = useHideAnimeSlides(queue);
+  const shownLetterboxdRows = useHideAnimeRows(letterboxdRows);
+  const shownSurprisePool = useHideAnimeMetas(surprisePool);
+  const voyageBannerPool = useMemo(() => {
+    const exclude = new Set(featured.map((m) => m.id));
+    if (criticsPick) exclude.add(criticsPick.id);
+    return shownSurprisePool.filter((m) => !exclude.has(m.id) && !!m.background && m.background !== m.poster);
+  }, [shownSurprisePool, featured, criticsPick]);
 
   const hiddenFeatured = pageRows.custom.hidden.includes("section-featured");
   const hiddenCatalog = pageRows.custom.hidden.includes("section-catalog");
@@ -407,20 +405,18 @@ export function Discover({ active = true }: { active?: boolean }) {
   return (
     <main ref={scrollCb} className="flex-1 overflow-y-auto px-12 pb-20 pt-28">
       <ScrollRootContext.Provider value={scrollEl}>
-        <div data-tauri-drag-region className="flex flex-col gap-14">
+        <div {...contentDrag} className="flex flex-col gap-14">
           {pageRows.editMode || !hiddenFeatured ? (
             <div className="relative">
               {pageRows.editMode && (
                 <SectionEditBar
                   name={t("Featured & Recommended")}
                   hidden={hiddenFeatured}
-                  onToggle={() =>
-                    pageRows.persist(togglePageRowHidden(pageRows.custom, "section-featured"))
-                  }
+                  onToggle={() => pageRows.persist(togglePageRowHidden(pageRows.custom, "section-featured"))}
                 />
               )}
               <div className={hiddenFeatured ? "pointer-events-none opacity-40" : ""}>
-                <FeaturedBanner items={featured} />
+                <FeaturedBanner items={featReady ? shownFeatured : []} />
               </div>
               <div className="absolute end-0 bottom-4 z-10">{customizeBar}</div>
             </div>
@@ -434,9 +430,7 @@ export function Discover({ active = true }: { active?: boolean }) {
                 <SectionEditBar
                   name={t("Browse your catalogs")}
                   hidden={hiddenCatalog}
-                  onToggle={() =>
-                    pageRows.persist(togglePageRowHidden(pageRows.custom, "section-catalog"))
-                  }
+                  onToggle={() => pageRows.persist(togglePageRowHidden(pageRows.custom, "section-catalog"))}
                 />
                 <div className={hiddenCatalog ? "pointer-events-none opacity-40" : ""}>
                   <CatalogBrowser />
@@ -446,12 +440,10 @@ export function Discover({ active = true }: { active?: boolean }) {
                 <SectionEditBar
                   name={t("Can't decide?")}
                   hidden={hiddenSurprise}
-                  onToggle={() =>
-                    pageRows.persist(togglePageRowHidden(pageRows.custom, "section-surprise"))
-                  }
+                  onToggle={() => pageRows.persist(togglePageRowHidden(pageRows.custom, "section-surprise"))}
                 />
                 <div className={hiddenSurprise ? "pointer-events-none opacity-40" : ""}>
-                  <SurpriseMe pool={surprisePool} />
+                  <SurpriseMe pool={shownSurprisePool} />
                 </div>
               </div>
             </div>
@@ -461,42 +453,44 @@ export function Discover({ active = true }: { active?: boolean }) {
                 className={`flex flex-wrap items-stretch gap-x-6 gap-y-4 ${!hiddenFeatured ? "-mt-8" : ""}`}
               >
                 {!hiddenCatalog && <CatalogBrowser />}
-                {!hiddenSurprise && <SurpriseMe pool={surprisePool} />}
+                {!hiddenSurprise && <SurpriseMe pool={shownSurprisePool} />}
               </div>
             )
           )}
 
-          {letterboxdRows.map((row, i) => {
+          {!pageRows.editMode && voyageBannerPool.length >= 3 && <VoyageBanner pool={voyageBannerPool} />}
+
+          {shownLetterboxdRows.map((row, i) => {
             const catalogId = row.key.replace("letterboxd-", "");
             return (
-              <Row
-                key={row.key}
-                title={
-                  <>
-                    {row.name}
-                    <span className="ms-2 inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
-                      Letterboxd
-                    </span>
-                  </>
-                }
-                titleExtra={
-                  <LetterboxdRowMenu
-                    canMoveUp={i > 0}
-                    canMoveDown={i < letterboxdRows.length - 1}
-                    hidden={letterboxd.hiddenCatalogs.includes(catalogId)}
-                    onMoveUp={() => letterboxd.moveCatalog(catalogId, -1)}
-                    onMoveDown={() => letterboxd.moveCatalog(catalogId, 1)}
-                    onToggleHidden={() => letterboxd.toggleHidden(catalogId)}
-                  />
-                }
-                min={148}
-                shape="portrait"
-                scrollKey={`discover:${row.key}`}
-              >
-                {row.metas.map((m) => (
-                  <PickCard key={m.id} meta={m} />
-                ))}
-              </Row>
+            <Row
+              key={row.key}
+              title={
+                <>
+                  {row.name}
+                  <span className="ms-2 inline-flex items-center gap-1 rounded-full bg-amber-400/10 px-2 py-[2px] text-[10px] font-semibold uppercase tracking-wider text-amber-300/80">
+                    Letterboxd
+                  </span>
+                </>
+              }
+              titleExtra={
+                <LetterboxdRowMenu
+                  canMoveUp={i > 0}
+                  canMoveDown={i < shownLetterboxdRows.length - 1}
+                  hidden={letterboxd.hiddenCatalogs.includes(catalogId)}
+                  onMoveUp={() => letterboxd.moveCatalog(catalogId, -1)}
+                  onMoveDown={() => letterboxd.moveCatalog(catalogId, 1)}
+                  onToggleHidden={() => letterboxd.toggleHidden(catalogId)}
+                />
+              }
+              min={148}
+              shape="portrait"
+              scrollKey={`discover:${row.key}`}
+            >
+              {row.metas.map((m) => (
+                <PickCard key={m.id} meta={m} />
+              ))}
+            </Row>
             );
           })}
 
@@ -511,28 +505,18 @@ export function Discover({ active = true }: { active?: boolean }) {
                       hidden={hidden}
                       canMoveUp={idx > 0}
                       canMoveDown={idx >= 0 && idx < orderKeys.length - 1}
-                      onMoveUp={() =>
-                        pageRows.persist(movePageRow(pageRows.custom, railKeys, item.key, -1))
-                      }
-                      onMoveDown={() =>
-                        pageRows.persist(movePageRow(pageRows.custom, railKeys, item.key, 1))
-                      }
-                      onToggleHidden={() =>
-                        pageRows.persist(togglePageRowHidden(pageRows.custom, item.key))
-                      }
-                      onRename={(label) =>
-                        pageRows.persist(renamePageRow(pageRows.custom, item.key, label))
-                      }
-                      onResetName={() =>
-                        pageRows.persist(renamePageRow(pageRows.custom, item.key, ""))
-                      }
+                      onMoveUp={() => pageRows.persist(movePageRow(pageRows.custom, railKeys, item.key, -1))}
+                      onMoveDown={() => pageRows.persist(movePageRow(pageRows.custom, railKeys, item.key, 1))}
+                      onToggleHidden={() => pageRows.persist(togglePageRowHidden(pageRows.custom, item.key))}
+                      onRename={(label) => pageRows.persist(renamePageRow(pageRows.custom, item.key, label))}
+                      onResetName={() => pageRows.persist(renamePageRow(pageRows.custom, item.key, ""))}
                       isRenamed={item.key in pageRows.custom.renamed}
                     />
                     {!hidden && (
                       <Rail
                         railId={item.key}
                         allRails={dailyRows}
-                        deduped={deduped}
+                        deduped={dedupedShown}
                         loadMore={loadMore}
                         ensureLoaded={ensureLoaded}
                         titleOverride={item.title}
@@ -547,7 +531,7 @@ export function Discover({ active = true }: { active?: boolean }) {
                     <Rail
                       railId={item.key}
                       allRails={dailyRows}
-                      deduped={deduped}
+                      deduped={dedupedShown}
                       loadMore={loadMore}
                       ensureLoaded={ensureLoaded}
                       titleOverride={item.title}
@@ -555,14 +539,14 @@ export function Discover({ active = true }: { active?: boolean }) {
                   </LazyMount>
 
                   {i === 0 && <GenreTiles />}
-                  {i === 1 && queue.length > 0 && <DiscoveryQueueCta items={queue} />}
+                  {i === 1 && shownQueue.length > 0 && <DiscoveryQueueCta items={shownQueue} />}
                   {i === 2 && <LanguageTiles />}
                   {i === 2 && settings.tmdbKey && (
                     <LazyMount minHeight={260}>
                       <CollectionsRow />
                     </LazyMount>
                   )}
-                  {i === 3 && criticsPick && (
+                  {i === 3 && criticsPick && !(hideAnime && metaLooksAnime(criticsPick)) && (
                     <LazyMount minHeight={580}>
                       <CriticsPick meta={criticsPick} />
                     </LazyMount>

@@ -1,4 +1,4 @@
-import { Check, Plus } from "lucide-react";
+import { Bookmark, Check, Plus } from "lucide-react";
 import { useState, type RefObject } from "react";
 import {
   addToList,
@@ -9,6 +9,7 @@ import {
 } from "@/lib/custom-lists";
 import { useT } from "@/lib/i18n";
 import { AnchoredMenu } from "@/components/anchored-menu";
+import { clearShowcase, setShowcase, useShowcaseMetaId } from "@/lib/social/showcase";
 import { CreateListModal } from "./create-list-modal";
 import { emitListToast } from "./list-toast";
 
@@ -27,12 +28,39 @@ export function AddToListMenu({
   const lists = useCustomLists();
   const containing = useListsContaining(item.id);
   const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const showcaseMetaId = useShowcaseMetaId();
+  const isShowcase = showcaseMetaId === item.id;
 
   const toggle = (listId: string, name: string) => {
     const nowIn = toggleInList(listId, item);
     emitListToast(
       nowIn ? t('Added to "{name}"', { name }) : t('Removed from "{name}"', { name }),
     );
+  };
+
+  const toggleShowcase = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (isShowcase) {
+        await clearShowcase();
+        emitListToast(t("Removed from showcase"));
+      } else {
+        await setShowcase({
+          metaId: item.id,
+          title: item.name ?? item.id,
+          posterUrl: item.poster,
+          kind: "pinned",
+        });
+        emitListToast(t("Set as your showcase"));
+      }
+      onClose();
+    } catch {
+      emitListToast(t("Could not update showcase"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -75,11 +103,25 @@ export function AddToListMenu({
           </div>
           <div className="border-t border-edge-soft/55 p-1.5">
             <button
-              onClick={() => setCreating(true)}
-              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start text-[13px] font-medium text-ink-muted transition-colors hover:bg-raised hover:text-ink"
+              onClick={toggleShowcase}
+              disabled={busy}
+              className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start text-[13px] font-medium text-ink-muted transition-colors hover:bg-raised hover:text-ink disabled:opacity-60"
             >
               <span className="flex h-5 w-5 items-center justify-center">
-                <Plus size={15} strokeWidth={2} />
+                <Bookmark
+                  size={20}
+                  strokeWidth={2}
+                  className={isShowcase ? "text-accent" : undefined}
+                />
+              </span>
+              {isShowcase ? t("Remove from showcase") : t("Set as showcase")}
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              className="flex min-h-[44px] w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-start text-[13px] font-medium text-ink-muted transition-colors hover:bg-raised hover:text-ink"
+            >
+              <span className="flex h-5 w-5 items-center justify-center">
+                <Plus size={20} strokeWidth={2} />
               </span>
               {t("Create new list")}
             </button>

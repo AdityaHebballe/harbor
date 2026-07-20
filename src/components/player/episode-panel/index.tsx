@@ -1,4 +1,4 @@
-import { ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { HarborLoader } from "@/components/harbor-loader";
 import type { Meta } from "@/lib/cinemeta";
@@ -11,6 +11,8 @@ import { preflightCheck } from "@/lib/streams/preflight";
 import { resolveStream } from "@/lib/streams/resolve";
 import type { ScoredStream } from "@/lib/streams/types";
 import { useView, type PlayEpisode } from "@/lib/view";
+import { useQueue } from "@/lib/queue";
+import { QueueUpNext } from "./queue-up-next";
 import { playLocalAware } from "@/lib/local-library/playback";
 import { localPlayerSrc } from "@/lib/local-library/player-src";
 import { useT } from "@/lib/i18n";
@@ -53,6 +55,7 @@ export function EpisodePanel({
   const t = useT();
   const { settings, update } = useSettings();
   const { openPicker, replacePlayerSrc } = useView();
+  const queue = useQueue();
   const debrids = useDebridClients();
   const { seasons, season, setSeason, episodes, loading } = useSeasonBrowser(
     meta,
@@ -67,6 +70,9 @@ export function EpisodePanel({
   const [expandedEp, setExpandedEp] = useState<string | null>(null);
   const [pickingFor, setPickingFor] = useState<PlayEpisode | null>(null);
   const [resolvingFor, setResolvingFor] = useState<PlayEpisode | null>(null);
+  const [showEpsOpen, setShowEpsOpen] = useState(false);
+  const hasQueue = queue.length > 0;
+  const followQueue = settings.queueDrivesNav && hasQueue && meta.type === "series";
   useEffect(() => {
     if (!open) {
       setExpandedEp(null);
@@ -155,8 +161,6 @@ export function EpisodePanel({
   return (
     <div
       aria-hidden={!open}
-      data-tv-focus-scope={open || undefined}
-      inert={!open ? true : undefined}
       className={`pointer-events-${open ? "auto" : "none"} absolute inset-0 z-30`}
     >
       {resolvingFor && (
@@ -214,7 +218,6 @@ export function EpisodePanel({
               <button
                 aria-label={t("Close")}
                 onClick={onClose}
-                data-tv-modal-close
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-elevated text-ink-muted transition-colors hover:bg-raised hover:text-ink"
               >
                 <X size={18} strokeWidth={2.2} />
@@ -237,12 +240,54 @@ export function EpisodePanel({
               )}
             </div>
             <div ref={listRef} className="flex-1 overflow-y-auto px-4 pb-8 pt-2">
-              {loading && episodes.length === 0 && (
+              {hasQueue && meta.type === "series" && (
+                <div className="mb-3 flex gap-1 rounded-full bg-elevated/60 p-1 ring-1 ring-edge-soft">
+                  <button
+                    type="button"
+                    onClick={() => update({ queueDrivesNav: false })}
+                    className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${!settings.queueDrivesNav ? "bg-accent text-canvas" : "text-ink-muted hover:text-ink"}`}
+                  >
+                    {t("Current show")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => update({ queueDrivesNav: true })}
+                    className={`flex-1 rounded-full px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${settings.queueDrivesNav ? "bg-accent text-canvas" : "text-ink-muted hover:text-ink"}`}
+                  >
+                    {t("Queue")}
+                  </button>
+                </div>
+              )}
+              {followQueue && (
+                <QueueUpNext
+                  meta={meta}
+                  currentEpisode={currentEpisode}
+                  roomGuest={roomGuest}
+                  onClose={onClose}
+                />
+              )}
+              {followQueue && (
+                <button
+                  type="button"
+                  onClick={() => setShowEpsOpen((o) => !o)}
+                  className="mt-5 flex w-full items-center justify-between border-t border-edge-soft/60 px-1 pt-4 text-[11px] font-bold uppercase tracking-[0.22em] text-ink-subtle transition-colors hover:text-ink"
+                >
+                  {t("This show")}
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={2.4}
+                    className={`transition-transform ${showEpsOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
+              )}
+              {(!followQueue || showEpsOpen) && (
+                <div className={followQueue ? "mt-3" : undefined}>
+              {meta.type === "series" && loading && episodes.length === 0 && (
                 <div className="flex items-center justify-center py-16">
                   <HarborLoader size="sm" />
                 </div>
               )}
-              {!loading && episodes.length === 0 && (
+              {meta.type === "series" && !loading && episodes.length === 0 && (
                 <p className="px-2 py-10 text-center text-[13.5px] text-ink-muted">
                   {t("No episodes found for this season.")}
                 </p>
@@ -287,6 +332,8 @@ export function EpisodePanel({
                   {t("Season {n}", { n: nextSeason })}
                   <ChevronRight size={16} strokeWidth={2.4} />
                 </button>
+              )}
+                </div>
               )}
             </div>
             <footer className="border-t border-edge-soft/60 px-6 py-4 text-[12px] text-ink-subtle">

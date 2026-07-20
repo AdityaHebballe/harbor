@@ -1,4 +1,4 @@
-import { BarChart3, Bookmark, Clock, HardDrive, Layers } from "lucide-react";
+import { BarChart3, Bookmark, Clock, HardDrive, Layers, Library, Star } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import traktLogo from "@/assets/trakt.svg";
 import anilistLogo from "@/assets/anilist.png";
@@ -11,6 +11,7 @@ import { useSimkl } from "@/lib/simkl/provider";
 import { useTrakt } from "@/lib/trakt/provider";
 import { useScrollMemory, useView } from "@/lib/view";
 import { useSettings } from "@/lib/settings";
+import { useContentDrag } from "@/lib/window-drag";
 import { useT } from "@/lib/i18n";
 import { watchlistHas } from "@/lib/watchlist";
 import { useLetterboxd } from "@/lib/stremboxd/provider";
@@ -19,6 +20,7 @@ import { HistoryTab } from "./library/history-tab";
 import { LocalTab } from "./library/local-tab";
 import { MalTab } from "./library/mal-tab";
 import { MyListsTab } from "./library/my-lists-tab";
+import { FavoritesTab } from "./library/favorites-tab";
 import { TabBtn, type Tab } from "./library/shared";
 import { SimklTab } from "./library/simkl-tab";
 import { TraktTab } from "./library/trakt-tab";
@@ -30,12 +32,22 @@ const LIBRARY_TAB_KEY = "harbor.library.tab";
 
 function readSavedTab(): Tab {
   try {
-    const v = localStorage.getItem(LIBRARY_TAB_KEY);
+    let v = localStorage.getItem(LIBRARY_TAB_KEY);
+    const migrated = "harbor.library.tab.split.v1";
+    if (!localStorage.getItem(migrated)) {
+      localStorage.setItem(migrated, "1");
+      if (v === "watchlist") {
+        localStorage.setItem(LIBRARY_TAB_KEY, "library");
+        v = "library";
+      }
+    }
     if (
+      v === "library" ||
       v === "watchlist" ||
       v === "history" ||
       v === "local" ||
       v === "lists" ||
+      v === "favorites" ||
       v === "trakt" ||
       v === "anilist" ||
       v === "simkl" ||
@@ -44,7 +56,7 @@ function readSavedTab(): Tab {
     )
       return v;
   } catch {}
-  return "watchlist";
+  return "library";
 }
 
 export function LibraryView({ active }: { active: boolean }) {
@@ -56,6 +68,7 @@ export function LibraryView({ active }: { active: boolean }) {
   const lb = useLetterboxd();
   const scrollRef = useRef<HTMLElement>(null);
   useScrollMemory("library", scrollRef, active);
+  const contentDrag = useContentDrag();
 
   useEffect(() => {
     try {
@@ -64,23 +77,23 @@ export function LibraryView({ active }: { active: boolean }) {
   }, [tab]);
 
   useEffect(() => {
-    if (tab === "trakt" && !traktConnected) setTab("watchlist");
+    if (tab === "trakt" && !traktConnected) setTab("library");
   }, [tab, traktConnected]);
 
   useEffect(() => {
-    if (tab === "anilist" && !anilistConnected) setTab("watchlist");
+    if (tab === "anilist" && !anilistConnected) setTab("library");
   }, [tab, anilistConnected]);
 
   useEffect(() => {
-    if (tab === "simkl" && !simklConnected) setTab("watchlist");
+    if (tab === "simkl" && !simklConnected) setTab("library");
   }, [tab, simklConnected]);
 
   useEffect(() => {
-    if (tab === "letterboxd" && !lb.isActive) setTab("watchlist");
+    if (tab === "letterboxd" && !lb.isActive) setTab("library");
   }, [tab, lb.isActive]);
 
   useEffect(() => {
-    if (tab === "mal" && !malConnected) setTab("watchlist");
+    if (tab === "mal" && !malConnected) setTab("library");
   }, [tab, malConnected]);
 
   useEffect(() => {
@@ -109,7 +122,7 @@ export function LibraryView({ active }: { active: boolean }) {
       ref={scrollRef}
       className="flex-1 overflow-y-auto px-5 pt-24 pb-14 sm:px-8 lg:px-12 lg:pt-28"
     >
-      <div data-tauri-drag-region className="flex flex-col gap-7">
+      <div {...contentDrag} className="flex flex-col gap-7">
         <Header
           tab={tab}
           onTab={setTab}
@@ -119,10 +132,12 @@ export function LibraryView({ active }: { active: boolean }) {
           simklConnected={simklConnected}
           lbConnected={lb.isActive}
         />
-        {tab === "watchlist" && <WatchlistTab />}
+        {tab === "library" && <WatchlistTab mode="library" />}
+        {tab === "watchlist" && <WatchlistTab mode="watchlist" />}
         {tab === "history" && <HistoryTab />}
         {tab === "local" && <LocalTab />}
         {tab === "lists" && <MyListsTab />}
+        {tab === "favorites" && <FavoritesTab />}
         {tab === "trakt" && traktConnected && <TraktTab />}
         {tab === "anilist" && anilistConnected && <AnilistTab />}
         {tab === "simkl" && simklConnected && <SimklTab />}
@@ -164,7 +179,7 @@ function Header({
             {t("Your collection.")}
           </h1>
           <p className="text-[14px] leading-snug text-ink-muted">
-            {t("Watchlist is what you've saved for later. History is everything you've watched. Local is files on your computer.")}
+            {t("Library is everything from Stremio, Trakt, and this device. Watchlist is only titles you haven't watched yet. History is what you've watched. Local is files on your computer.")}
           </p>
         </div>
         {settings.wrappedButton && (
@@ -178,6 +193,10 @@ function Header({
         )}
       </div>
       <div className="flex items-center gap-1 border-b border-edge-soft">
+        <TabBtn active={tab === "library"} onClick={() => onTab("library")}>
+          <Library size={14} strokeWidth={2.2} />
+          {t("Library")}
+        </TabBtn>
         <TabBtn active={tab === "watchlist"} onClick={() => onTab("watchlist")}>
           <Bookmark size={14} strokeWidth={2.2} />
           {t("Watchlist")}
@@ -193,6 +212,10 @@ function Header({
         <TabBtn active={tab === "lists"} onClick={() => onTab("lists")}>
           <Layers size={14} strokeWidth={2.2} />
           {t("My Lists")}
+        </TabBtn>
+        <TabBtn active={tab === "favorites"} onClick={() => onTab("favorites")}>
+          <Star size={14} strokeWidth={2.2} />
+          {t("Favorites")}
         </TabBtn>
         {traktConnected && (
           <TabBtn active={tab === "trakt"} onClick={() => onTab("trakt")}>

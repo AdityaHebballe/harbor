@@ -1,9 +1,9 @@
-import { PanelTop } from "lucide-react";
+import { AppWindow, Move, PanelTop, Sparkles } from "lucide-react";
 import { useSettings } from "@/lib/settings";
 import { type ThemeSettings } from "@/lib/theme";
 import { useT } from "@/lib/i18n";
 import { Section } from "./shared";
-import { SeekBarPanel } from "./player-panel";
+import { NewBadge } from "./new-badge";
 import { BackgroundPicker } from "./theme-panel/background-picker";
 import { ColorThemeBody } from "./theme-panel/color-theme-body";
 import { CustomThemesSection } from "./theme-panel/custom-themes-section";
@@ -44,22 +44,10 @@ export function ThemePanel() {
       </Section>
 
       <Section
-        title={t("Background image")}
-        subtitle={t("Drop a wallpaper behind the app. The dim slider keeps text readable.")}
+        title={t("Your themes")}
+        subtitle={t("Make your own in the Theme Studio, or import one a friend shared.")}
       >
-        <BackgroundPicker
-          imageData={theme.backgroundImage}
-          dim={theme.backgroundDim}
-          onImageChange={(d) => setTheme({ backgroundImage: d })}
-          onDimChange={(d) => setTheme({ backgroundDim: d })}
-        />
-      </Section>
-
-      <Section
-        title={t("Logo & app icon")}
-        subtitle={t("Make Harbor yours: swap the sidebar logo and the window/taskbar icon.")}
-      >
-        <LogoPicker />
+        <CustomThemesSection />
       </Section>
 
       <Section
@@ -75,20 +63,18 @@ export function ThemePanel() {
       </Section>
 
       <Section
-        title={t("Your themes")}
-        subtitle={t("Make your own in the Theme Studio, or import one a friend shared.")}
+        title={t("Background image")}
+        subtitle={t("Drop a wallpaper behind the app. The dim slider keeps text readable.")}
       >
-        <CustomThemesSection />
+        <BackgroundPicker
+          imageData={theme.backgroundImage}
+          dim={theme.backgroundDim}
+          onImageChange={(d) => setTheme({ backgroundImage: d })}
+          onDimChange={(d) => setTheme({ backgroundDim: d })}
+        />
       </Section>
 
       <DisplaySection />
-
-      <Section
-        title={t("Seek bar")}
-        subtitle={t("Style the timeline at the bottom of the player. Swap the dot for a sticker, change the bar height, recolor it. Settings live-preview right here.")}
-      >
-        <SeekBarPanel />
-      </Section>
 
       {isTauri && (
         <Section
@@ -96,8 +82,27 @@ export function ThemePanel() {
           subtitle={t("Use your operating system's native title bar and window buttons instead of Harbor's built-in ones. Handy if the in-app buttons ever feel out of reach, like during playback.")}
         >
           <NativeTitleBarRow />
+          <HybridBarRow />
+          <TopbarScrollBlurRow />
+          <CleanTopBarRow />
         </Section>
       )}
+
+      {isTauri && (
+        <Section
+          title={t("Moving the window")}
+          subtitle={t("Choose where you can grab Harbor to drag it around your screen.")}
+        >
+          <DragAnywhereRow />
+        </Section>
+      )}
+
+      <Section
+        title={t("Logo & app icon")}
+        subtitle={t("Make Harbor yours: swap the sidebar logo and the window/taskbar icon.")}
+      >
+        <LogoPicker />
+      </Section>
     </>
   );
 }
@@ -126,6 +131,169 @@ function NativeTitleBarRow() {
         role="switch"
         aria-checked={on}
         onClick={() => update({ useNativeTitleBar: !on })}
+        className={`mt-1 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+          on ? "bg-accent" : "bg-raised"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-canvas shadow-sm transition-transform ${
+            on ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function HybridBarRow() {
+  const t = useT();
+  const { settings, update } = useSettings();
+  const nativeOn = settings.useNativeTitleBar;
+  const on = settings.hybridTitleBar && !nativeOn;
+  return (
+    <div
+      className={`flex items-start gap-3 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3.5 ${
+        nativeOn ? "opacity-55" : ""
+      }`}
+    >
+      <span
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          on ? "bg-accent/15 text-accent" : "bg-raised text-ink-subtle"
+        }`}
+      >
+        <AppWindow size={15} strokeWidth={2.2} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[14px] font-medium text-ink">{t("Native-style hybrid bar")}</span>
+        <p className="text-[12.5px] leading-relaxed text-ink-subtle">
+          {nativeOn
+            ? t("Turn off the native window title bar above to use Harbor's hybrid bar instead.")
+            : t("Tuck clean, native-looking window buttons into the top corner, with hover labels. On macOS they become traffic-light dots. Blends into Harbor while feeling like your system's own title bar.")}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        disabled={nativeOn}
+        onClick={() => update({ hybridTitleBar: !on })}
+        className={`mt-1 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+          nativeOn ? "cursor-not-allowed bg-raised" : on ? "bg-accent" : "bg-raised"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-canvas shadow-sm transition-transform ${
+            on ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function TopbarScrollBlurRow() {
+  const t = useT();
+  const { settings, update } = useSettings();
+  const on = settings.topbarScrollBlur;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3.5">
+      <span
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          on ? "bg-accent/15 text-accent" : "bg-raised text-ink-subtle"
+        }`}
+      >
+        <PanelTop size={15} strokeWidth={2.2} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[14px] font-medium text-ink">{t("Frost the top bar on scroll")}</span>
+        <p className="text-[12.5px] leading-relaxed text-ink-subtle">
+          {t("As you scroll, the top bar frosts over the content beneath it. Off by default; it uses a blur, so leave it off on lower-end machines.")}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={() => update({ topbarScrollBlur: !on })}
+        className={`mt-1 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+          on ? "bg-accent" : "bg-raised"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-canvas shadow-sm transition-transform ${
+            on ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function CleanTopBarRow() {
+  const t = useT();
+  const { settings, update } = useSettings();
+  const on = settings.transparentTopBar;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3.5">
+      <span
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          on ? "bg-accent/15 text-accent" : "bg-raised text-ink-subtle"
+        }`}
+      >
+        <Sparkles size={15} strokeWidth={2.2} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-[14px] font-medium text-ink">{t("Clean, transparent top bar")}</span>
+        <p className="text-[12.5px] leading-relaxed text-ink-subtle">
+          {t("On by default. The top-bar icons sit clean over the artwork with no pill behind them, and Watch Together opens as a top-right panel. Turn it off to bring back the filled pill buttons.")}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={() => update({ transparentTopBar: !on })}
+        className={`mt-1 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+          on ? "bg-accent" : "bg-raised"
+        }`}
+      >
+        <span
+          className={`h-5 w-5 rounded-full bg-canvas shadow-sm transition-transform ${
+            on ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0"
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function DragAnywhereRow() {
+  const t = useT();
+  const { settings, update } = useSettings();
+  const on = settings.dragAnywhere;
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-edge-soft bg-canvas/40 px-4 py-3.5">
+      <span
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          on ? "bg-accent/15 text-accent" : "bg-raised text-ink-subtle"
+        }`}
+      >
+        <Move size={15} strokeWidth={2.2} />
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-center gap-2">
+          <span className="text-[14px] font-medium text-ink">{t("Drag the window from anywhere")}</span>
+          <NewBadge id="theme:drag-anywhere" />
+        </span>
+        <p className="text-[12.5px] leading-relaxed text-ink-subtle">
+          {t("Move Harbor by dragging any empty space on a page, not just the top bar. Leave this off to keep clicks inside pages from nudging the window.")}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        onClick={() => update({ dragAnywhere: !on })}
         className={`mt-1 flex h-6 w-11 shrink-0 items-center rounded-full px-0.5 transition-colors ${
           on ? "bg-accent" : "bg-raised"
         }`}

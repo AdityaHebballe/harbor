@@ -37,6 +37,7 @@ export function useAnimeTvdbPanel(
   enabled: boolean,
   franchiseEpisodes?: KitsuEpisode[],
   preferredSeasonKey?: string,
+  intentSeasonKey?: string,
 ): AnimeTvdbPanelState {
   const t = useT();
   const [seriesId, setSeriesId] = useState<number | null>(null);
@@ -144,7 +145,7 @@ export function useAnimeTvdbPanel(
       for (const e of bucket) {
         const abs = ordering.absByEpId.get(e.id);
         const img = e.stillPath ?? (abs != null ? ordering.imageByAbs.get(abs) : undefined);
-        let match = byPair.get(`${e.seasonNumber}:${e.episodeNumber}`) ?? byTvdbId.get(e.id);
+        let match = byTvdbId.get(e.id) ?? byPair.get(`${e.seasonNumber}:${e.episodeNumber}`);
         if (!match && abs != null) match = byAbs.get(abs);
         const ep: KitsuEpisode = match
           ? !match.thumbnail && img
@@ -162,6 +163,7 @@ export function useAnimeTvdbPanel(
               imdbSeason: e.seasonNumber,
               imdbEpisode: e.episodeNumber,
               absoluteNumber: abs ?? undefined,
+              tvdbEpisodeId: e.id > 0 ? e.id : undefined,
             };
         if (seenId.has(ep.id)) continue;
         seenId.add(ep.id);
@@ -193,9 +195,11 @@ export function useAnimeTvdbPanel(
   const activeKey =
     touched && built.items.some((i) => i.key === sel)
       ? (sel as string)
-      : preferredSeasonKey && built.items.some((i) => i.key === preferredSeasonKey)
-        ? preferredSeasonKey
-        : built.items[0].key;
+      : intentSeasonKey && built.items.some((i) => i.key === intentSeasonKey)
+        ? intentSeasonKey
+        : preferredSeasonKey && built.items.some((i) => i.key === preferredSeasonKey)
+          ? preferredSeasonKey
+          : built.items[0].key;
   return {
     panel: {
       items: built.items,

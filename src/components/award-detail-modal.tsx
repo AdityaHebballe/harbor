@@ -17,6 +17,15 @@ const TYPE_TITLE: Record<AwardType, string> = {
   cannes: "Cannes Film Festival",
   venice: "Venice Film Festival",
   berlin: "Berlin Film Festival",
+  bafta_tv: "BAFTA Television Awards",
+  annie: "Annie Awards",
+  spirit: "Independent Spirit Awards",
+  saturn: "Saturn Awards",
+  cesar: "César Awards",
+  goya: "Goya Awards",
+  blue_dragon: "Blue Dragon Film Awards",
+  baeksang: "Baeksang Arts Awards",
+  bifa: "British Independent Film Awards",
   other: "Awards",
 };
 

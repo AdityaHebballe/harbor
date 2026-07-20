@@ -277,7 +277,7 @@ export function EditorOverlay({
         </div>
       </header>
 
-      <HiddenTray config={config} onUnhide={onUnhide} onSelect={onSelect} />
+      <HiddenTray config={config} mode={mode} onUnhide={onUnhide} onSelect={onSelect} />
 
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <FauxBackdrop width={winSize.w} height={winSize.h} sizeLabel={sizeLabel} bg={previewBg} />
@@ -356,16 +356,32 @@ export function EditorOverlay({
   );
 }
 
+const LIVE_ONLY_CONTROLS = new Set<PlayerControlId>(["dvr"]);
+const NOT_IN_LIVE_CONTROLS = new Set<PlayerControlId>([
+  "download",
+  "seek-back",
+  "seek-forward",
+  "prev-episode",
+  "next-episode",
+]);
+
+function controlAppliesToMode(id: PlayerControlId, mode: PlayerMode): boolean {
+  if (mode === "live") return !NOT_IN_LIVE_CONTROLS.has(id);
+  return !LIVE_ONLY_CONTROLS.has(id);
+}
+
 function HiddenTray({
   config,
+  mode,
   onUnhide,
   onSelect,
 }: {
   config: PlayerChromeConfig;
+  mode: PlayerMode;
   onUnhide: (id: PlayerControlId) => void;
   onSelect: (id: PlayerControlId | null) => void;
 }) {
-  const hidden = config.controls.filter((c) => c.hidden);
+  const hidden = config.controls.filter((c) => c.hidden && controlAppliesToMode(c.id, mode));
   if (hidden.length === 0) return null;
   return (
     <div className="flex shrink-0 items-center gap-3 overflow-x-auto border-b border-white/8 px-8 py-2.5">

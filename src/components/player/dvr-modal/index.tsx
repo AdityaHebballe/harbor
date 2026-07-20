@@ -46,7 +46,6 @@ export function DvrModal({
 
   return (
     <div
-      data-tv-focus-scope
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/72 backdrop-blur-md animate-in fade-in duration-200"
     >
@@ -108,7 +107,6 @@ function Header({
       </div>
       <button
         onClick={onClose}
-        data-tv-modal-close
         aria-label={t("Close")}
         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-raised text-ink-muted transition-colors hover:bg-raised/70 hover:text-ink"
       >

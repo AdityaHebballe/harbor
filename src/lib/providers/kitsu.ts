@@ -117,6 +117,7 @@ export type KitsuAnimeDetail = {
   id: number;
   slug: string;
   title: string;
+  altTitles: string[];
   synopsis: string;
   poster?: string;
   backdrop?: string;
@@ -209,6 +210,9 @@ export async function kitsuAnime(id: number): Promise<KitsuAnimeDetail | null> {
     id: Number(j.data.id),
     slug: a.slug ?? "",
     title: a.titles?.en || a.canonicalTitle || a.titles?.en_jp || "Unknown",
+    altTitles: [a.titles?.en, a.titles?.en_jp, a.titles?.ja_jp, a.canonicalTitle].filter(
+      (t): t is string => !!t,
+    ),
     synopsis: a.synopsis || a.description || "",
     poster: pickImg(a.posterImage),
     backdrop: pickImg(a.coverImage),

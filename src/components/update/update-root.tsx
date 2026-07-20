@@ -1,5 +1,5 @@
 import { createPortal } from "react-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ArrowUpCircle, X } from "lucide-react";
 import {
   dismissUpdate,
@@ -10,15 +10,51 @@ import {
 } from "@/lib/updater/use-update";
 import { UpdateCard } from "./update-card";
 
+const AUTO_DISMISS_MS = 12_000;
+
+function useChromeHidden(): boolean {
+  const [hidden, setHidden] = useState(
+    () => typeof document !== "undefined" && document.documentElement.dataset.chromeHidden === "true",
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const read = () => setHidden(root.dataset.chromeHidden === "true");
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(root, { attributes: true, attributeFilter: ["data-chrome-hidden"] });
+    return () => obs.disconnect();
+  }, []);
+  return hidden;
+}
+
 export function UpdateRoot() {
   const u = useUpdate();
+  const chromeHidden = useChromeHidden();
+  const [autoHidden, setAutoHidden] = useState<string | null>(null);
+
   useEffect(() => {
     startUpdateWatcher();
   }, []);
 
+  useEffect(() => {
+    setAutoHidden(null);
+  }, [u.version]);
+
+  const pillVisible =
+    !u.panelOpen &&
+    updateAvailable(u) &&
+    u.version !== u.dismissed &&
+    u.version !== autoHidden &&
+    !chromeHidden;
+
+  useEffect(() => {
+    if (!pillVisible || u.status === "downloading") return;
+    const id = window.setTimeout(() => setAutoHidden(u.version), AUTO_DISMISS_MS);
+    return () => window.clearTimeout(id);
+  }, [pillVisible, u.status, u.version]);
+
   if (u.panelOpen) return createPortal(<UpdateCard />, document.body);
-  if (!updateAvailable(u)) return null;
-  if (u.status === "available" && u.version && u.version === u.dismissed) return null;
+  if (!pillVisible) return null;
 
   const label =
     u.status === "downloading"
@@ -42,7 +78,7 @@ export function UpdateRoot() {
         <span className="text-[13.5px] font-semibold text-ink">{label}</span>
         {u.version && <span className="text-[12px] text-ink-subtle">{u.version}</span>}
       </button>
-      {u.status === "available" && (
+      {u.status !== "downloading" && (
         <button
           onClick={dismissUpdate}
           aria-label="Dismiss"

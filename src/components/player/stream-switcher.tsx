@@ -1,4 +1,4 @@
-import { Filter, Languages, MousePointerClick, RefreshCw, X, Zap } from "lucide-react";
+import { MousePointerClick, RefreshCw, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { resolveAddonLogo } from "@/components/addon-logo";
 import { HostSourceBanner } from "@/components/host-source-banner";
@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { peekPickerCache, subscribePickerCache } from "@/lib/picker-cache";
 import { useSettings } from "@/lib/settings";
 import type { ScoredStream } from "@/lib/streams/types";
-import { hasCachedMarker } from "@/lib/streams/cached";
+import { hasCachedMarker, isP2pStream } from "@/lib/streams/cached";
 import type { SourceDescriptor } from "@/lib/together/protocol";
 import { buildMatchScores, matchBadge } from "@/lib/together/source-match";
 import { addonInstanceKey, buildAddonOptions } from "@/views/play-picker/picker-utils";
@@ -17,10 +17,10 @@ import type { Meta } from "@/lib/cinemeta";
 import type { PlayEpisode, PlayerStreamRef } from "@/lib/view";
 import { useT } from "@/lib/i18n";
 import { useActiveKid } from "@/lib/profiles";
-import { AddonFilterMenu, QualityFilterMenu, SourceFilterMenu } from "./stream-switcher/filter-dropdowns";
+import { FiltersMenu, type SwitcherFilters } from "./stream-switcher/filters-menu";
 import { sourceGroup } from "@/views/play-picker/quality-filter";
 import { KidsStreamSwitcher } from "./stream-switcher/kids-switcher";
-import { abbreviateLanguages, normalizeLangCode, streamMatchesLangs } from "./stream-switcher/lang-utils";
+import { normalizeLangCode, streamMatchesLangs } from "./stream-switcher/lang-utils";
 import { QUALITY_BADGE, QUALITY_LABEL, QUALITY_ORDER, qualityKey, type QualityKey } from "./stream-switcher/quality";
 import { isCurrentStream, streamKey, SwitcherRow } from "./stream-switcher/switcher-row";
 import { useSwitcherRefresh } from "./stream-switcher/use-switcher-refresh";
@@ -63,7 +63,7 @@ export function StreamSwitcher({
   const t = useT();
   const kid = useActiveKid();
   const { authKey } = useAuth();
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const baseLangs = settings.preferredLanguages ?? [];
   const isAnimeRequest =
     typeof meta.id === "string" && (meta.id.startsWith("kitsu:") || meta.id.startsWith("mal:"));
@@ -119,16 +119,28 @@ export function StreamSwitcher({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  const keptStreams = useMemo<ScoredStream[]>(() => cache?.result.picker.all ?? [], [cache]);
+  const keptStreams = useMemo<ScoredStream[]>(() => {
+    const all = cache?.result.picker.all ?? [];
+    if (settings.streamMode === "addons") {
+      const addonsOnly = all.filter((s) => !isP2pStream(s));
+      return addonsOnly.length > 0 ? addonsOnly : all;
+    }
+    if (settings.streamMode === "p2p") {
+      const p2pOnly = all.filter((s) => isP2pStream(s));
+      return p2pOnly.length > 0 ? p2pOnly : all;
+    }
+    return all;
+  }, [cache, settings.streamMode]);
   const rejectedStreams = useMemo<ScoredStream[]>(
     () =>
       (cache?.result.rejected ?? []).map((r) => ({
@@ -159,11 +171,8 @@ export function StreamSwitcher({
   const [cachedOnly, setCachedOnly] = useState(false);
   const baseList = cachedOnly && debridSlugs.length > 0 && cachedStreams.length > 0 ? cachedStreams : allStreams;
   const [addonFilter, setAddonFilter] = useState<string>("all");
-  const [addonMenuOpen, setAddonMenuOpen] = useState(false);
   const [qualityFilter, setQualityFilter] = useState<QualityKey>("all");
-  const [qualityMenuOpen, setQualityMenuOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("all");
-  const [sourceMenuOpen, setSourceMenuOpen] = useState(false);
   const qualityOptions = useMemo(() => {
     const counts = new Map<Exclude<QualityKey, "all">, number>();
     for (const s of allStreams) {
@@ -265,8 +274,32 @@ export function StreamSwitcher({
   }, [addonFilter, qualityFilter, sourceFilter, filterToPreferred, cachedOnly, list.length]);
   const hiddenCount = addonFilteredList.length - matchedStreams.length;
   const uncachedHidden = allStreams.length - cachedStreams.length;
-  const activeAddonName =
-    addonFilter === "all" ? t("All addons") : addonOptions.find((o) => o.id === addonFilter)?.name ?? addonFilter;
+  const filters: SwitcherFilters = {
+    mode: settings.streamMode,
+    setMode: (m) => update({ streamMode: m }),
+    quality: qualityFilter,
+    setQuality: setQualityFilter,
+    qualityOptions,
+    source: sourceFilter,
+    setSource: setSourceFilter,
+    sourceOptions,
+    addon: addonFilter,
+    setAddon: setAddonFilter,
+    addonOptions,
+    addonLogos,
+    total: allStreams.length,
+    hasDebrid: debridSlugs.length > 0,
+    cachedOnly,
+    setCachedOnly,
+    uncachedHidden,
+    preferredLangs,
+    filterToPreferred,
+    setFilterToPreferred,
+    langHidden: hiddenCount,
+    rejectedCount: rejectedStreams.length,
+    showFlagged: showFiltered,
+    setShowFlagged: setShowFiltered,
+  };
   void cache?.meta.name;
   void cache?.episode;
 
@@ -293,10 +326,7 @@ export function StreamSwitcher({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        data-tv-focus-scope
-        className="flex h-full max-h-[82vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[8px] border border-edge bg-elevated shadow-[0_28px_72px_-20px_rgba(0,0,0,0.85)] animate-in fade-in slide-in-from-bottom-2 duration-150 backdrop-blur-xl"
-      >
+      <div className="flex h-full max-h-[82vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[8px] border border-edge bg-elevated shadow-[0_28px_72px_-20px_rgba(0,0,0,0.85)] animate-in fade-in slide-in-from-bottom-2 duration-150 backdrop-blur-xl">
         <header className="flex items-center justify-between gap-4 border-b border-edge-soft px-6 py-4">
           <div className="flex items-center gap-2.5">
             <Tooltip label={t("Refresh sources")} side="bottom">
@@ -318,87 +348,9 @@ export function StreamSwitcher({
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {rejectedStreams.length > 0 && (
-              <Tooltip label={t("Show sources hidden by the trust filter")} side="bottom">
-                <button
-                  onClick={() => setShowFiltered((v) => !v)}
-                  className={`flex h-9 items-center gap-2 rounded-md px-3.5 text-[11.5px] font-semibold tracking-[0.04em] transition-colors ${
-                    showFiltered
-                      ? "bg-elevated text-ink ring-1 ring-edge hover:bg-raised"
-                      : "bg-raised text-ink-muted hover:bg-elevated hover:text-ink"
-                  }`}
-                  aria-pressed={showFiltered}
-                >
-                  <Filter size={11} strokeWidth={2.2} />
-                  {showFiltered ? t("Flagged shown") : t("Flagged ({n})", { n: rejectedStreams.length })}
-                </button>
-              </Tooltip>
-            )}
-            {debridSlugs.length > 0 && uncachedHidden > 0 && (
-              <button
-                onClick={() => setCachedOnly((v) => !v)}
-                className={`flex h-9 items-center gap-2 rounded-md px-3.5 text-[11.5px] font-semibold tracking-[0.04em] transition-colors ${
-                  cachedOnly
-                    ? "bg-elevated text-ink ring-1 ring-edge hover:bg-raised"
-                    : "bg-raised text-ink-muted hover:bg-elevated hover:text-ink"
-                }`}
-                aria-pressed={cachedOnly}
-              >
-                <Zap size={11} fill={cachedOnly ? "currentColor" : "none"} strokeWidth={2.2} />
-                {cachedOnly ? t("Cached only ({n})", { n: uncachedHidden }) : t("Cached only")}
-              </button>
-            )}
-            {addonOptions.length > 1 && (
-              <AddonFilterMenu
-                addonFilter={addonFilter}
-                setAddonFilter={setAddonFilter}
-                open={addonMenuOpen}
-                setOpen={setAddonMenuOpen}
-                addonOptions={addonOptions}
-                addonLogos={addonLogos}
-                totalCount={allStreams.length}
-                activeAddonName={activeAddonName}
-              />
-            )}
-            {qualityOptions.length > 1 && (
-              <QualityFilterMenu
-                qualityFilter={qualityFilter}
-                setQualityFilter={setQualityFilter}
-                open={qualityMenuOpen}
-                setOpen={setQualityMenuOpen}
-                qualityOptions={qualityOptions}
-                totalCount={allStreams.length}
-              />
-            )}
-            {sourceOptions.length > 1 && (
-              <SourceFilterMenu
-                sourceFilter={sourceFilter}
-                setSourceFilter={setSourceFilter}
-                open={sourceMenuOpen}
-                setOpen={setSourceMenuOpen}
-                sourceOptions={sourceOptions}
-                totalCount={allStreams.length}
-              />
-            )}
-            {preferredLangs.length > 0 && hiddenCount > 0 && (
-              <button
-                onClick={() => setFilterToPreferred((v) => !v)}
-                className={`flex h-9 items-center gap-2 rounded-md px-3.5 text-[11.5px] font-semibold tracking-[0.04em] transition-colors ${
-                  filterToPreferred
-                    ? "bg-elevated text-ink ring-1 ring-edge hover:bg-raised"
-                    : "bg-raised text-ink-muted hover:bg-elevated hover:text-ink"
-                }`}
-                aria-pressed={filterToPreferred}
-              >
-                <Languages size={13} strokeWidth={2.2} />
-                {filterToPreferred
-                  ? t("{langs} only · {n} hidden", { langs: abbreviateLanguages(preferredLangs), n: hiddenCount })
-                  : t("{langs} only", { langs: abbreviateLanguages(preferredLangs) })}
-              </button>
-            )}
+            <FiltersMenu filters={filters} />
             <button
               onClick={onClose}
-              data-tv-modal-close
               className="flex h-9 w-9 items-center justify-center rounded-md bg-raised text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
               aria-label={t("Close")}
             >

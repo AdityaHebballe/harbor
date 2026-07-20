@@ -6,6 +6,7 @@ import { languageName } from "@/lib/subtitles/language";
 import { searchSubtitles } from "@/lib/subtitles/search";
 import type { SubResult } from "@/lib/subtitles/types";
 import { useSettings } from "@/lib/settings";
+import { buildStreamIds } from "@/lib/streams/stream-ids";
 import type { PlayerSrc } from "@/lib/view";
 
 export type SubtitleLangGroup = { langKey: string; langDisplay: string; items: SubResult[] };
@@ -51,14 +52,28 @@ export function useSubtitleChoices(src: PlayerSrc) {
         addons = [];
       }
       const enabled = settings.subProvidersEnabled ?? {};
+      const candidateIds = buildStreamIds(
+        src.meta.id,
+        src.episode,
+        src.imdbId ?? null,
+        src.meta.behaviorHints?.defaultVideoId ?? null,
+      );
+      const animeIds = candidateIds.some((i) => i.startsWith("kitsu:") || i.startsWith("mal:"));
+      const imdbEpAligned =
+        !animeIds || src.episode?.imdbEpisode == null || src.episode.episode === src.episode.imdbEpisode;
       try {
         const r = await searchSubtitles(
           {
             imdbId: src.imdbId ?? (src.meta.id?.startsWith("tt") ? src.meta.id : undefined),
             stremioId: src.meta.id,
+            candidateIds,
             type: src.meta.type === "series" ? "series" : "movie",
-            season: src.episode?.season,
-            episode: src.episode?.episode,
+            season: imdbEpAligned
+              ? src.episode?.imdbSeason ?? src.episode?.season
+              : src.episode?.season,
+            episode: imdbEpAligned
+              ? src.episode?.imdbEpisode ?? src.episode?.episode
+              : src.episode?.episode,
             langs: preferredLangs,
             filename: src.streamRef?.parsedTitle ?? src.streamRef?.title ?? undefined,
           },

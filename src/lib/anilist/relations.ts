@@ -16,6 +16,7 @@ const RELATIONS_QUERY = `query ($id: Int) {
           title { english romaji userPreferred }
           coverImage { large }
           bannerImage
+          description(asHtml: false)
           startDate { year month day }
         }
       }
@@ -37,6 +38,7 @@ type RawNode = {
   title: { english: string | null; romaji: string | null; userPreferred: string | null };
   coverImage: { large: string | null } | null;
   bannerImage: string | null;
+  description: string | null;
   startDate: { year: number | null; month: number | null; day: number | null } | null;
 };
 type RawEdge = { relationType: string | null; node: RawNode | null };
@@ -49,6 +51,7 @@ export type AnilistFranchiseNode = {
   format?: string;
   poster?: string;
   banner?: string;
+  description?: string;
   episodes?: number;
   year?: number;
   startDate?: string;
@@ -87,6 +90,7 @@ function toNode(n: RawNode): AnilistFranchiseNode {
     format: n.format ?? undefined,
     poster: n.coverImage?.large ?? undefined,
     banner: n.bannerImage ?? undefined,
+    description: (n.description ?? "").replace(/<[^>]+>/g, "").trim() || undefined,
     episodes: n.episodes ?? undefined,
     year: n.seasonYear ?? n.startDate?.year ?? undefined,
     startDate: fmtDate(n.startDate),

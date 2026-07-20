@@ -8,9 +8,7 @@ export function DisplayLanguageSection() {
   return (
     <Section
       title={t("Display language")}
-      subtitle={t(
-        "Sets Harbor's interface language and automatically follows its text direction. This is separate from subtitle and metadata languages below.",
-      )}
+      subtitle={t("Sets the language of Harbor's own interface: menus, buttons, and labels. Arabic switches the layout to right to left. This is separate from subtitle and metadata languages below.")}
     >
       <div className="flex flex-col gap-2.5">
         {LANGUAGES.map((lang) => {

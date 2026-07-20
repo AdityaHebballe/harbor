@@ -17,6 +17,7 @@ export function Dropdown({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value) ?? null;
@@ -39,6 +40,12 @@ export function Dropdown({
 
   useLayoutEffect(() => {
     if (!open) return;
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      const desired = Math.min(360, window.innerHeight * 0.6) + 12;
+      const below = window.innerHeight - rect.bottom;
+      setDropUp(below < desired && rect.top > below);
+    }
     listRef.current
       ?.querySelector('[data-selected="true"]')
       ?.scrollIntoView({ block: "nearest" });
@@ -68,7 +75,9 @@ export function Dropdown({
         <div
           ref={listRef}
           role="listbox"
-          className="absolute inset-x-0 top-[calc(100%+6px)] z-50 max-h-[min(360px,60vh)] overflow-y-auto rounded-xl border border-edge bg-elevated p-1 shadow-[0_18px_50px_-15px_rgba(0,0,0,0.7)] animate-popover-in"
+          className={`absolute inset-x-0 z-50 max-h-[min(360px,60vh)] overflow-y-auto rounded-xl border border-edge bg-elevated p-1 shadow-[0_18px_50px_-15px_rgba(0,0,0,0.7)] animate-popover-in ${
+            dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"
+          }`}
         >
           {options.map((o) => {
             const active = o.value === value;

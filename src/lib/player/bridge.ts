@@ -1,5 +1,5 @@
 import type { SubCue } from "@/lib/subtitles/parser";
-import type { SubtitleLoadMetadata } from "./subtitle-load";
+import type { SubtitleLoadMetadata } from "@/lib/subtitles/types";
 
 export type TrackInfo = {
   id: string;
@@ -25,18 +25,6 @@ export type Chapter = {
 };
 
 export type PlayerStatus = "idle" | "loading" | "ready" | "playing" | "paused" | "ended" | "error";
-
-export function loadingSurfaceFor(input: {
-  forceShow: boolean;
-  everPlayed: boolean;
-  buffering: boolean;
-  status: PlayerStatus;
-  errorCode: PlayerSnapshot["errorCode"];
-}): "startup" | "buffering" | null {
-  if (input.errorCode != null || input.status === "ended") return null;
-  if (input.forceShow || !input.everPlayed) return "startup";
-  return input.buffering ? "buffering" : null;
-}
 
 export type PlayerSnapshot = {
   status: PlayerStatus;

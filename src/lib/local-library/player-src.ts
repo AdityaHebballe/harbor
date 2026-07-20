@@ -8,7 +8,7 @@ export function episodeLabel(e: LocalEntry): string | null {
   return null;
 }
 
-export function localPlayerSrc(entry: LocalEntry): PlayerSrc {
+export function localPlayerSrc(entry: LocalEntry, isAnimeHint?: boolean): PlayerSrc {
   const epLabel = episodeLabel(entry);
   return {
     meta: {
@@ -26,5 +26,6 @@ export function localPlayerSrc(entry: LocalEntry): PlayerSrc {
     title: entry.title,
     subtitle: epLabel ?? (entry.year ? String(entry.year) : entry.filename),
     notWebReady: true,
+    isAnime: isAnimeHint || entry.isAnime,
   };
 }

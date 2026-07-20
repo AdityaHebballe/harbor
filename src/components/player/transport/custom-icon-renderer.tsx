@@ -50,7 +50,7 @@ export function renderCustomIconControl(
           <button
             onClick={ctx.onBack}
             aria-label={t("Back")}
-            className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-md transition-colors hover:bg-black/80"
+            className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
           >
             <CustomIcon url={iconUrl} size={24} />
           </button>
@@ -64,9 +64,8 @@ export function renderCustomIconControl(
         <Tooltip label={ctx.playing ? t("Pause") : t("Play")}>
           <button
             onClick={ctx.onPlayPause}
-            data-player-play-pause
             aria-label={ctx.playing ? t("Pause") : t("Play")}
-            className={`relative flex items-center justify-center rounded-full bg-white/12 text-white backdrop-blur-md transition-[background-color,transform] hover:bg-white/22 active:scale-95 ${boxSize}`}
+            className={`flex items-center justify-center rounded-full bg-white/[0.16] text-white transition-[background-color,transform] hover:bg-white/22 active:scale-95 ${boxSize}`}
           >
             <CustomIcon url={iconUrl} size={iconSize} />
           </button>
@@ -108,15 +107,13 @@ export function renderCustomIconControl(
     case "prev-episode": {
       if (ctx.tight || !ctx.showEpisodeNav) return null;
       return (
-        <Tooltip label={t("Previous Episode")}>
+        <Tooltip label={t("Previous")}>
           <button
             onClick={ctx.hasPrevEp ? ctx.onPrevEp : undefined}
             disabled={!ctx.hasPrevEp}
-            aria-label={t("Previous Episode")}
+            aria-label={t("Previous")}
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-[background-color,color] ${
-              ctx.hasPrevEp
-                ? "text-white/90 hover:bg-white/10 hover:text-white"
-                : "cursor-not-allowed text-white/25"
+              ctx.hasPrevEp ? "text-white/90 hover:bg-white/10 hover:text-white" : "cursor-not-allowed text-white/25"
             }`}
           >
             <CustomIcon url={iconUrl} size={22} />
@@ -127,15 +124,13 @@ export function renderCustomIconControl(
     case "next-episode": {
       if (ctx.tight || !ctx.showEpisodeNav) return null;
       return (
-        <Tooltip label={t("Next Episode")}>
+        <Tooltip label={t("Next")}>
           <button
             onClick={ctx.hasNextEp ? ctx.onNextEp : undefined}
             disabled={!ctx.hasNextEp}
-            aria-label={t("Next Episode")}
+            aria-label={t("Next")}
             className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-[background-color,color] ${
-              ctx.hasNextEp
-                ? "text-white/90 hover:bg-white/10 hover:text-white"
-                : "cursor-not-allowed text-white/25"
+              ctx.hasNextEp ? "text-white/90 hover:bg-white/10 hover:text-white" : "cursor-not-allowed text-white/25"
             }`}
           >
             <CustomIcon url={iconUrl} size={22} />
@@ -171,12 +166,7 @@ export function renderCustomIconControl(
     case "draw-toggle": {
       if (ctx.compact || !ctx.showDraw) return null;
       return (
-        <BigButton
-          onClick={ctx.onToggleDraw}
-          active={ctx.drawMode}
-          ariaLabel={t("Draw on video")}
-          tooltip={t("Draw on video")}
-        >
+        <BigButton onClick={ctx.onToggleDraw} active={ctx.drawMode} ariaLabel={t("Draw on video")} tooltip={t("Draw on video")}>
           <CustomIcon url={iconUrl} size={22} />
         </BigButton>
       );
@@ -184,11 +174,7 @@ export function renderCustomIconControl(
     case "pip": {
       if (!ctx.capabilities.pictureInPicture) return null;
       return (
-        <BigButton
-          onClick={ctx.onPiP}
-          ariaLabel={t("Picture in Picture")}
-          tooltip={t("Picture in Picture")}
-        >
+        <BigButton onClick={ctx.onPiP} ariaLabel={t("Picture in Picture")} tooltip={t("Picture in Picture")}>
           <CustomIcon url={iconUrl} size={22} />
         </BigButton>
       );
@@ -235,11 +221,7 @@ export function renderCustomIconControlStremio(
     case "play-pause":
       return (
         <Tooltip label={ctx.playing ? t("Pause") : t("Play")}>
-          <StremioBtn
-            onClick={ctx.onPlayPause}
-            ariaLabel={ctx.playing ? t("Pause") : t("Play")}
-            playPause
-          >
+          <StremioBtn onClick={ctx.onPlayPause} ariaLabel={ctx.playing ? t("Pause") : t("Play")}>
             <CustomIcon url={iconUrl} size={32} />
           </StremioBtn>
         </Tooltip>
@@ -248,11 +230,7 @@ export function renderCustomIconControlStremio(
       if (!ctx.showEpisodeNav) return null;
       return (
         <Tooltip label={t("Previous episode")}>
-          <StremioBtn
-            onClick={ctx.onPrevEp}
-            ariaLabel={t("Previous episode")}
-            disabled={!ctx.hasPrevEp}
-          >
+          <StremioBtn onClick={ctx.onPrevEp} ariaLabel={t("Previous episode")} disabled={!ctx.hasPrevEp}>
             <CustomIcon url={iconUrl} size={26} />
           </StremioBtn>
         </Tooltip>
@@ -261,11 +239,7 @@ export function renderCustomIconControlStremio(
       if (!ctx.showEpisodeNav) return null;
       return (
         <Tooltip label={t("Next episode")}>
-          <StremioBtn
-            onClick={ctx.onNextEp}
-            ariaLabel={t("Next episode")}
-            disabled={!ctx.hasNextEp}
-          >
+          <StremioBtn onClick={ctx.onNextEp} ariaLabel={t("Next episode")} disabled={!ctx.hasNextEp}>
             <CustomIcon url={iconUrl} size={26} />
           </StremioBtn>
         </Tooltip>

@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { getEpisodeProgress, type EpisodeProgress } from "@/lib/episode-progress";
+import { manualWatchedState } from "@/lib/manual-watched";
 import type { KitsuEpisode } from "@/lib/providers/kitsu";
 import { spoilerMaskFor, type SpoilerMask } from "@/lib/spoilers";
 import { animeSeasonKey } from "./anime-season-key";
@@ -10,18 +11,26 @@ export function useAnimeProgressMap({
   episodes,
   displayEpisodes,
   metaId,
+  trackId,
   traktWatched,
   anilistWatched,
   malWatched,
+  entrySourceId,
+  entryAnilistWatched,
+  entryMalWatched,
   mwVersion,
   settings,
 }: {
   episodes: KitsuEpisode[];
   displayEpisodes: KitsuEpisode[];
   metaId: string;
+  trackId?: string;
   traktWatched: Set<string>;
   anilistWatched?: Set<string>;
   malWatched?: Set<string>;
+  entrySourceId?: string | null;
+  entryAnilistWatched?: Set<string>;
+  entryMalWatched?: Set<string>;
   mwVersion: number;
   settings: Parameters<typeof spoilerMaskFor>[0];
 }) {
@@ -30,28 +39,63 @@ export function useAnimeProgressMap({
     const add = (ep: KitsuEpisode) => {
       if (m.has(ep.id)) return;
       const isCurrent = ep.sourceMetaId == null;
-      m.set(
-        ep.id,
-        getEpisodeProgress(
-          ep.sourceMetaId ?? metaId,
-          animeSeasonKey(ep),
+      const isEntry = entrySourceId != null && ep.sourceMetaId === entrySourceId;
+      const seasonKey = animeSeasonKey(ep);
+      let prog = getEpisodeProgress(
+        ep.sourceMetaId ?? metaId,
+        seasonKey,
+        ep.number,
+        ep.length ?? null,
+        ep.imdbId ?? null,
+        traktWatched,
+        undefined,
+        isCurrent ? anilistWatched : isEntry ? entryAnilistWatched : undefined,
+        undefined,
+        isCurrent ? malWatched : isEntry ? entryMalWatched : undefined,
+        ep.imdbSeason,
+        ep.imdbEpisode,
+      );
+      if (
+        isCurrent &&
+        !prog.watched &&
+        trackId &&
+        trackId !== metaId &&
+        manualWatchedState(metaId, seasonKey, ep.number) !== false
+      ) {
+        const alt = getEpisodeProgress(
+          trackId,
+          seasonKey,
           ep.number,
           ep.length ?? null,
           ep.imdbId ?? null,
           traktWatched,
           undefined,
-          isCurrent ? anilistWatched : undefined,
+          anilistWatched,
           undefined,
-          isCurrent ? malWatched : undefined,
+          malWatched,
           ep.imdbSeason,
           ep.imdbEpisode,
-        ),
-      );
+        );
+        if (alt.watched || alt.ratio > prog.ratio) prog = alt;
+      }
+      m.set(ep.id, prog);
     };
     for (const ep of episodes) add(ep);
     for (const ep of displayEpisodes) add(ep);
     return m;
-  }, [episodes, displayEpisodes, metaId, traktWatched, anilistWatched, malWatched, mwVersion]);
+  }, [
+    episodes,
+    displayEpisodes,
+    metaId,
+    trackId,
+    traktWatched,
+    anilistWatched,
+    malWatched,
+    entrySourceId,
+    entryAnilistWatched,
+    entryMalWatched,
+    mwVersion,
+  ]);
 
   const progressFor = (ep: KitsuEpisode) => progressById.get(ep.id) ?? NO_PROGRESS;
 

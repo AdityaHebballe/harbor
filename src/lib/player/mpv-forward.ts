@@ -1,10 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import {
-  emptySnapshot,
-  type PlayerBridge,
-  type PlayerCapabilities,
-  type PlayerSnapshot,
-} from "./bridge";
+import { emptySnapshot, type PlayerBridge, type PlayerCapabilities, type PlayerSnapshot } from "./bridge";
 import { isWindowsDesktop } from "@/lib/platform";
 import { subtitleDownloadArgs } from "./subtitle-load";
 
@@ -104,12 +99,8 @@ export function createForwardingMpvBridge(): ForwardingBridge {
     setAudioDevice(name) {
       void set("audio-device", name && name !== "auto" ? name : "auto");
     },
-    getSelectedTrackCues() {
-      return null;
-    },
-    getSelectedTrackUrl() {
-      return null;
-    },
+    getSelectedTrackCues() { return null; },
+    getSelectedTrackUrl() { return null; },
     setMediaInfo() {},
     async screenshot(path) {
       try {

@@ -1,4 +1,5 @@
 import { type Meta } from "@/lib/cinemeta";
+import { lruSet } from "@/lib/cache";
 import { resolveMeta } from "@/lib/meta-resource";
 
 const metaHydrateCache = new Map<string, Promise<Meta | null>>();
@@ -49,7 +50,7 @@ export async function hydrateLibraryMeta(
     }
     return (await resolveMeta(authKey, type, id).catch(() => null)) ?? null;
   })();
-  metaHydrateCache.set(cacheKey, p);
+  lruSet(metaHydrateCache, cacheKey, p, 400);
   return p;
 }
 

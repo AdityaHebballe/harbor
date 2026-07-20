@@ -30,6 +30,27 @@ const STEPS: { title: string; body: string; img: string; callout?: boolean }[] =
   },
 ];
 
+function linkify(text: string) {
+  return text.split(/(\bhttps?:\/\/\S+|\bthetvdb\.com\/\S+)/g).map((part, i) => {
+    if (!/^(https?:\/\/|thetvdb\.com\/)/.test(part)) return <span key={i}>{part}</span>;
+    const trail = part.match(/[.,;:)]+$/)?.[0] ?? "";
+    const url = trail ? part.slice(0, part.length - trail.length) : part;
+    const href = url.startsWith("http") ? url : `https://${url}`;
+    return (
+      <span key={i}>
+        <button
+          type="button"
+          onClick={() => openUrl(href)}
+          className="font-medium text-accent underline decoration-accent/40 underline-offset-2 transition-colors hover:decoration-accent"
+        >
+          {url}
+        </button>
+        {trail}
+      </span>
+    );
+  });
+}
+
 export function TvdbGuideModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   useEffect(() => {
     if (!open) return;
@@ -77,7 +98,7 @@ export function TvdbGuideModal({ open, onClose }: { open: boolean; onClose: () =
               </span>
               <div className="flex min-w-0 flex-col gap-1.5">
                 <span className="text-[14.5px] font-medium text-ink">{step.title}</span>
-                <p className="text-[13px] leading-relaxed text-ink-muted">{step.body}</p>
+                <p className="text-[13px] leading-relaxed text-ink-muted">{linkify(step.body)}</p>
                 {step.callout && (
                   <div className="mt-1 flex items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 px-3.5 py-3">
                     <Check size={15} strokeWidth={2.6} className="mt-0.5 shrink-0 text-accent" />

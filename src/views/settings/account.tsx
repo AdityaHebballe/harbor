@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import stremioWordmark from "@/assets/stremio-wordmark.png";
 import { AuthModal } from "@/components/auth-modal";
 import { useAuth } from "@/lib/auth";
+import { currentAuthor, subscribeAuthor } from "@/lib/theme-auth";
 import { useProfiles } from "@/lib/profiles";
 import { useSettings } from "@/lib/settings";
 import { useTogether } from "@/lib/together/provider";
@@ -16,13 +17,16 @@ import { StartupDefaults } from "./account/startup-defaults";
 import { SettingsScopeCard } from "./account/settings-scope-card";
 import { AvatarFan } from "@/components/avatar-picker/avatar-fan";
 import { AvatarCatalogModal } from "@/components/avatar-picker/avatar-catalog-modal";
-import { avatarUrl } from "@/lib/avatars/catalog";
+import { HarborAccountPanel } from "@/views/account/harbor-account-panel";
+import { nameEquals } from "@/lib/account/name-sync";
 
 export function AccountStub() {
   const t = useT();
   const { user, signOut } = useAuth();
   const { settings, update } = useSettings();
   const { displayName, setDisplayName } = useTogether();
+  const [harborAuthor, setHarborAuthor] = useState(currentAuthor);
+  useEffect(() => subscribeAuthor(() => setHarborAuthor(currentAuthor())), []);
   const { activeProfile, updateProfile } = useProfiles();
   const pushIdentity = (patch: { harborColor?: string; harborAvatar?: string | null }) => {
     update(patch);
@@ -33,9 +37,11 @@ export function AccountStub() {
     if (Object.keys(profilePatch).length > 0) updateProfile(activeProfile.id, profilePatch);
   };
   const pushDisplayName = (next: string) => {
+    const trimmed = next.trim();
+    if (nameEquals(trimmed, displayName)) return;
     setDisplayName(next);
-    if (activeProfile && next && next !== activeProfile.name) {
-      updateProfile(activeProfile.id, { name: next });
+    if (activeProfile && trimmed && trimmed !== activeProfile.name) {
+      updateProfile(activeProfile.id, { name: trimmed });
     }
   };
   const [showAuth, setShowAuth] = useState(false);
@@ -78,7 +84,7 @@ export function AccountStub() {
     <div className="flex flex-col gap-5">
       <Section
         title={t("Harbor identity")}
-        subtitle={t("How you appear in Watch Together, sessions, and chat. Sits on top of your Stremio account.")}
+        subtitle={t("Your avatar, name, and handle across Harbor.")}
       >
         <div className="flex flex-col gap-4 rounded-2xl border border-edge-soft bg-canvas/40 p-5">
           <div className="flex items-center gap-5">
@@ -100,6 +106,7 @@ export function AccountStub() {
                   <input
                     autoFocus
                     value={nameDraft}
+                    maxLength={32}
                     onChange={(e) => setNameDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -131,11 +138,13 @@ export function AccountStub() {
                   <span className="font-display text-[24px] font-medium leading-tight tracking-tight text-ink">
                     {displayName}
                   </span>
-                  {user && (
+                  {harborAuthor?.handle ? (
+                    <span className="text-[13px] font-medium text-ink-subtle">@{harborAuthor.handle}</span>
+                  ) : user ? (
                     <span className="text-[13px] text-ink-subtle">
                       ({user.fullname || user.email.split("@")[0]})
                     </span>
-                  )}
+                  ) : null}
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden className="text-ink-subtle">
                     <path
                       d="M16.5 4.5l3 3-11 11H5.5v-3l11-11z"
@@ -168,7 +177,7 @@ export function AccountStub() {
               </div>
               <AvatarFan
                 onClick={() => setAvatarPickerOpen(true)}
-                onRandomize={(id) => pushIdentity({ harborAvatar: avatarUrl(id) })}
+                onRandomize={(value) => pushIdentity({ harborAvatar: value })}
               />
               <ColorPicker
                 value={settings.harborColor}
@@ -178,6 +187,8 @@ export function AccountStub() {
           </div>
         </div>
       </Section>
+
+      <HarborAccountPanel />
 
       <Section
         title={t("Profiles")}
@@ -272,8 +283,8 @@ export function AccountStub() {
       {avatarPickerOpen && (
         <AvatarCatalogModal
           current={effectiveAvatar}
-          onPick={(id) => {
-            pushIdentity({ harborAvatar: avatarUrl(id) });
+          onPick={(value) => {
+            pushIdentity({ harborAvatar: value });
             setAvatarPickerOpen(false);
           }}
           onClose={() => setAvatarPickerOpen(false)}

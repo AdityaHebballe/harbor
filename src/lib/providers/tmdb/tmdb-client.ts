@@ -1,11 +1,11 @@
-import { createRequestScheduler } from "@/lib/request-scheduler";
 import { safeFetch } from "@/lib/safe-fetch";
+import { createRequestScheduler } from "@/lib/request-scheduler";
 import { imageRequestLang } from "./tmdb-image-lang";
-
-const tmdbRequests = createRequestScheduler({ concurrency: 6 });
 
 export const TMDB = "https://api.themoviedb.org/3";
 export const IMG = "https://image.tmdb.org/t/p";
+
+const tmdbRequests = createRequestScheduler({ concurrency: 6 });
 
 let tmdbLanguage = "";
 
@@ -27,13 +27,9 @@ function logTmdbFailure(path: string, status: number, body: string): void {
   if (now - lastFailureLogged < 1000) return;
   lastFailureLogged = now;
   if (status === 401) {
-    console.warn(
-      `[tmdb] 401 unauthorized on ${path} — TMDB key invalid or revoked. ${body.slice(0, 200)}`,
-    );
+    console.warn(`[tmdb] 401 unauthorized on ${path} — TMDB key invalid or revoked. ${body.slice(0, 200)}`);
   } else if (status === 429) {
-    console.warn(
-      `[tmdb] 429 rate-limited on ${path} — TMDB throttling this IP/key. ${body.slice(0, 200)}`,
-    );
+    console.warn(`[tmdb] 429 rate-limited on ${path} — TMDB throttling this IP/key. ${body.slice(0, 200)}`);
   } else if (status === 404) {
     console.warn(`[tmdb] 404 not found on ${path} — TMDB does not have this resource.`);
   } else {
@@ -58,11 +54,20 @@ async function readJsonBody(res: Response, path: string): Promise<string> {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
+const TMDB_TIMEOUT_MS = 15000;
+
 async function tmdbHttpFetch(url: string): Promise<Response> {
-  return safeFetch(url, {
-    method: "GET",
-    headers: { Accept: "application/json" },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TMDB_TIMEOUT_MS);
+  try {
+    return await safeFetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function fetchTmdbOnce<T>(
@@ -102,9 +107,7 @@ export async function get<T>(
       const backoffMs = Math.min(2000, 250 * 2 ** attempt);
       const { status, data } = await tmdbRequests.schedule(target, async () => {
         const result = await fetchTmdbOnce<T>(target, path);
-        if (result.status === 429 || (result.status >= 500 && result.status < 600)) {
-          tmdbRequests.pauseFor(backoffMs);
-        }
+        if (result.status === 429 || (result.status >= 500 && result.status < 600)) tmdbRequests.pauseFor(backoffMs);
         return result;
       });
       if (status === 429 || (status >= 500 && status < 600)) {

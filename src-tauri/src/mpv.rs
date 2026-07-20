@@ -66,7 +66,6 @@ pub struct MpvGeometry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub(crate) struct NativeMpvRect {
     pub x: f64,
     pub y: f64,
@@ -74,7 +73,6 @@ pub(crate) struct NativeMpvRect {
     pub height: f64,
 }
 
-#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub(crate) fn map_css_geometry(
     css: &MpvGeometry,
     native_width: f64,
@@ -214,7 +212,7 @@ fn force_c_numeric_locale() {}
 #[tauri::command]
 pub async fn mpv_probe(_app: AppHandle) -> MpvProbe {
     force_c_numeric_locale();
-    match Mpv::new() {
+    match Mpv::with_initializer(|init| init.set_property("media-controls", "no")) {
         Ok(mpv) => {
             let version = mpv
                 .get_property::<String>("mpv-version")
@@ -279,7 +277,8 @@ pub async fn mpv_audio_devices(state: State<'_, MpvState>) -> Result<Vec<AudioDe
         return Ok(read_audio_devices(&mpv));
     }
     force_c_numeric_locale();
-    let mpv = Mpv::new().map_err(|e| format!("mpv init: {}", e))?;
+    let mpv = Mpv::with_initializer(|init| init.set_property("media-controls", "no"))
+        .map_err(|e| format!("mpv init: {}", e))?;
     Ok(read_audio_devices(&mpv))
 }
 
@@ -288,7 +287,6 @@ fn apply_pre_init(
     args: &MpvStartArgs,
     embed_hwnd: Option<&str>,
 ) -> Result<(), String> {
-    let rtx_hdr = cfg!(windows) && args.rtx_hdr.unwrap_or(false);
     // Property sets here are best-effort. Some builds of mpv (e.g. Flatpak's
     // meson build without Lua) omit optional properties like `osc`. Treat
     // PROPERTY_NOT_FOUND as non-fatal so the player still initializes.
@@ -316,6 +314,7 @@ fn apply_pre_init(
     if !header_fields.is_empty() {
         set("http-header-fields", &header_fields.join(","));
     }
+    let rtx = cfg!(windows) && args.rtx_hdr.unwrap_or(false);
     let on_mac_embed = cfg!(target_os = "macos") && embed_hwnd.is_some();
     if on_mac_embed {
         set("hwdec", "videotoolbox-copy");
@@ -328,7 +327,7 @@ fn apply_pre_init(
             set("force-window", "yes");
         }
     } else if cfg!(windows) {
-        set("hwdec", if rtx_hdr { "d3d11va" } else { "auto" });
+        set("hwdec", if rtx { "d3d11va" } else { "auto" });
         set("force-window", "immediate");
     } else {
         set("hwdec", "auto");
@@ -353,7 +352,7 @@ fn apply_pre_init(
     set("volume-max", "600");
     let _ = init.set_property("background-color", "#000000");
     let _ = init.set_property("background", "color");
-    let _ = init.set_property("media-controls", "yes");
+    let _ = init.set_property("media-controls", "no");
 
     if let Some(hwnd) = embed_hwnd {
         #[cfg(windows)]
@@ -379,7 +378,11 @@ fn apply_pre_init(
     let opt = |k: &str, v: &str| {
         let _ = init.set_property(k, v);
     };
-    if args.hdr_to_sdr.unwrap_or(false) && !rtx_hdr {
+    if rtx {
+        opt("gpu-api", "d3d11");
+        opt("target-colorspace-hint", "yes");
+        opt("target-peak", "10000");
+    } else if args.hdr_to_sdr.unwrap_or(false) {
         opt("tone-mapping", "spline");
         opt("gamut-mapping-mode", "perceptual");
         opt("hdr-compute-peak", "yes");
@@ -394,7 +397,7 @@ fn apply_pre_init(
         #[cfg(windows)]
         {
             opt("target-colorspace-hint", "yes");
-            if embed_hwnd.is_some() || rtx_hdr {
+            if embed_hwnd.is_some() {
                 opt("gpu-api", "d3d11");
             }
         }
@@ -708,17 +711,8 @@ pub async fn mpv_start(
         args.mac_edr.unwrap_or(false),
     );
 
-    let start_at_sec = args.start_at_sec.filter(|start| *start > 0.0);
-    let start_option = start_at_sec.map(|start| format!("start={start}"));
-    let mut load_args = vec!["loadfile", args.url.as_str(), "replace", "0"];
-    if let Some(start_option) = start_option.as_deref() {
-        load_args.push(start_option);
-    }
-    eprintln!(
-        "[harbor::mpv] loadfile {} start_at_sec={:?}",
-        args.url, start_at_sec
-    );
-    mpv_argv_command(&*mpv_arc, &load_args).map_err(|e| {
+    eprintln!("[harbor::mpv] loadfile {}", args.url);
+    mpv_argv_command(&*mpv_arc, &["loadfile", &args.url, "replace"]).map_err(|e| {
         eprintln!("[harbor::mpv] loadfile FAILED: {}", e);
         format!("loadfile: {}", e)
     })?;
@@ -732,12 +726,6 @@ pub async fn mpv_start(
         embedded: use_render_api,
     });
     drop(g);
-
-    #[cfg(windows)]
-    if want_embed {
-        // Reveal video under the UI only while embedded playback is active.
-        crate::webview_helpers::apply_transparency(&app, "main");
-    }
 
     #[cfg(not(windows))]
     let _ = embed_hwnd;
@@ -1119,12 +1107,12 @@ pub async fn mpv_set_geometry(
             g.as_ref().map(|s| s.embedded).unwrap_or(false)
         };
         if embedded {
-            // GLArea fills the full window via GTK expand flags, so
-            // geometry tracking is redundant. We still dispatch to the
-            // main thread as a rendering tickle for the GLArea.
+            let (tx, rx) = std::sync::mpsc::sync_channel::<()>(1);
             let _ = app.run_on_main_thread(move || {
                 let _ = crate::mpv_render_linux::resize_to(geom);
+                let _ = tx.send(());
             });
+            let _ = rx.recv_timeout(std::time::Duration::from_millis(300));
             return Ok(());
         }
     }
@@ -2077,87 +2065,9 @@ pub async fn mpv_stop(app: AppHandle, state: State<'_, MpvState>) -> Result<(), 
             *guard = None;
         }
         MPV_POS_LAST_COUNT.store(usize::MAX, std::sync::atomic::Ordering::Relaxed);
-        // Orphan mpv child HWNDs can paint solid black under a transparent WebView.
-        hide_embedded_mpv_children(&app);
-        // Restore opaque WebView background when leaving embedded playback.
-        crate::webview_helpers::apply_opaque(&app, "main");
     }
-    #[cfg(not(windows))]
-    {
-        let _ = app;
-    }
+    let _ = app;
     Ok(())
-}
-
-/// Hide/destroy leftover mpv child windows under the main HWND so they cannot
-/// cover the WebView after stop (stuck black surface).
-#[cfg(windows)]
-fn hide_embedded_mpv_children(app: &AppHandle) {
-    use windows::core::BOOL;
-    use windows::Win32::Foundation::{HWND, LPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        DestroyWindow, EnumChildWindows, GetClassNameW, GetWindowTextW, SetWindowPos, HWND_BOTTOM,
-        SWP_HIDEWINDOW, SWP_NOACTIVATE,
-    };
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    let Ok(parent_hwnd) = window.hwnd() else {
-        return;
-    };
-
-    struct EnumState {
-        mpv_hwnds: Vec<isize>,
-    }
-    let mut state = EnumState {
-        mpv_hwnds: Vec::new(),
-    };
-    let state_ptr = &mut state as *mut EnumState;
-
-    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        let mut class_buf = [0u16; 256];
-        let class_len = GetClassNameW(hwnd, &mut class_buf);
-        let class_name = String::from_utf16_lossy(&class_buf[..class_len as usize]);
-        let mut title_buf = [0u16; 256];
-        let title_len = GetWindowTextW(hwnd, &mut title_buf);
-        let title = String::from_utf16_lossy(&title_buf[..title_len as usize]);
-        let is_mpv = class_name == "mpv"
-            || class_name.starts_with("mpv ")
-            || (class_name.is_empty() && title.starts_with("Harbor"));
-        if is_mpv {
-            let s = lparam.0 as *mut EnumState;
-            (*s).mpv_hwnds.push(hwnd.0 as isize);
-        }
-        BOOL(1)
-    }
-
-    unsafe {
-        let _ = EnumChildWindows(
-            Some(parent_hwnd),
-            Some(enum_proc),
-            LPARAM(state_ptr as isize),
-        );
-        for h in &state.mpv_hwnds {
-            let target = HWND(*h as *mut _);
-            let _ = SetWindowPos(
-                target,
-                Some(HWND_BOTTOM),
-                -32000,
-                -32000,
-                1,
-                1,
-                SWP_NOACTIVATE | SWP_HIDEWINDOW,
-            );
-            // Best-effort destroy; ignore failures (mpv may already be tearing down).
-            let _ = DestroyWindow(target);
-        }
-    }
-    if !state.mpv_hwnds.is_empty() {
-        eprintln!(
-            "[harbor::mpv] cleaned {} embedded mpv child hwnd(s) after stop",
-            state.mpv_hwnds.len()
-        );
-    }
 }
 
 #[cfg(windows)]

@@ -1,7 +1,11 @@
 import { Bookmark, Check, Popcorn, RefreshCcw } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { animeHasDub, dubSetReady, ensureDubSet, subscribeDubSet } from "@/lib/providers/anime-dub-sub";
-import { awardSourceMeta, findTopAward, parseAwardYear, type AwardWin } from "@/lib/anime-awards";
+import { awardSourceMeta, findAnyAwardWins, findTopAward, parseAwardYear, type AwardWin } from "@/lib/anime-awards";
+import { resolveAwardIcon, useAwardPacks } from "@/lib/award-icons";
+import { AwardTab } from "@/components/award-tab";
+import { TopTenRibbon } from "@/components/top-ten-ribbon";
+import { isTop10, useTop10Version } from "@/lib/top10-set";
 import { meta as fetchMeta, narrowMediaType, type Meta } from "@/lib/cinemeta";
 import { useContextMenu } from "@/lib/context-menu";
 import { useT } from "@/lib/i18n";
@@ -17,12 +21,14 @@ import { cinemetaRatingPrefetch, useCinemetaRating } from "@/lib/providers/cinem
 import { harborImdbTitle } from "@/lib/providers/harbor-imdb";
 import { mdblistCardPrefetch, useMdblistCardScores } from "@/lib/providers/mdblist-batch";
 import { needsImdbForPoster, needsTmdbForPoster, rpdbPoster } from "@/lib/providers/rpdb";
+import { useTitlePoster } from "@/lib/title-poster";
 import { externalToKitsu, kitsuToImdb, kitsuToTvdb } from "@/lib/providers/anime-mapping";
 import {
   tmdbIdFromImdb,
   tmdbImdbId,
   useTmdbIdFromImdb,
   useTmdbImdbId,
+  useTmdbVote,
 } from "@/lib/providers/tmdb";
 import { useSettings } from "@/lib/settings";
 import { useSimklCardScores, useSimklCardScoresByAnimeId } from "@/lib/simkl/ratings";
@@ -30,8 +36,8 @@ import { simklRequest } from "@/lib/simkl/client";
 import { getLocalCache } from "@/lib/simkl/activities";
 import { aniZipByKitsu, aniZipByMal } from "@/lib/providers/anizip";
 import { useView } from "@/lib/view";
+import { useTilt } from "@/lib/use-tilt";
 import { observe } from "@/lib/visibility";
-import { prefetchFranchiseRoot } from "@/lib/providers/anime-franchise-root";
 import { useInWatchlist } from "@/lib/watchlist";
 import { useMetaWatched } from "@/lib/watched-flag";
 import { useInLocalLibrary } from "@/lib/local-library";
@@ -44,6 +50,7 @@ import { CardHoverOverlay, cardHoverPosterClass, type CardHoverStyle } from "./p
 import { CustomHoverOverlay, customHoverPosterProps } from "./pick-card/custom-hover";
 import { getCustomHover } from "@/lib/custom-hover";
 import { RtBadge } from "./rt-badge";
+import { ClassicAwardBadge, ClassicAwardTab, useClassicAwardWin } from "./card-award";
 import mdblistLogo from "@/assets/addon-logos/mdblist.png";
 import letterboxdLogo from "@/assets/addon-logos/letterboxd.png";
 import traktLogo from "@/assets/trakt.svg";
@@ -81,12 +88,13 @@ export const PickCard = memo(function PickCard({
   awardLookupName?: string;
   kids?: boolean;
 }) {
-  const { openMeta, openPicker } = useView();
+  const { openMeta, openPicker, openManga } = useView();
   const { open: openContextMenu } = useContextMenu();
   const { settings } = useSettings();
   const cardStyle: CardHoverStyle = kids || !settings.hoverPreviewEnabled ? "none" : settings.cardHoverStyle;
   const activeCustom = cardStyle === "custom" ? getCustomHover(settings.customHoverId) : null;
-  const inCardHover: CardHoverStyle = cardStyle === "default" || cardStyle === "custom" ? "none" : cardStyle;
+  const inCardHover: CardHoverStyle =
+    cardStyle === "default" || cardStyle === "custom" || cardStyle === "marquee" ? "none" : cardStyle;
   const customProps = activeCustom ? customHoverPosterProps(activeCustom) : null;
   const badgeFade = inCardHover !== "none" || activeCustom ? "transition-opacity duration-150 group-hover:opacity-0 group-focus-within:opacity-0" : "";
   const t = useT();
@@ -96,10 +104,18 @@ export const PickCard = memo(function PickCard({
     if (settings.showDubBadge && isAnimeCardId) ensureDubSet();
   }, [isAnimeCardId, settings.showDubBadge]);
   const hasDub = settings.showDubBadge && isAnimeCardId && dubReady && animeHasDub(meta.id);
+  useTop10Version();
+  const showTop10 = settings.top10Ribbon && isTop10(meta.id, meta.name);
   const inCinema = isInCinema(meta);
   const rerun = (inCinema || flagRerun) && isRerun(meta);
   const showCinema = inCinema && !rerun;
   const newBadge = !rerun && !inCinema ? deriveBadge(meta) : null;
+  const topLeftBadges = (hasDub ? 1 : 0) + (rerun || showCinema || newBadge ? 1 : 0);
+  const watchlistTop = settings.watchlistBadge === "topStart" || settings.watchlistBadge === "topEnd";
+  const watchlistPos =
+    showTop10 && watchlistTop
+      ? `start-1.5 ${topLeftBadges >= 2 ? "top-[52px]" : topLeftBadges === 1 ? "top-[30px]" : "top-1.5"}`
+      : WATCHLIST_POS[settings.watchlistBadge];
   const resolvedImdb = useTmdbImdbId(meta.id);
   const imdbId = resolvedImdb ?? undefined;
   const cached = useOmdbScores(imdbId);
@@ -127,7 +143,8 @@ export const PickCard = memo(function PickCard({
     settings.showMetacriticBadge ||
     settings.showLetterboxdBadge ||
     settings.showMdblistBadge ||
-    settings.showTraktBadge;
+    settings.showTraktBadge ||
+    settings.showSimklBadge;
   const cardScores = useMdblistCardScores(wantMdblist ? imdbId : undefined, mediaKind);
   const hasInlineImdb = meta.id.startsWith("tt") && !!meta.imdbRating;
   const wantCinemetaRating = settings.showImdbBadge && !isAnimeCardId && !hasInlineImdb;
@@ -138,26 +155,26 @@ export const PickCard = memo(function PickCard({
       cached?.imdbRating ??
       cinemetaRating ??
       (meta.id.startsWith("tt") ? meta.imdbRating : undefined);
-  const cardRating = isAnimeCardId
+  const animeRating = isAnimeCardId
     ? settings.showMalBadge
       ? animeWantsImdb && harborRating
         ? harborRating
         : meta.imdbRating
       : undefined
-    : cardImdbValue
-      ? settings.showImdbBadge
-        ? cardImdbValue
-        : undefined
-      : settings.showTmdbBadge
-        ? meta.imdbRating
+    : undefined;
+  const animeRatingSource: "imdb" | "mal" = animeWantsImdb && harborRating ? "imdb" : "mal";
+  const tmdbVote = useTmdbVote(
+    settings.showTmdbBadge && !isAnimeCardId ? meta.id : undefined,
+    meta.type === "series" ? "series" : "movie",
+    settings.tmdbKey,
+  );
+  const cardRating = isAnimeCardId
+    ? animeRating
+    : settings.showImdbBadge && cardImdbValue
+      ? cardImdbValue
+      : settings.showTmdbBadge && tmdbVote
+        ? tmdbVote
         : undefined;
-  const cardRatingSource = isAnimeCardId
-    ? animeWantsImdb && harborRating
-      ? "imdb"
-      : "mal"
-    : cardImdbValue
-      ? "imdb"
-      : "tmdb";
   const simklCardScoreImdb = useSimklCardScores(
     settings.showSimklBadge && !isAnimeCardId ? imdbId : undefined,
   );
@@ -165,10 +182,19 @@ export const PickCard = memo(function PickCard({
     settings.showSimklBadge && isAnimeCardId ? meta.id : undefined,
   );
   const simklCardScore = isAnimeCardId ? simklCardScoreAnime : simklCardScoreImdb;
+  const simklCardValue = simklCardScore.score ?? cardScores?.simkl ?? null;
   const cardBadges: CardBadge[] = [];
-  if (cardRating) cardBadges.push({ kind: "rating", source: cardRatingSource, value: cardRating });
-  if (settings.showSimklBadge && simklCardScore.score != null)
-    cardBadges.push({ kind: "simkl", value: simklCardScore.score });
+  if (isAnimeCardId) {
+    if (animeRating)
+      cardBadges.push({ kind: "rating", source: animeRatingSource, value: animeRating });
+  } else {
+    if (settings.showImdbBadge && cardImdbValue)
+      cardBadges.push({ kind: "rating", source: "imdb", value: cardImdbValue });
+    if (settings.showTmdbBadge && tmdbVote)
+      cardBadges.push({ kind: "rating", source: "tmdb", value: tmdbVote });
+  }
+  if (settings.showSimklBadge && simklCardValue != null)
+    cardBadges.push({ kind: "simkl", value: simklCardValue });
   if (settings.showRtBadge && cached?.rtCritics != null)
     cardBadges.push({ kind: "rt", value: cached.rtCritics });
   if (settings.showPopcornBadge && cardScores?.rtAudience != null)
@@ -182,10 +208,20 @@ export const PickCard = memo(function PickCard({
   if (settings.showTraktBadge && cardScores?.trakt != null)
     cardBadges.push({ kind: "trakt", value: cardScores.trakt });
   const ref = useRef<HTMLButtonElement>(null);
+  const tilt = useTilt<HTMLDivElement>();
+  const tiltable = !activeCustom;
   const altIds = useMemo(() => [imdbId], [imdbId]);
   const inWatchlist = useInWatchlist(meta.id, altIds);
-  const watched = useMetaWatched(meta.id, meta.type);
+  const watched = useMetaWatched(meta.id, meta.type, resolvedImdb);
   const inLocalLibrary = useInLocalLibrary(meta.id, altIds);
+  const wlTopEnd =
+    inWatchlist &&
+    settings.watchlistBadge === "topEnd" &&
+    !(showTop10 && watchlistTop);
+  const watchedPos =
+    settings.badgePlacement === "top"
+      ? "bottom-1.5 end-1.5"
+      : `end-1.5 ${wlTopEnd ? "top-[34px]" : "top-1.5"}`;
 
   const [imgIdx, setImgIdx] = useState(0);
   const [hydratedPoster, setHydratedPoster] = useState<string | undefined>();
@@ -203,12 +239,14 @@ export const PickCard = memo(function PickCard({
     !!settings.tmdbKey &&
     ((posterNeedsImdb && resolvedImdb === undefined) ||
       (wantTmdbPoster && resolvedTmdb === undefined));
+  const pinnedPoster = useTitlePoster(meta.id);
   const posterCandidates = useMemo(() => {
-    if (posterPending) return [];
+    if (posterPending && !pinnedPoster) return [];
     const base = localizedPoster ?? meta.poster;
     const seen = new Set<string>();
     const out: string[] = [];
     for (const u of [
+      pinnedPoster,
       animeImdb ? rpdbPoster(settings.rpdbKey, animeImdb, base, animeTmdb) : undefined,
       animeTvdb ? rpdbPoster(settings.rpdbKey, `tvdb:${animeTvdb}`, base) : undefined,
       rpdbPoster(settings.rpdbKey, meta.id, base, posterAltId),
@@ -221,7 +259,7 @@ export const PickCard = memo(function PickCard({
       out.push(u);
     }
     return out;
-  }, [settings.rpdbKey, meta.id, posterAltId, meta.poster, hydratedPoster, animeImdb, animeTvdb, animeTmdb, localizedPoster, posterPending]);
+  }, [settings.rpdbKey, meta.id, posterAltId, meta.poster, hydratedPoster, animeImdb, animeTvdb, animeTmdb, localizedPoster, posterPending, pinnedPoster]);
   const posterSrc = posterCandidates[imgIdx];
 
   useEffect(() => {
@@ -441,53 +479,71 @@ export const PickCard = memo(function PickCard({
     return () => off?.();
   }, [meta.id, meta.type, settings.tmdbKey, settings.omdbKey, settings.mdblistKey, wantMdblist, settings.rpdbKey, wantCinemetaRating]);
 
-  useEffect(() => {
-    if (!isAnimeCardId) return;
-    const el = ref.current;
-    if (!el) return;
-    let off: (() => void) | null = null;
-    off = observe(el, (visible) => {
-      if (!visible) return;
-      off?.();
-      off = null;
-      prefetchFranchiseRoot(meta.id);
-    });
-    return () => off?.();
-  }, [meta.id, isAnimeCardId]);
+  const awardYear = parseAwardYear(meta.releaseInfo);
+  const awardImdb =
+    !isAnimeCardId && (settings.awardTabs || settings.showCardBadges) ? imdbId : undefined;
+  const classicWin = useClassicAwardWin(meta, awardImdb);
+  const animeAwardWin =
+    settings.awardTabs && isAnimeCardId
+      ? (findTopAward(awardLookupName ?? meta.name, awardYear) ?? findTopAward(meta.name, awardYear))
+      : null;
+  const awardBelow = (!!animeAwardWin || !!classicWin) && settings.awardTabPosition === "below";
 
   return (
     <button
       ref={ref}
-      onClick={() => openMeta(meta)}
+      onClick={() => (meta.type === "manga" ? openManga(meta.id) : openMeta(meta, isAnimeCardId ? { exact: true } : undefined))}
       onContextMenu={(e) => openContextMenu(e, { kind: "meta", meta })}
       onFocus={(e) => hoverPreviewFocus(meta, e.currentTarget)}
       onBlur={(e) => hoverPreviewBlur(e.currentTarget)}
       data-no-card-ring={inCardHover !== "none" || activeCustom ? "" : undefined}
-      className="group flex w-full min-w-0 flex-col gap-2.5 text-start"
+      className="group relative flex w-full min-w-0 flex-col gap-2.5 text-start hover:z-[2]"
     >
       <div
         data-preview-anchor
-        onPointerEnter={(e) => hoverPreviewEnter(meta, e.currentTarget, e.buttons)}
-        onPointerLeave={(e) => hoverPreviewLeave(e.currentTarget)}
+        ref={tiltable ? tilt.ref : undefined}
+        onPointerEnter={(e) => {
+          hoverPreviewEnter(meta, e.currentTarget, e.buttons);
+          if (tiltable) tilt.onPointerEnter();
+        }}
+        onPointerMove={tiltable ? tilt.onPointerMove : undefined}
+        onPointerLeave={(e) => {
+          hoverPreviewLeave(e.currentTarget);
+          if (tiltable) tilt.onPointerLeave();
+        }}
         style={customProps?.style}
-        className="relative w-full transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0.24,1)] will-change-transform group-hover:[-webkit-transform:translate3d(0,-0.5rem,0)] group-hover:[transform:translate3d(0,-0.5rem,0)]"
+        className={`relative w-full ${
+          tiltable
+            ? ""
+            : "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0.24,1)] motion-safe:group-hover:[transform:translate3d(0,-0.5rem,0)_scale(1.03)] motion-safe:group-hover:will-change-transform"
+        }`}
       >
         <Poster
           src={posterSrc}
           seed={meta.id}
           lowResImdb={imdbId}
           ratio="portrait"
+          lazy="release"
           onError={() => setImgIdx((i) => i + 1)}
           className={`harbor-card-ring rounded-[var(--poster-radius,12px)] shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.06)] transition-[box-shadow] duration-300 group-hover:shadow-[0_24px_48px_-14px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] ${
             customProps ? customProps.className : cardHoverPosterClass(inCardHover)
           }`}
         />
+        {settings.cardHoverShine && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-[var(--poster-radius,12px)] opacity-0 transition-opacity duration-300 ease-out group-hover:opacity-100 motion-reduce:transition-none"
+            style={{ background: "linear-gradient(105deg, transparent 44%, rgba(255,255,255,0.12) 50%, transparent 56%)" }}
+          />
+        )}
         {activeCustom ? (
           <CustomHoverOverlay
             config={activeCustom}
             meta={meta}
             onPlay={() => {
-              if (meta.type === "movie") openPicker(meta, undefined, { autoPlay: true, resume: true });
+              if (meta.isCollection) openMeta(meta);
+              else if (meta.type === "manga") openManga(meta.id);
+              else if (meta.type === "movie") openPicker(meta, undefined, { autoPlay: true, resume: true });
               else openMeta(meta);
             }}
           />
@@ -496,12 +552,15 @@ export const PickCard = memo(function PickCard({
             meta={meta}
             style={inCardHover}
             onPlay={() => {
-              if (meta.type === "movie") openPicker(meta, undefined, { autoPlay: true, resume: true });
+              if (meta.isCollection) openMeta(meta);
+              else if (meta.type === "manga") openManga(meta.id);
+              else if (meta.type === "movie") openPicker(meta, undefined, { autoPlay: true, resume: true });
               else openMeta(meta);
             }}
           />
         ) : null}
         <div className={badgeFade}>
+        {showTop10 && <TopTenRibbon side={settings.top10RibbonSide} />}
         {hasDub && (
           <span className="pointer-events-none absolute start-2 top-2 z-10 rounded-md bg-accent/90 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-[0.14em] text-canvas ring-1 ring-black/10">
             DUB
@@ -512,27 +571,47 @@ export const PickCard = memo(function PickCard({
             {rerun && <RerunBadge year={meta.releaseInfo} dubShift={hasDub} />}
             {showCinema && <CinemaBadge dubShift={hasDub} />}
             {newBadge && <Badge label={t(newBadge.label)} tone={newBadge.tone} kids={kids} dubShift={hasDub} />}
-            <AnimeAwardBadge
-              name={awardLookupName ?? meta.name}
-              fallbackName={meta.name}
-              year={parseAwardYear(meta.releaseInfo)}
-              stacked={rerun || showCinema || !!newBadge}
-              dubShift={hasDub}
-            />
+            {!settings.awardTabs && isAnimeCardId && (
+              <AnimeAwardBadge
+                name={awardLookupName ?? meta.name}
+                fallbackName={meta.name}
+                year={parseAwardYear(meta.releaseInfo)}
+                stacked={rerun || showCinema || !!newBadge}
+                dubShift={hasDub}
+              />
+            )}
+            {!settings.awardTabs && !isAnimeCardId && (
+              <ClassicAwardBadge
+                win={classicWin}
+                stacked={rerun || showCinema || !!newBadge}
+                dubShift={hasDub}
+              />
+            )}
           </>
+        )}
+        {settings.awardTabs && isAnimeCardId && (
+          <AnimeAwardTab
+            name={awardLookupName ?? meta.name}
+            fallbackName={meta.name}
+            year={parseAwardYear(meta.releaseInfo)}
+            below={awardBelow}
+          />
+        )}
+        {settings.awardTabs && !isAnimeCardId && (
+          <ClassicAwardTab win={classicWin} below={awardBelow} />
         )}
         {inWatchlist && settings.watchlistBadge !== "off" && (
           <span
-            className={`pointer-events-none absolute flex h-6 w-6 items-center justify-center rounded-full bg-canvas/85 text-ink ring-1 ring-edge-soft/70 backdrop-blur-sm ${WATCHLIST_POS[settings.watchlistBadge]}`}
+            className={`pointer-events-none absolute flex h-6 w-6 items-center justify-center rounded-full bg-canvas/85 text-ink ring-1 ring-edge-soft/70 backdrop-blur-sm ${watchlistPos}`}
             title={t("In your watchlist")}
             aria-label={t("In watchlist")}
           >
             <Bookmark size={11} strokeWidth={2.6} fill="currentColor" />
           </span>
         )}
-        {watched && (
+        {settings.showWatchedBadge && watched && (
           <span
-            className="pointer-events-none absolute bottom-1.5 start-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/90 text-white ring-1 ring-emerald-300/40 backdrop-blur-sm"
+            className={`pointer-events-none absolute flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/90 text-white ring-1 ring-emerald-300/40 backdrop-blur-sm ${watchedPos}`}
             title={t("Watched")}
             aria-label={t("Watched")}
           >
@@ -552,6 +631,7 @@ export const PickCard = memo(function PickCard({
             badges={cardBadges}
             limit={settings.cardBadgeLimit}
             placement={settings.badgePlacement}
+            raised={awardBelow}
           />
         )}
         </div>
@@ -659,10 +739,12 @@ function ScoreStack({
   badges,
   limit = 3,
   placement = "bottom",
+  raised = false,
 }: {
   badges: CardBadge[];
   limit?: number;
   placement?: "top" | "bottom";
+  raised?: boolean;
 }) {
   const shown = badges.slice(0, Math.max(1, limit));
   if (shown.length === 0) return null;
@@ -671,7 +753,7 @@ function ScoreStack({
     <div
       style={scale < 1 ? { transform: `scale(${scale})`, transformOrigin: "right" } : undefined}
       className={`absolute end-1.5 flex items-center gap-1 whitespace-nowrap rounded-md bg-canvas/95 px-1.5 py-0.5 text-[10px] font-semibold text-ink ${
-        placement === "top" ? "top-1.5" : "bottom-1.5"
+        placement === "top" ? "top-1.5" : raised ? "bottom-9" : "bottom-1.5"
       }`}
     >
       {shown.map((b, i) => (
@@ -803,6 +885,48 @@ const CR_CATEGORY_SHORT: Record<string, string> = {
   best_psychological: "Psychological",
 };
 
+const AWARD_TAB_LABEL: Record<string, string> = {
+  crunchyroll: "Crunchyroll",
+  taaf: "TAAF",
+  jmaf: "JMAF",
+  r_anime: "r/anime",
+  animation_kobe: "Kobe",
+};
+
+function AnimeAwardTab({
+  name,
+  fallbackName,
+  year,
+  below = false,
+}: {
+  name: string;
+  fallbackName?: string;
+  year?: number;
+  below?: boolean;
+}) {
+  const primary = findTopAward(name, year);
+  const win = primary ?? (fallbackName ? findTopAward(fallbackName, year) : null);
+  if (!win) return null;
+  const lookupName = primary ? name : fallbackName ?? name;
+  let label: string;
+  if (win.source === "crunchyroll") {
+    const count =
+      findAnyAwardWins(lookupName, year).filter((w) => w.source === "crunchyroll").length || 1;
+    label = `${count} ${count === 1 ? "Award" : "Awards"}`;
+  } else {
+    label = AWARD_TAB_LABEL[win.source] ?? awardSourceMeta(win.source).shortName;
+  }
+  return (
+    <span
+      className={`pointer-events-none absolute left-1/2 z-10 -translate-x-1/2 ${
+        below ? "bottom-1.5" : "bottom-7"
+      }`}
+    >
+      <AwardTab label={label} />
+    </span>
+  );
+}
+
 function AnimeAwardBadge({
   name,
   fallbackName,
@@ -817,9 +941,11 @@ function AnimeAwardBadge({
   dubShift?: boolean;
 }) {
   const t = useT();
+  useAwardPacks();
   const win = findTopAward(name, year) ?? (fallbackName ? findTopAward(fallbackName, year) : null);
   if (!win) return null;
   const src = awardSourceMeta(win.source);
+  const custom = resolveAwardIcon(win.source);
   const short = shortCategory(win);
   const above = (dubShift ? 1 : 0) + (stacked ? 1 : 0);
   const label = above > 0 ? `${win.year}` : `${win.year} ${t(short)}`;
@@ -830,11 +956,11 @@ function AnimeAwardBadge({
       title={`${src.name} · ${win.categoryName} (${win.year})`}
     >
       <img
-        src={src.iconSmall}
+        src={custom ?? src.iconSmall}
         alt=""
         width={11}
         height={11}
-        className={`h-2.5 w-2.5 shrink-0 object-contain ${win.source === "animation_kobe" ? "brightness-0 invert" : ""}`}
+        className={`h-2.5 w-2.5 shrink-0 object-contain ${!custom && win.source === "animation_kobe" ? "brightness-0 invert" : ""}`}
         draggable={false}
       />
       <span className="truncate">{label}</span>

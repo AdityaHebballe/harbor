@@ -1,4 +1,5 @@
 import { Check, Eye } from "lucide-react";
+import { HoverTooltip } from "@/components/hover-tooltip";
 import { EpisodeRatingBadge } from "./episode-rating-badge";
 import { useEffect, useMemo, useState } from "react";
 import { DragStrip } from "@/components/drag-strip";
@@ -72,27 +73,13 @@ export function EpisodeStrip({
                 still: stills[0],
                 overview: ep.overview || undefined,
               },
-              opts: {
-                autoPlay: settings.instantPlay || settings.seasonSourceLock,
-                resume: opts?.resume,
-              },
+              opts: { autoPlay: settings.instantPlay || settings.seasonSourceLock, resume: opts?.resume },
               imdbId: seriesImdbId,
               videos: cinemetaVideos,
             }),
         };
       }),
-    [
-      episodes,
-      thumbnailFor,
-      meta,
-      playLocalAware,
-      settings.instantPlay,
-      settings.seasonSourceLock,
-      settings.hdEpisodeImages,
-      t,
-      seriesImdbId,
-      cinemetaVideos,
-    ],
+    [episodes, thumbnailFor, meta, playLocalAware, settings.instantPlay, settings.seasonSourceLock, settings.hdEpisodeImages, t, seriesImdbId, cinemetaVideos],
   );
   const epByNumber = useMemo(() => {
     const m = new Map<number, Episode>();
@@ -114,7 +101,11 @@ export function EpisodeStrip({
   return (
     <DragStrip itemCount={episodes.length}>
       {episodes.map((ep) => (
-        <div key={ep.id} className="w-[244px] shrink-0">
+        <div
+          key={ep.id}
+          className="shrink-0"
+          style={{ width: Math.round(244 * (settings.episodeCardScale || 1)) }}
+        >
           <EpisodeStripCard
             meta={meta}
             ep={ep}
@@ -164,8 +155,7 @@ function EpisodeStripCard({
 
   const still = useMemo(() => {
     const tmdbSize = settings.hdEpisodeImages ? "original" : "w300";
-    if (imgIdx === 0 && ep.stillPath)
-      return `https://image.tmdb.org/t/p/${tmdbSize}${ep.stillPath}`;
+    if (imgIdx === 0 && ep.stillPath) return `https://image.tmdb.org/t/p/${tmdbSize}${ep.stillPath}`;
     if (imgIdx === 0 && !ep.stillPath && ep.stillUrl) return ep.stillUrl;
     if (imgIdx <= 1 && thumbnail) return thumbnail;
     return undefined;
@@ -182,10 +172,7 @@ function EpisodeStripCard({
         still,
         overview: ep.overview || undefined,
       },
-      opts: {
-        autoPlay: settings.instantPlay || settings.seasonSourceLock,
-        resume: !progress.watched && progress.ratio > 0.01,
-      },
+      opts: { autoPlay: settings.instantPlay || settings.seasonSourceLock, resume: !progress.watched && progress.ratio > 0.01 },
       imdbId: seriesImdbId,
       videos: cinemetaVideos,
     });
@@ -209,10 +196,11 @@ function EpisodeStripCard({
             seed={String(ep.id)}
             ratio="landscape"
             className=""
+            lazy
             onError={() => setImgIdx((i) => i + 1)}
           />
         </div>
-
+        
         {settings.showEpisodeRating && ratingValue != null && ratingValue > 0 && (
           <div className="pointer-events-none absolute start-2 top-2 z-[6] flex items-center gap-1.5 rounded-md bg-black/55 px-1.5 py-0.5 opacity-0 drop-shadow-md backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100">
             <EpisodeRatingBadge value={ratingValue} isImdb={ratingIsImdb} />
@@ -236,10 +224,7 @@ function EpisodeStripCard({
         )}
         {progress.ratio > 0.01 && (
           <div className="absolute inset-x-0 bottom-0 z-10 h-[3px] bg-black/55 transition-opacity group-hover:opacity-0">
-            <div
-              className="h-full bg-accent"
-              style={{ width: `${Math.max(2, progress.ratio * 100)}%` }}
-            />
+            <div className="h-full bg-accent" style={{ width: `${Math.max(2, progress.ratio * 100)}%` }} />
           </div>
         )}
       </button>
@@ -249,9 +234,7 @@ function EpisodeStripCard({
           onClick={handlePlayClick}
           className="flex min-w-0 flex-1 flex-col gap-0.5 text-start focus-visible:outline-none"
         >
-          <span
-            className={`truncate text-[13.5px] font-semibold text-ink ${spoiler?.title ? SPOILER_TEXT_CLASS : ""}`}
-          >
+          <span className={`truncate text-[13.5px] font-semibold text-ink ${spoiler?.title ? SPOILER_TEXT_CLASS : ""}`}>
             {ep.name || t("Episode {n}", { n: ep.episodeNumber })}
           </span>
           <span className="text-[11.5px] text-ink-subtle">
@@ -272,15 +255,16 @@ function EpisodeStripCard({
             }}
             size={30}
           />
-          <button
-            type="button"
-            onClick={() => openEpisodeDetail(meta.id, ep.seasonNumber, ep.episodeNumber, meta)}
-            aria-label={t("Episode details")}
-            title={t("Episode details")}
-            className="flex items-center justify-center rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
-          >
-            <Eye size={16} strokeWidth={2} />
-          </button>
+          <HoverTooltip label={t("Episode details")} align="center" className="shrink-0">
+            <button
+              type="button"
+              onClick={() => openEpisodeDetail(meta.id, ep.seasonNumber, ep.episodeNumber, meta)}
+              aria-label={t("Episode details")}
+              className="flex items-center justify-center rounded-full p-1.5 text-ink-subtle transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink"
+            >
+              <Eye size={16} strokeWidth={2} />
+            </button>
+          </HoverTooltip>
         </div>
       </div>
     </div>

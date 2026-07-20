@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 export type PlaybackEntry = {
   infoHash?: string | null;
   fileIdx?: number | null;
@@ -160,6 +162,14 @@ export function recentlyPlayed(): WatchedSet {
     if (raw) titles.add(raw);
   }
   return { ids, titles };
+}
+
+export function useWatchedCount(): number {
+  return useSyncExternalStore(
+    subscribePlayback,
+    () => recentlyPlayed().ids.size,
+    () => 0,
+  );
 }
 
 export function playbackEntries(): Array<{ metaId: string; savedAt: number; title?: string; parsedTitle?: string }> {

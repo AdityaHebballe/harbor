@@ -1,30 +1,19 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MOVIE_GENRES } from "@/lib/feed/tags";
+import { metaLooksAnime } from "@/lib/anime-detect";
 import { useParental } from "@/lib/parental";
-import {
-  detectIntent,
-  searchAll,
-  searchAnime,
-  searchCinemeta,
-  searchLiveTvChannels,
-  type SearchResults,
-} from "@/lib/search";
+import { searchAll, searchAnime, searchCinemeta, searchLiveTvChannels, type SearchResults } from "@/lib/search";
 import { searchAddonCatalogs, searchAddonGroups, mergeMetas } from "@/lib/search-addons";
 import { searchAddonIndex } from "@/lib/search-addon-index";
 import { createSearchRequestGuard } from "@/lib/search-request-guard";
 import { normalizeSearchQuery } from "@/lib/search-query";
+import { searchManga } from "@/lib/manga/api";
+import type { MangaSummary } from "@/lib/manga/model";
+import { anilistCharacterSearch, type CharacterHit } from "@/lib/anilist/character";
 import { gatherCatalogAddons, type Addon } from "@/lib/addons";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
+import { isMagnetInput, isDirectVideoUrl } from "@/lib/torrent/magnet";
 
 type SearchState = {
   open: boolean;
@@ -41,11 +30,13 @@ type SearchValue = SearchState & {
   recordRecent: (q: string) => void;
   removeRecent: (q: string) => void;
   clearRecent: () => void;
+  setAiHold: (hold: boolean) => void;
 };
 
 const Ctx = createContext<SearchValue | null>(null);
 const RECENT_KEY = "harbor.search.recent";
 const MAX_RECENT = 8;
+const SOURCE_TIMEOUT_MS = 8000;
 const TMDB_CACHE_TTL_MS = 60_000;
 const SECONDARY_CACHE_TTL_MS = 60_000;
 const MAX_CACHE_ENTRIES = 16;
@@ -74,12 +65,63 @@ function cachedSearch<T>(
   });
 }
 
+type TitledMeta = { name?: string; releaseInfo?: string };
+
+function dedupeByTitle<T extends TitledMeta>(list: T[]): T[] {
+  const seen = new Map<string, T[]>();
+  const out: T[] = [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  for (const m of list) {
+    const key = norm(m.name ?? "");
+    if (!key) {
+      out.push(m);
+      continue;
+    }
+    const bucket = seen.get(key);
+    if (!bucket) {
+      seen.set(key, [m]);
+      out.push(m);
+      continue;
+    }
+    const year = (m.releaseInfo ?? "").slice(0, 4);
+    const clashes = bucket.some((prev) => {
+      const prevYear = (prev.releaseInfo ?? "").slice(0, 4);
+      return !year || !prevYear || year === prevYear;
+    });
+    if (clashes) continue;
+    bucket.push(m);
+    out.push(m);
+  }
+  return out;
+}
+
+function normShow(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function sameShow(a: string, b: string): boolean {
+  const x = normShow(a);
+  return x.length > 0 && x === normShow(b);
+}
+
 function loadRecent(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === "string").slice(0, MAX_RECENT) : [];
+    if (!Array.isArray(arr)) return [];
+    const all = arr.filter((x): x is string => typeof x === "string");
+    const clean = all
+      .filter((x) => !isMagnetInput(x) && !isDirectVideoUrl(x))
+      .slice(0, MAX_RECENT);
+    if (clean.length !== all.length) {
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(clean));
+      } catch {
+        /* noop */
+      }
+    }
+    return clean;
   } catch {
     return [];
   }
@@ -101,16 +143,13 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const [query, setQueryState] = useState("");
   const [results, setResults] = useState<SearchResults | null>(null);
   const [status, setStatus] = useState<SearchState["status"]>("idle");
+  const [aiHold, setAiHold] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => loadRecent());
   const debounceRef = useRef<number | null>(null);
   const requestGuardRef = useRef(createSearchRequestGuard());
-  const tmdbCacheRef = useRef(new Map<string, { expiresAt: number; result: SearchResults }>());
-  const animeCacheRef = useRef(
-    new Map<string, { expiresAt: number; result: Awaited<ReturnType<typeof searchAnime>> }>(),
-  );
-  const cinemetaCacheRef = useRef(
-    new Map<string, { expiresAt: number; result: Awaited<ReturnType<typeof searchCinemeta>> }>(),
-  );
+  const tmdbCacheRef = useRef<SearchCache<SearchResults | null>>(new Map());
+  const animeCacheRef = useRef<SearchCache<Awaited<ReturnType<typeof searchAnime>>>>(new Map());
+  const cinemetaCacheRef = useRef<SearchCache<Awaited<ReturnType<typeof searchCinemeta>>>>(new Map());
   const addonsRef = useRef<{ key: string | null; addons: Addon[] } | null>(null);
   const ensureAddons = useCallback(async (): Promise<Addon[]> => {
     if (addonsRef.current && addonsRef.current.key === authKey) return addonsRef.current.addons;
@@ -134,8 +173,6 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }, [hiddenTabs.anime]);
 
   useEffect(() => {
-    // Invalidate an already-running request before the debounce starts. Without
-    // this, an older search can publish while the user is typing a new query.
     const id = requestGuardRef.current.begin();
     const trimmed = query.trim();
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
@@ -144,14 +181,28 @@ export function SearchProvider({ children }: { children: ReactNode }) {
       setStatus("idle");
       return;
     }
+    if (aiHold) {
+      setResults(null);
+      setStatus("idle");
+      return;
+    }
     setResults(null);
     setStatus("typing");
-    const animeAllowed = !hiddenTabs.anime;
+    const animeAllowed = !hiddenTabs.anime && !settings.hideContent.anime;
+    const mangaAllowed = settings.mangaEnabled && !settings.hideContent.manga;
+    const franchiseAllowed = animeAllowed || mangaAllowed;
     const liveTvAllowed = !hiddenTabs.liveTv && settings.iptvPlaylists.length > 0;
     debounceRef.current = window.setTimeout(() => {
       if (!requestGuardRef.current.isCurrent(id)) return;
       setStatus("loading");
       const liveTv = liveTvAllowed ? searchLiveTvChannels(trimmed, settings.iptvPlaylists) : [];
+      const guard = <T,>(p: Promise<T>, fallback: T): Promise<T> =>
+        Promise.race([
+          p.catch(() => fallback),
+          new Promise<T>((resolve) => {
+            window.setTimeout(() => resolve(fallback), SOURCE_TIMEOUT_MS);
+          }),
+        ]);
       const normalizedQuery = normalizeSearchQuery(trimmed);
       const tmdbCacheKey = [
         settings.tmdbKey,
@@ -159,82 +210,138 @@ export function SearchProvider({ children }: { children: ReactNode }) {
         excludeGenres.join(","),
         normalizedQuery,
       ].join("\0");
-      const tmdbPromise = cachedSearch(tmdbCacheRef.current, tmdbCacheKey, TMDB_CACHE_TTL_MS, () =>
-        searchAll(settings.tmdbKey, trimmed, { excludeGenres }),
+      const addonsP = ensureAddons();
+      const tmdbPromise = guard<SearchResults | null>(
+        cachedSearch(tmdbCacheRef.current, tmdbCacheKey, TMDB_CACHE_TTL_MS, () =>
+          searchAll(settings.tmdbKey, trimmed, { excludeGenres }),
+        ),
+        null,
       );
       const animePromise = animeAllowed
-        ? cachedSearch(animeCacheRef.current, normalizedQuery, SECONDARY_CACHE_TTL_MS, () =>
-            searchAnime(trimmed),
+        ? guard(
+            cachedSearch(animeCacheRef.current, normalizedQuery, SECONDARY_CACHE_TTL_MS, () =>
+              searchAnime(trimmed),
+            ),
+            [],
           )
         : Promise.resolve([]);
-      const addonsP = ensureAddons();
-      const addonPromise = addonsP
-        .then((a) => searchAddonCatalogs(a, trimmed))
-        .catch(() => ({ movies: [], series: [] }));
-      const addonGroupsPromise = addonsP.then((a) => searchAddonGroups(a, trimmed)).catch(() => []);
-      const cinemetaPromise = cachedSearch(
-        cinemetaCacheRef.current,
-        normalizedQuery,
-        SECONDARY_CACHE_TTL_MS,
-        () => searchCinemeta(trimmed),
-      ).catch(() => ({ movies: [], series: [] }));
-      let tmdbResult: Awaited<typeof tmdbPromise> | null = null;
+      const mangaPromise: Promise<MangaSummary[]> = mangaAllowed
+        ? guard(searchManga(trimmed), [])
+        : Promise.resolve([]);
+      const charactersPromise: Promise<CharacterHit[]> = franchiseAllowed
+        ? guard(anilistCharacterSearch(trimmed), [])
+        : Promise.resolve([]);
+      const addonPromise = guard(
+        addonsP.then((a) => searchAddonCatalogs(a, trimmed)),
+        { movies: [], series: [] },
+      );
+      const addonGroupsPromise = guard(
+        addonsP.then((a) => searchAddonGroups(a, trimmed)),
+        [],
+      );
+      const cinemetaPromise = guard(
+        cachedSearch(cinemetaCacheRef.current, normalizedQuery, SECONDARY_CACHE_TTL_MS, () =>
+          searchCinemeta(trimmed),
+        ),
+        { movies: [], series: [] },
+      );
+      let tmdbResult: SearchResults | null = null;
       const acc = {
         anime: [] as Awaited<typeof animePromise>,
+        manga: [] as MangaSummary[],
+        characters: [] as CharacterHit[],
         addon: { movies: [], series: [] } as Awaited<typeof addonPromise>,
         cine: { movies: [], series: [] } as Awaited<typeof cinemetaPromise>,
         groups: [] as Awaited<typeof addonGroupsPromise>,
       };
       const publish = () => {
-        if (!requestGuardRef.current.isCurrent(id) || !tmdbResult) return;
-        const mergedMovies = mergeMetas(
-          mergeMetas(tmdbResult.movies, acc.addon.movies),
-          acc.cine.movies,
+        if (!requestGuardRef.current.isCurrent(id)) return;
+        const base: SearchResults = tmdbResult ?? {
+          query: trimmed,
+          topMatch: null,
+          people: [],
+          movies: [],
+          series: [],
+          liveTv: [],
+          anime: [],
+          manga: [],
+          characters: [],
+          addonGroups: [],
+          addons: [],
+          intent: null,
+        };
+        const animeTitleSet = new Set(acc.anime.map((a) => normShow(a.name)));
+        const notAnimeDupe = (m: { name?: string }) =>
+          animeTitleSet.size === 0 || !animeTitleSet.has(normShow(m.name ?? ""));
+        const dropAnime = <T extends { id: string }>(list: T[]): T[] =>
+          settings.hideContent.anime ? list.filter((m) => !metaLooksAnime(m)) : list;
+        const mergedMovies = dropAnime(
+          dedupeByTitle(mergeMetas(mergeMetas(base.movies, acc.addon.movies), acc.cine.movies)).filter(notAnimeDupe),
         );
-        const mergedSeries = mergeMetas(
-          mergeMetas(tmdbResult.series, acc.addon.series),
-          acc.cine.series,
+        const mergedSeries = dropAnime(
+          dedupeByTitle(mergeMetas(mergeMetas(base.series, acc.addon.series), acc.cine.series)).filter(notAnimeDupe),
         );
         const shown = new Set<string>([...mergedMovies, ...mergedSeries].map((m) => m.id));
         const dedupedGroups = acc.groups
-          .map((g) => ({ ...g, metas: g.metas.filter((m) => !shown.has(m.id)) }))
+          .map((g) => ({ ...g, metas: dropAnime(g.metas.filter((m) => !shown.has(m.id))) }))
           .filter((g) => g.metas.length > 0);
+        const animeTop = acc.anime[0];
+        const topMatch =
+          animeTop && base.topMatch && sameShow(base.topMatch.meta.name, animeTop.name)
+            ? {
+                kind: "series" as const,
+                meta: {
+                  id: animeTop.kitsuId
+                    ? `kitsu:${animeTop.kitsuId}`
+                    : animeTop.malId
+                      ? `mal:${animeTop.malId}`
+                      : `anilist:${animeTop.anilistId}`,
+                  type: "series" as const,
+                  name: animeTop.name,
+                  poster: animeTop.poster ?? base.topMatch.meta.poster,
+                  background: animeTop.background ?? undefined,
+                  description: animeTop.overview || undefined,
+                  releaseInfo: animeTop.year ?? undefined,
+                },
+                popularity: base.topMatch.popularity,
+                backdrop: animeTop.background ?? base.topMatch.backdrop,
+                overview: animeTop.overview || base.topMatch.overview,
+                voteAverage: base.topMatch.voteAverage,
+              }
+            : base.topMatch;
         setResults({
-          ...tmdbResult,
+          ...base,
+          topMatch: settings.hideContent.anime && topMatch && metaLooksAnime(topMatch.meta) ? null : topMatch,
           movies: mergedMovies,
           series: mergedSeries,
           liveTv,
           anime: acc.anime,
+          manga: acc.manga,
+          characters: acc.characters,
           addonGroups: dedupedGroups,
           addons: searchAddonIndex(trimmed),
         });
-        setStatus("done");
       };
-      tmdbPromise
-        .then((r) => {
-          tmdbResult = r;
-          publish();
-        })
-        .catch(() => {
-          // Other search providers remain useful when TMDB is temporarily
-          // unavailable, so use an empty TMDB result as the publish baseline.
-          tmdbResult = {
-            query: trimmed,
-            topMatch: null,
-            people: [],
-            movies: [],
-            series: [],
-            liveTv: [],
-            anime: [],
-            addonGroups: [],
-            addons: [],
-            intent: detectIntent(trimmed),
-            tmdbUnavailable: true,
-          };
-          publish();
-        });
+      void tmdbPromise.then((r) => {
+        tmdbResult = r;
+        publish();
+      });
       void animePromise.then((a) => {
         acc.anime = a;
+        publish();
+      });
+      void mangaPromise.then((m) => {
+        acc.manga = m;
+        publish();
+      });
+      void charactersPromise.then((c) => {
+        acc.characters = c
+          .map((ch) => ({
+            ...ch,
+            anime: animeAllowed ? ch.anime : [],
+            manga: mangaAllowed ? ch.manga : [],
+          }))
+          .filter((ch) => ch.anime.length + ch.manga.length > 0);
         publish();
       });
       void addonPromise.then((a) => {
@@ -249,6 +356,19 @@ export function SearchProvider({ children }: { children: ReactNode }) {
         acc.groups = g;
         publish();
       });
+      void Promise.all([
+        tmdbPromise,
+        animePromise,
+        mangaPromise,
+        charactersPromise,
+        addonPromise,
+        cinemetaPromise,
+        addonGroupsPromise,
+      ]).then(() => {
+        if (!requestGuardRef.current.isCurrent(id)) return;
+        publish();
+        setStatus("done");
+      });
     }, 180);
 
     return () => {
@@ -257,16 +377,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
         debounceRef.current = null;
       }
     };
-  }, [
-    query,
-    settings.tmdbKey,
-    settings.tmdbLanguage,
-    settings.iptvPlaylists,
-    excludeGenres,
-    hiddenTabs.anime,
-    hiddenTabs.liveTv,
-    ensureAddons,
-  ]);
+  }, [query, aiHold, settings.tmdbKey, settings.tmdbLanguage, settings.iptvPlaylists, excludeGenres, hiddenTabs.anime, settings.hideContent.anime, hiddenTabs.liveTv, settings.mangaEnabled, settings.hideContent.manga, authKey]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -296,11 +407,9 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   const recordRecent = useCallback((q: string) => {
     const trimmed = q.trim();
     if (!trimmed) return;
+    if (isMagnetInput(trimmed) || isDirectVideoUrl(trimmed)) return;
     setRecent((prev) => {
-      const next = [
-        trimmed,
-        ...prev.filter((p) => p.toLowerCase() !== trimmed.toLowerCase()),
-      ].slice(0, MAX_RECENT);
+      const next = [trimmed, ...prev.filter((p) => p.toLowerCase() !== trimmed.toLowerCase())].slice(0, MAX_RECENT);
       saveRecent(next);
       return next;
     });
@@ -320,31 +429,8 @@ export function SearchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({
-      open,
-      setOpen,
-      query,
-      setQuery,
-      results,
-      status,
-      recent,
-      clear,
-      recordRecent,
-      removeRecent,
-      clearRecent,
-    }),
-    [
-      open,
-      query,
-      results,
-      status,
-      recent,
-      setQuery,
-      clear,
-      recordRecent,
-      removeRecent,
-      clearRecent,
-    ],
+    () => ({ open, setOpen, query, setQuery, results, status, recent, clear, recordRecent, removeRecent, clearRecent, setAiHold }),
+    [open, query, results, status, recent, setQuery, clear, recordRecent, removeRecent, clearRecent],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

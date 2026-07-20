@@ -18,6 +18,8 @@ import { useSimkl } from "@/lib/simkl/provider";
 import { useScrollMemory, useView } from "@/lib/view";
 import { useT } from "@/lib/i18n";
 import { AuthModal } from "@/components/auth-modal";
+import { RemindersManagerButton } from "@/components/reminders-manager";
+import { clearUnseenReminders } from "@/lib/reminders";
 import { DayModal } from "./calendar/day-modal";
 import { EmptyState, ErrorState, NoKeyState, NotSignedInState } from "./calendar/empty-states";
 import { MonthGrid } from "./calendar/month-grid";
@@ -47,6 +49,10 @@ export function CalendarView() {
   useScrollMemory("calendar", scrollRef);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [dayModal, setDayModal] = useState<string | null>(null);
+
+  useEffect(() => {
+    clearUnseenReminders();
+  }, []);
 
   const source = settings.calendarSource;
   const { isConnected: traktConnected } = useTrakt();
@@ -81,8 +87,10 @@ export function CalendarView() {
   const libraryNames = useMemo(() => buildLibraryNameSet(libraryItems), [libraryItems]);
 
   const filtered = useMemo(() => {
-    if (source !== "all" && source !== "simkl-anticipated") return items;
-    let out = applyCalendarFilter(items, filter);
+    const hideAnime = (list: CalendarItem[]) =>
+      settings.hideContent.anime ? list.filter((i) => !i.isAnime) : list;
+    if (source !== "all" && source !== "simkl-anticipated") return hideAnime(items);
+    let out = hideAnime(applyCalendarFilter(items, filter));
     if (source === "all" && watchlistOnly) {
       out = out.filter((i) => {
         const t = i.type === "tv" ? "tv" : "movie";
@@ -90,7 +98,7 @@ export function CalendarView() {
       });
     }
     return out;
-  }, [source, items, filter, watchlistOnly, libraryNames]);
+  }, [source, items, filter, watchlistOnly, libraryNames, settings.hideContent.anime]);
 
   const grouped = useMemo(() => groupByDate(filtered), [filtered]);
   const cells = useMemo(
@@ -131,6 +139,7 @@ export function CalendarView() {
 
   const showAllControls = source === "all";
   const showPremiereFilters = source === "simkl-anticipated";
+  const filters = settings.hideContent.anime ? FILTERS.filter((f) => f.id !== "anime") : FILTERS;
 
   let body: React.ReactNode;
   if (source === "library" && !authKey) {
@@ -193,6 +202,12 @@ export function CalendarView() {
             >
               <ChevronRight size={16} strokeWidth={2.2} className="dir-icon" />
             </button>
+            <span className="mx-1 h-5 w-px bg-edge-soft" />
+            <RemindersManagerButton
+              onOpenItem={(r) =>
+                openMeta({ id: r.id, type: "series", name: r.name, poster: r.poster })
+              }
+            />
           </div>
         </div>
         <nav className="mt-6 flex flex-wrap items-center gap-3">
@@ -224,7 +239,7 @@ export function CalendarView() {
             <>
               <span className="mx-1 h-5 w-px bg-edge-soft" />
               <div className="flex flex-wrap items-center gap-2">
-                {FILTERS.map((f) => {
+                {filters.map((f) => {
                   const active = filter === f.id;
                   const count =
                     f.id === "all"
@@ -275,7 +290,7 @@ export function CalendarView() {
             <>
               <span className="mx-1 h-5 w-px bg-edge-soft" />
               <div className="flex flex-wrap items-center gap-2">
-                {FILTERS.map((f) => {
+                {filters.map((f) => {
                   const active = filter === f.id;
                   const count =
                     f.id === "all" ? items.length : applyCalendarFilter(items, f.id).length;

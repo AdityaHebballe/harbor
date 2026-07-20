@@ -39,6 +39,41 @@ export function QualityPanel() {
       </Section>
 
       <Section
+        title={t("X-Ray (experimental)")}
+        subtitle={t("Amazon-style X-Ray: open the cast while you watch and tap anyone for their bio and everything they have been in. On-device face matching to show who is on screen is coming next. Off by default.")}
+      >
+        <ToggleRow
+          label={t("Enable X-Ray")}
+          sub={t("Adds an X-Ray button in the player to see the full cast with photos and tap through to any actor. Needs a TMDB key for photos and filmographies.")}
+          value={settings.xrayEnabled}
+          onChange={(v) => update({ xrayEnabled: v })}
+        />
+        {settings.xrayEnabled && (
+          <ToggleRow
+            label={t("Scan who is on screen while playing")}
+            sub={t("Periodically match faces in the current frame against the cast to show who is on screen now. On-device, nothing leaves your machine. Uses a little more CPU while playing.")}
+            value={settings.xrayLiveScan}
+            onChange={(v) => update({ xrayLiveScan: v })}
+          />
+        )}
+        {settings.xrayEnabled && !settings.tmdbKey.trim() && (
+          <button
+            type="button"
+            onClick={() => setActive("library")}
+            className="flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-start transition-colors hover:bg-amber-400/15"
+          >
+            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-400/20 text-[12px] font-bold text-amber-300">!</span>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-[13px] font-semibold text-amber-200">{t("X-Ray needs a TMDB key")}</span>
+              <span className="text-[12px] leading-relaxed text-amber-200/85">
+                {t("X-Ray reads the cast and their photos from TMDB. Without a TMDB key there is no cast to match against. Add your free key under Library & metadata.")}
+              </span>
+            </div>
+          </button>
+        )}
+      </Section>
+
+      <Section
         title={t("Aspect ratio")}
         subtitle={t("Default picture shape on the mpv engine. Fit keeps the source as-is with any black bars; the rest stretch or crop to fill, handy for old 4:3 shows on a widescreen TV.")}
       >
@@ -68,6 +103,12 @@ export function QualityPanel() {
           sub={t("Evens out quiet dialogue and loud action scenes with a dynamic normalizer.")}
           value={settings.audioNormalize}
           onChange={(v) => update({ audioNormalize: v })}
+        />
+        <ToggleRow
+          label={t("Mix surround sound down to stereo")}
+          sub={t("Turn on if you watch on a laptop or headphones and dialogue feels too quiet next to the effects. Leave off if you have a real surround setup or a soundbar.")}
+          value={settings.mpvDownmixStereo}
+          onChange={(v) => update({ mpvDownmixStereo: v })}
         />
         <div>
           <Segmented
@@ -154,11 +195,43 @@ export function QualityPanel() {
           value={settings.autoPlayNextEpisode}
           onChange={(v) => update({ autoPlayNextEpisode: v })}
         />
+        {settings.autoPlayNextEpisode && (
+          <ToggleRow
+            label={t("Ask if you're still watching")}
+            sub={t("After several episodes auto-play in a row with no input, pause and check you're still there before continuing. Off by default.")}
+            value={settings.stillWatching}
+            onChange={(v) => update({ stillWatching: v })}
+          />
+        )}
+        {settings.autoPlayNextEpisode && settings.stillWatching && (
+          <Segmented
+            value={String(settings.stillWatchingAfter)}
+            options={[
+              { value: "2", label: t("After 2") },
+              { value: "3", label: t("After 3") },
+              { value: "4", label: t("After 4") },
+              { value: "5", label: t("After 5") },
+            ]}
+            onChange={(v) => update({ stillWatchingAfter: Number(v) })}
+          />
+        )}
+        <ToggleRow
+          label={t("Queue drives Next/Previous")}
+          sub={t("After the current show's episodes, Next flows into your queue. Off keeps Next/Previous within the current show only.")}
+          value={settings.queueDrivesNav}
+          onChange={(v) => update({ queueDrivesNav: v })}
+        />
         <ToggleRow
           label={t("Show controls when pausing with keyboard")}
           sub={t("Show the player controls when you pause or resume using the keyboard. Turn off to keep them hidden so they don't cover subtitles.")}
           value={settings.keyboardPauseShowsControls}
           onChange={(v) => update({ keyboardPauseShowsControls: v })}
+        />
+        <ToggleRow
+          label={t("Sleep timer in the top bar")}
+          sub={t("Adds a timer button next to Downloads. Set a time or episode limit from anywhere; playback pauses when it runs out.")}
+          value={settings.navbarSleepTimer}
+          onChange={(v) => update({ navbarSleepTimer: v })}
         />
       </Section>
     </>

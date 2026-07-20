@@ -60,7 +60,7 @@ function OptionCard<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-edge-soft bg-elevated/40 p-5">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <span className="text-[10.5px] font-semibold uppercase tracking-[0.16em] text-ink-subtle">
           {title}

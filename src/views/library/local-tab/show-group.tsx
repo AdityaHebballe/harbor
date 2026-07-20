@@ -69,9 +69,9 @@ export function ShowGroupCard({
   const isSelected = episodeIds.every((id) => selected.has(id));
   const needsReview = episodes.some((e) => e.needsReview);
   const countLabel = episodes.length === 1 ? t("1 episode") : t("{n} episodes", { n: episodes.length });
-  const onActivate = () => {
+  const onActivate = (range = false) => {
     if (selectMode) {
-      onToggleSelect(episodeIds);
+      onToggleSelect(episodeIds, range);
       return;
     }
     openLocalEpisodes({
@@ -87,11 +87,11 @@ export function ShowGroupCard({
       <div
         role="button"
         tabIndex={0}
-        onClick={onActivate}
+        onClick={(e) => onActivate(e.shiftKey)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onActivate();
+            onActivate(e.shiftKey);
           }
         }}
         className={`relative aspect-[2/3] cursor-pointer overflow-hidden rounded-xl bg-elevated shadow-[0_2px_8px_-2px_rgba(0,0,0,0.4)] outline-none ring-offset-2 ring-offset-canvas focus-visible:ring-2 focus-visible:ring-ink ${
@@ -170,7 +170,7 @@ export function ShowGroupCard({
           </>
         )}
       </div>
-      <button type="button" onClick={onActivate} className="text-start">
+      <button type="button" onClick={(e) => onActivate(e.shiftKey)} className="text-start">
         <p className="truncate text-[13px] font-medium text-ink transition-colors hover:text-accent" title={head.title}>
           {head.title}
         </p>

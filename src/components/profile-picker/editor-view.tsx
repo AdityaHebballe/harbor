@@ -1,4 +1,4 @@
-import { Check, ChevronLeft, Loader2, Lock, Link2, ShieldCheck, Trash2, Unlock, User as UserIcon } from "lucide-react";
+import { Check, ChevronLeft, Crown, Loader2, Lock, Link2, ShieldCheck, Trash2, Unlock, User as UserIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import traktLogo from "@/assets/trakt.svg";
 import simklLogo from "@/assets/simkl.png";
@@ -36,10 +36,10 @@ import { fetchSimklAvatar } from "@/lib/simkl/profile";
 import { useSimkl } from "@/lib/simkl/provider";
 import { useSettings } from "@/lib/settings";
 import { AvatarRing } from "@/views/settings/account/avatar-ring";
+import { CatAvatar } from "@/components/icons/cat-avatar";
 import { resizeAvatar } from "@/views/settings/account/avatar-utils";
 import { AvatarFan } from "@/components/avatar-picker/avatar-fan";
 import { AvatarCatalogModal } from "@/components/avatar-picker/avatar-catalog-modal";
-import { avatarUrl } from "@/lib/avatars/catalog";
 import { ColorPicker } from "@/views/settings/color-picker";
 import { KidToggle } from "./kid-toggle";
 import { KidsSetupPanel } from "./kids-setup-panel";
@@ -62,7 +62,7 @@ export function EditorView({
   onCancel: () => void;
   onDone: () => void;
 }) {
-  const { profiles, activeProfile, createProfile, updateProfile, deleteProfile, selectProfile } =
+  const { profiles, activeProfile, createProfile, updateProfile, deleteProfile, selectProfile, setPrimary } =
     useProfiles();
   const { isConnected: traktConnected } = useTrakt();
   const { isConnected: anilistConnected, avatar: anilistAvatar } = useAnilist();
@@ -77,6 +77,7 @@ export function EditorView({
   const [simklAvatarError, setSimklAvatarError] = useState<string | null>(null);
   const editing = mode.kind === "edit" ? mode.profile : null;
   const primary = profiles.find((p) => p.isPrimary);
+  const transferTargets = profiles.filter((p) => !p.isPrimary);
   const activeIsPrimary = !!activeProfile?.isPrimary;
   const isOwnProfile = editing?.id === activeProfile?.id;
   const canEditAdvanced = activeIsPrimary;
@@ -92,6 +93,9 @@ export function EditorView({
     editing ? editing.shareStremioWith : primary?.id ?? null,
   );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingPrimary, setConfirmingPrimary] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [draftPin, setDraftPin] = useState<string | null>(null);
   const [draftLockedTabs, setDraftLockedTabs] = useState<HiddenTabs | null>(
     editing?.lockedTabs ?? null,
@@ -421,8 +425,8 @@ export function EditorView({
             </div>
             <AvatarFan
               onClick={() => setAvatarPickerOpen(true)}
-              onRandomize={(id) => {
-                setAvatar(avatarUrl(id));
+              onRandomize={(value) => {
+                setAvatar(value);
                 setAvatarSource("builtin");
               }}
             />
@@ -491,6 +495,137 @@ export function EditorView({
         </div>
       )}
 
+      {showAdvanced && !draftKid && editing && !isPrimary && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+            {t("Primary profile")}
+          </span>
+          <div className="flex items-center gap-3 rounded-xl border border-edge-soft bg-elevated/30 p-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+              <Crown size={16} strokeWidth={2.2} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-[13px] font-semibold text-ink">{t("Make this the primary profile")}</span>
+              <span className="text-[11.5px] leading-snug text-ink-subtle">
+                {t("The primary manages profiles and can't be deleted. Transfer it here to delete the old one.")}
+              </span>
+            </div>
+            {!confirmingPrimary ? (
+              <button
+                type="button"
+                onClick={() => setConfirmingPrimary(true)}
+                className="h-9 shrink-0 rounded-lg border border-edge-soft px-3 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-edge hover:text-ink"
+              >
+                {t("Set as primary")}
+              </button>
+            ) : (
+              <div className="flex shrink-0 items-center gap-2 text-[12px]">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingPrimary(false)}
+                  className="text-ink-muted transition-colors hover:text-ink"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrimary(editing.id);
+                    onDone();
+                  }}
+                  className="rounded-md bg-accent/20 px-2 py-1 font-semibold text-accent transition-colors hover:bg-accent/30"
+                >
+                  {t("common.confirm")}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showAdvanced && !draftKid && editing && isPrimary && transferTargets.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
+            {t("Primary profile")}
+          </span>
+          <div className="flex flex-col gap-2.5 rounded-xl border border-edge-soft bg-elevated/30 p-3">
+            <div className="flex items-center gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent/12 text-accent">
+                <Crown size={16} strokeWidth={2.2} />
+              </span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] font-semibold text-ink">{t("This is the primary profile")}</span>
+                <span className="text-[11.5px] leading-snug text-ink-subtle">
+                  {t("It manages profiles and can't be deleted. Hand primary to another profile to delete this one.")}
+                </span>
+              </div>
+            </div>
+            {!transferOpen ? (
+              <button
+                type="button"
+                onClick={() => setTransferOpen(true)}
+                className="h-9 self-start rounded-lg border border-edge-soft px-3 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-edge hover:text-ink"
+              >
+                {t("Transfer to another profile")}
+              </button>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {transferTargets.map((p) => {
+                  const sel = transferTarget === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setTransferTarget(p.id)}
+                      className={`flex items-center gap-2.5 rounded-lg border p-2 text-start transition-colors ${
+                        sel ? "border-accent bg-accent/10" : "border-edge-soft hover:border-edge hover:bg-elevated/40"
+                      }`}
+                    >
+                      <span
+                        className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-elevated"
+                        style={{ boxShadow: `0 0 0 2px ${p.color}` }}
+                      >
+                        {p.avatar ? (
+                          <img src={p.avatar} alt="" className="h-full w-full object-cover" draggable={false} />
+                        ) : (
+                          <CatAvatar className="h-full w-full" />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{p.name}</span>
+                      {sel && <Check size={15} className="shrink-0 text-accent" strokeWidth={2.6} />}
+                    </button>
+                  );
+                })}
+                <div className="flex items-center justify-end gap-2 pt-1 text-[12px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTransferOpen(false);
+                      setTransferTarget(null);
+                    }}
+                    className="text-ink-muted transition-colors hover:text-ink"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!transferTarget}
+                    onClick={() => {
+                      if (!transferTarget) return;
+                      setPrimary(transferTarget);
+                      onDone();
+                    }}
+                    className="rounded-md bg-accent/20 px-2.5 py-1 font-semibold text-accent transition-colors hover:bg-accent/30 disabled:opacity-40"
+                  >
+                    {t("Transfer primary")}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-3 pt-1">
         <div className="flex items-center gap-3">
           <button
@@ -546,8 +681,8 @@ export function EditorView({
       {avatarPickerOpen && (
         <AvatarCatalogModal
           current={avatar}
-          onPick={(id) => {
-            setAvatar(avatarUrl(id));
+          onPick={(value) => {
+            setAvatar(value);
             setAvatarSource("builtin");
             setAvatarPickerOpen(false);
           }}

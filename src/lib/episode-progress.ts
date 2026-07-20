@@ -1,5 +1,6 @@
 import { manualWatchedState } from "@/lib/manual-watched";
 import { lastPlayedEpisode, readResumeEntry } from "@/lib/resume";
+import { getViewedSeason } from "@/lib/season-view-pref";
 
 export type EpisodeProgress = {
   ratio: number;
@@ -20,6 +21,10 @@ export function resumeDefaultSeason(
     .filter((s) => s.seasonNumber >= 1)
     .sort((a, b) => a.seasonNumber - b.seasonNumber);
   const first = real[0]?.seasonNumber ?? seasons[0]?.seasonNumber ?? 1;
+
+  const viewed = getViewedSeason(seriesId);
+  if (viewed != null && seasons.some((s) => s.seasonNumber === viewed)) return viewed;
+
   if (real.length <= 1) return first;
 
   const watchedInSeason = (sn: number): number => {

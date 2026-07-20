@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Play, Quote, Star } from "luci
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { narrowMediaType, type Meta } from "@/lib/cinemeta";
 import { pickRandom } from "@/lib/feed/tags";
+import { useImdbRating } from "@/lib/imdb-rating";
 import { peekCachedLogo, resolveLogo } from "@/lib/logo";
 import { useOmdbScores } from "@/lib/providers/omdb";
 import { rpdbPoster } from "@/lib/providers/rpdb";
@@ -35,6 +36,8 @@ export function CriticsPick({ meta }: { meta: Meta }) {
   const castScrollRef = useRef<HTMLDivElement>(null);
   const resolvedImdb = useTmdbImdbId(meta.id);
   const omdb = useOmdbScores(resolvedImdb ?? undefined);
+  const imdbRating = useImdbRating(meta, resolvedImdb) ?? meta.imdbRating;
+  const hasImdbIdentity = meta.id.startsWith("tt") || !!resolvedImdb;
   const [logo, setLogo] = useState<string | null>(
     () => peekCachedLogo(settings.tmdbKey, meta) ?? null,
   );
@@ -94,13 +97,31 @@ export function CriticsPick({ meta }: { meta: Meta }) {
   const overview = data?.overview ?? meta.description ?? "";
   const reviews = data?.reviews ?? [];
   const [reviewIdx, setReviewIdx] = useState(0);
+  const [reviewVisible, setReviewVisible] = useState(true);
   useEffect(() => {
     setReviewIdx(0);
   }, [meta.id]);
+  const changeReview = useCallback(
+    (dir: number) => {
+      setReviewVisible(false);
+      window.setTimeout(() => {
+        setReviewIdx((i) => (i + dir + reviews.length) % reviews.length);
+        setReviewVisible(true);
+      }, 190);
+    },
+    [reviews.length],
+  );
+  const reviewFade = {
+    transition: "opacity 200ms ease, transform 200ms ease",
+    opacity: reviewVisible ? 1 : 0,
+    transform: reviewVisible ? "translateY(0)" : "translateY(6px)",
+  };
   const activeReview: CriticReview | null = reviews[reviewIdx] ?? null;
   const quote = activeReview
     ? excerptReview(activeReview.content)
     : tagline || (overview ? overview.split(/(?<=[.!?])\s+/)[0] : "A standout this week.");
+  const canOpenOverview = !!(overview || activeReview);
+  const openOverview = () => canOpenOverview && setOverviewOpen(true);
 
   const linkablePeople = useMemo<PersonRef[]>(() => {
     if (!data) return [];
@@ -254,12 +275,12 @@ export function CriticsPick({ meta }: { meta: Meta }) {
             </div>
             <div className="flex items-center gap-2.5 text-[13px] text-ink/80">
               {meta.releaseInfo && <span>{meta.releaseInfo}</span>}
-              {meta.imdbRating && (
+              {imdbRating && (
                 <>
-                  <span aria-hidden className="text-ink/40">·</span>
+                  {meta.releaseInfo && <span aria-hidden className="text-ink/40">·</span>}
                   <span className="inline-flex items-center gap-1.5">
-                    {meta.id.startsWith("tt") ? <ImdbIcon className="h-[12px] w-auto rounded-[2px]" /> : <Star className="h-[12px] w-[12px] text-amber-400" fill="currentColor" strokeWidth={0} />}
-                    {meta.imdbRating}
+                    {hasImdbIdentity ? <ImdbIcon className="h-[12px] w-auto rounded-[2px]" /> : <Star className="h-[12px] w-[12px] text-amber-400" fill="currentColor" strokeWidth={0} />}
+                    {imdbRating}
                   </span>
                 </>
               )}
@@ -269,12 +290,35 @@ export function CriticsPick({ meta }: { meta: Meta }) {
         <aside className="flex min-h-0 flex-col gap-4 overflow-hidden rounded-2xl border border-edge-soft bg-elevated/35 p-5">
           <div className="flex flex-col gap-2">
             <Quote size={22} className="shrink-0 text-accent" />
-            <p className="font-display text-[15px] italic leading-[1.5] text-ink/90 line-clamp-[5]">
+            <p
+              {...(canOpenOverview
+                ? {
+                    role: "button",
+                    tabIndex: 0,
+                    onClick: openOverview,
+                    onKeyDown: (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openOverview();
+                      }
+                    },
+                  }
+                : {})}
+              className={`font-display text-[15px] italic leading-[1.5] text-ink/90 line-clamp-[5] ${
+                canOpenOverview
+                  ? "cursor-pointer rounded-sm outline-none transition-colors duration-150 hover:text-ink focus-visible:text-ink"
+                  : ""
+              }`}
+              style={reviewFade}
+            >
               <LinkedReview text={quote} people={linkablePeople} onPersonClick={handlePersonClick} />
             </p>
             {activeReview ? (
               <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-subtle">
+                <div
+                  className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-ink-subtle"
+                  style={reviewFade}
+                >
                   <span className="text-ink-muted">{activeReview.author}</span>
                   {typeof activeReview.rating === "number" && activeReview.rating > 0 && (
                     <span>· {activeReview.rating}/10</span>
@@ -298,7 +342,7 @@ export function CriticsPick({ meta }: { meta: Meta }) {
                     <div className="me-1 flex items-center gap-0.5">
                       <button
                         type="button"
-                        onClick={() => setReviewIdx((i) => (i - 1 + reviews.length) % reviews.length)}
+                        onClick={() => changeReview(-1)}
                         aria-label={t("Previous review")}
                         className="flex h-5 w-5 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
                       >
@@ -309,7 +353,7 @@ export function CriticsPick({ meta }: { meta: Meta }) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => setReviewIdx((i) => (i + 1) % reviews.length)}
+                        onClick={() => changeReview(1)}
                         aria-label={t("Next review")}
                         className="flex h-5 w-5 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
                       >
@@ -329,10 +373,10 @@ export function CriticsPick({ meta }: { meta: Meta }) {
             ) : (
               <div className="flex items-center justify-between gap-3 text-[11.5px] text-ink-muted">
                 <div className="flex items-center gap-3">
-                  {meta.imdbRating && (
+                  {imdbRating && (
                     <span className="inline-flex items-center gap-1.5">
-                      {meta.id.startsWith("tt") ? <ImdbIcon className="h-[12px] w-auto rounded-[2px]" /> : <Star className="h-[12px] w-[12px] text-amber-400" fill="currentColor" strokeWidth={0} />}
-                      {meta.imdbRating}
+                      {hasImdbIdentity ? <ImdbIcon className="h-[12px] w-auto rounded-[2px]" /> : <Star className="h-[12px] w-[12px] text-amber-400" fill="currentColor" strokeWidth={0} />}
+                      {imdbRating}
                     </span>
                   )}
                   {settings.showRtBadge && omdb?.rtCritics != null && (
@@ -471,7 +515,12 @@ export function CriticsPick({ meta }: { meta: Meta }) {
           overview={overview}
           review={activeReview}
           people={linkablePeople}
+          poster={rpdbPoster(settings.rpdbKey, meta.id, meta.poster) ?? meta.poster}
           onClose={() => setOverviewOpen(false)}
+          onOpenTitle={() => {
+            setOverviewOpen(false);
+            openMeta({ ...meta, logo: logo ?? meta.logo });
+          }}
           onPersonClick={handlePersonClick}
           reviewCount={reviews.length}
           reviewIndex={reviewIdx}

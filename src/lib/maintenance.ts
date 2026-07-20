@@ -128,7 +128,7 @@ export function startMaintenance(): () => void {
   let hiddenTimer: number | null = null;
   const onVisibility = () => {
     if (document.visibilityState === "hidden") {
-      hiddenTimer = window.setTimeout(() => runMaintenance(true), HIDDEN_GRACE_MS);
+      hiddenTimer = window.setTimeout(() => runMaintenance(isMemoryPressureHigh()), HIDDEN_GRACE_MS);
     } else if (hiddenTimer != null) {
       window.clearTimeout(hiddenTimer);
       hiddenTimer = null;

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { isMovieWatchedLocal, subscribeMovieWatched } from "./movie-watched";
+import { persistCritical } from "./storage-recovery";
 
 const KEY = "harbor.watchedFlag.v1";
 
@@ -21,16 +22,16 @@ function load(): Set<string> {
 function persist(next: Set<string>): void {
   cache = next;
   version += 1;
-  try {
-    localStorage.setItem(KEY, JSON.stringify([...next]));
-  } catch {
-    /* quota */
-  }
+  persistCritical(KEY, JSON.stringify([...next]));
   for (const fn of subs) fn();
 }
 
 export function isWatchedFlagged(metaId: string): boolean {
   return load().has(metaId);
+}
+
+export function watchedFlagIds(): Set<string> {
+  return load();
 }
 
 export function setWatchedFlag(metaId: string, watched: boolean): void {
@@ -51,13 +52,22 @@ function subscribe(fn: () => void): () => void {
   };
 }
 
-export function useMetaWatched(metaId: string | undefined, type: string | undefined): boolean {
+export function useMetaWatched(
+  metaId: string | undefined,
+  type: string | undefined,
+  altId?: string | null,
+): boolean {
   return useSyncExternalStore(
     subscribe,
     () => {
       if (!metaId) return false;
       if (load().has(metaId)) return true;
-      return type === "movie" && isMovieWatchedLocal(metaId);
+      if (altId && load().has(altId)) return true;
+      if (type === "movie") {
+        if (isMovieWatchedLocal(metaId)) return true;
+        if (altId && isMovieWatchedLocal(altId)) return true;
+      }
+      return false;
     },
     () => false,
   );

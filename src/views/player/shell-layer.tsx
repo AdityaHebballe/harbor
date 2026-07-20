@@ -1,4 +1,4 @@
-import { memo, type RefObject } from "react";
+import type { RefObject } from "react";
 import type { Meta } from "@/lib/cinemeta";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlayerShell, type PlayerShellProps } from "@/lib/player-shells/registry";
@@ -6,7 +6,7 @@ import { writePlayerPrefs } from "@/lib/player-prefs";
 import { writePlayerVolume } from "@/lib/player-volume";
 import type { useVideoDownload } from "./hooks/use-video-download";
 
-export const ShellLayer = memo(function ShellLayer({
+export function ShellLayer({
   shellId,
   shellSnap,
   snapRef,
@@ -44,6 +44,7 @@ export const ShellLayer = memo(function ShellLayer({
   subtitle,
   resolution,
   quality,
+  releaseName,
   hoverTitle,
   hoverSub,
   hasPrevEp,
@@ -99,6 +100,7 @@ export const ShellLayer = memo(function ShellLayer({
   subtitle?: string;
   resolution?: string | null;
   quality?: string | null;
+  releaseName?: string | null;
   hoverTitle?: string;
   hoverSub?: string;
   hasPrevEp: boolean;
@@ -124,16 +126,7 @@ export const ShellLayer = memo(function ShellLayer({
       engine={engine}
       useOverlayPopups={false}
       onMenuOpenChange={onMenuOpenChange}
-      capabilities={
-        bridgeRef.current?.capabilities() ?? {
-          engine: "html5",
-          pictureInPicture: false,
-          airplay: false,
-          chromecast: false,
-          hdrPassthrough: false,
-          hardwareDecode: true,
-        }
-      }
+      capabilities={bridgeRef.current?.capabilities() ?? { engine: "html5", pictureInPicture: false, airplay: false, chromecast: false, hdrPassthrough: false, hardwareDecode: true }}
       visible={visible}
       fullscreen={fullscreen}
       drawMode={drawMode}
@@ -167,7 +160,6 @@ export const ShellLayer = memo(function ShellLayer({
       }}
       onSubDelay={(s) => {
         bridgeRef.current?.setSubDelay(s);
-        writePlayerPrefs(metaId, { subDelaySec: s });
       }}
       onEnterSync={onEnterSync}
       onAudioDelay={(s) => bridgeRef.current?.setAudioDelay(s)}
@@ -192,7 +184,9 @@ export const ShellLayer = memo(function ShellLayer({
       onPiP={onPiP}
       onFullscreen={onFullscreen}
       onCast={() => {
-        const btn = document.querySelector('[aria-label="Cast"]') as HTMLElement | null;
+        const btn = (document.querySelector(
+          '[aria-label="Cast"]',
+        ) as HTMLElement | null);
         if (btn) {
           const r = btn.getBoundingClientRect();
           openCastMenu({ right: r.right, bottom: r.top });
@@ -210,6 +204,7 @@ export const ShellLayer = memo(function ShellLayer({
       subtitle={subtitle}
       resolution={resolution}
       quality={quality}
+      releaseName={releaseName}
       hoverTitle={hoverTitle}
       hoverSub={hoverSub}
       hasPrevEp={hasPrevEp}
@@ -232,4 +227,4 @@ export const ShellLayer = memo(function ShellLayer({
       sleep={sleep}
     />
   );
-});
+}

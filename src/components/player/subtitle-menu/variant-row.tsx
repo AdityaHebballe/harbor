@@ -34,11 +34,7 @@ export function VariantRow({
   if (track.hearingImpaired) tags.push({ label: tr("HI/SDH"), tone: "warn" });
   if (track.default) tags.push({ label: tr("Default"), tone: "default" });
   if (isImageSubTrack(track)) tags.push({ label: tr("Position and size only"), tone: "warn" });
-  const sourceLabel = isImported
-    ? tr("Imported")
-    : track.external
-      ? tr("External")
-      : tr("Embedded");
+  const sourceLabel = isImported ? tr("Imported") : track.external ? tr("External") : tr("Embedded");
   const codec = track.codec?.toUpperCase();
   const release = pickReleaseHint(track);
   const titleText = subtitleTrackTitle(track);

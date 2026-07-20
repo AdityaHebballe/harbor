@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Compass, ListTree, Loader2, Shuffle, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ListTree, Loader2, Shuffle, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AddonsIcon } from "@/components/icons/addons-icon";
 import { AnimeIcon } from "@/components/icons/anime-icon";
@@ -344,12 +344,11 @@ export function EmptyState({ onClose, onOpenGuide }: { onClose: () => void; onOp
   }
 
   return (
-    <div className="flex flex-col gap-9">
+    <div className="flex flex-col gap-10 pt-1">
       {recent.length > 0 && (
         <section>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-subtle">
-              <span className="text-ink-muted"><Clock size={13} strokeWidth={2.2} /></span>
+          <div className="mb-3.5 flex items-center justify-between gap-3">
+            <h3 className="text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-subtle">
               {t("Recent searches")}
             </h3>
             <button
@@ -386,7 +385,7 @@ export function EmptyState({ onClose, onOpenGuide }: { onClose: () => void; onOp
       )}
 
       <section>
-        <Title icon={<Compass size={13} strokeWidth={2.2} />}>{t("Jump to")}</Title>
+        <Title>{t("Jump to")}</Title>
         <div className="flex flex-wrap gap-2">
           {visibleJumps.map((j) => (
             <button
@@ -395,18 +394,18 @@ export function EmptyState({ onClose, onOpenGuide }: { onClose: () => void; onOp
                 setView(j.view);
                 onClose();
               }}
-              className="flex h-12 items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/50 px-5 text-[14.5px] font-semibold text-ink transition-all hover:border-edge hover:bg-elevated active:scale-[0.97]"
+              className="group flex h-12 items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/50 px-5 text-[14.5px] font-semibold text-ink transition-all hover:border-edge hover:bg-elevated active:scale-[0.97]"
             >
-              <span className="flex h-5 w-5 items-center justify-center text-ink-muted">{j.icon}</span>
+              <span className="flex h-5 w-5 items-center justify-center text-ink-muted transition-colors group-hover:text-accent">{j.icon}</span>
               {t(j.label)}
             </button>
           ))}
           {!hiddenTabs.liveTv && (
             <button
               onClick={() => onOpenGuide()}
-              className="flex h-12 items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/50 px-5 text-[14.5px] font-semibold text-ink transition-all hover:border-edge hover:bg-elevated active:scale-[0.97]"
+              className="group flex h-12 items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/50 px-5 text-[14.5px] font-semibold text-ink transition-all hover:border-edge hover:bg-elevated active:scale-[0.97]"
             >
-              <span className="flex h-5 w-5 items-center justify-center text-ink-muted">
+              <span className="flex h-5 w-5 items-center justify-center text-ink-muted transition-colors group-hover:text-accent">
                 <ListTree size={16} strokeWidth={2} />
               </span>
               {t("TV Guide")}
@@ -416,7 +415,7 @@ export function EmptyState({ onClose, onOpenGuide }: { onClose: () => void; onOp
       </section>
 
       <section>
-        <Title icon={<Sparkles size={13} strokeWidth={2.2} />}>{t("Try a genre")}</Title>
+        <Title>{t("Try a genre")}</Title>
         <div className="flex flex-wrap gap-2">
           {visibleGenres.map((name) => (
             <button
@@ -430,21 +429,19 @@ export function EmptyState({ onClose, onOpenGuide }: { onClose: () => void; onOp
         </div>
       </section>
 
-      <section className="flex justify-center pt-2">
+      <section className="flex justify-center pb-1 pt-2">
         <button
           type="button"
           onClick={onSurprise}
           disabled={surpriseBusy}
-          className="group inline-flex items-center gap-2 text-[13.5px] font-medium text-ink-subtle transition-colors hover:text-ink disabled:opacity-60"
+          className="group inline-flex h-11 items-center gap-2.5 rounded-full border border-edge-soft px-6 text-[13.5px] font-semibold text-ink-muted transition-colors hover:border-accent/50 hover:text-ink active:scale-[0.97] disabled:opacity-60"
         >
           <Shuffle
             size={14}
-            strokeWidth={1.9}
-            className={`transition-transform duration-300 ${surpriseBusy ? "animate-spin" : "group-hover:rotate-[18deg]"}`}
+            strokeWidth={2}
+            className={`transition-[transform,color] duration-300 group-hover:text-accent ${surpriseBusy ? "animate-spin" : "group-hover:rotate-[18deg]"}`}
           />
-          <span className="underline decoration-edge-soft underline-offset-4 transition-colors group-hover:decoration-edge">
-            {surpriseBusy ? t("Picking…") : t("Surprise me")}
-          </span>
+          {surpriseBusy ? t("Picking…") : t("Surprise me")}
         </button>
       </section>
     </div>
@@ -478,10 +475,9 @@ function FilterPill({
   );
 }
 
-function Title({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function Title({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="mb-3 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-subtle">
-      <span className="text-ink-muted">{icon}</span>
+    <h3 className="mb-3.5 text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-subtle">
       {children}
     </h3>
   );

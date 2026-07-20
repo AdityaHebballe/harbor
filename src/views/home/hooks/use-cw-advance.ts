@@ -5,6 +5,7 @@ import type { PlayEpisode } from "@/lib/view";
 import { getEpisodeProgress } from "@/lib/episode-progress";
 import { simklWatchedForId, statusForId, type WatchlistStatus } from "@/lib/simkl/list-status";
 import { episodeFromVideoId, isAnimeCwItem, libraryMetaType, type LibraryItem } from "@/lib/stremio";
+import { isEpisodeHidden } from "@/lib/hidden-episodes";
 import { isNextAired, resurfaceCandidates, type AnimeMode } from "@/lib/cw-resurface";
 
 const FINISHED_RATIO = 0.9;
@@ -115,6 +116,7 @@ export function useCwAdvance(
   anilistWatched: Map<string, Set<string>> = EMPTY_ANILIST_WATCHED,
   simklStatus: Map<string, WatchlistStatus> = EMPTY_SIMKL_STATUS,
   animeVersion = 0,
+  episodeHiding = false,
 ): LibraryItem[] {
   const [advanced, setAdvanced] = useState<Map<string, LibraryItem>>(new Map());
   const [extra, setExtra] = useState<LibraryItem[]>([]);
@@ -129,21 +131,27 @@ export function useCwAdvance(
       return;
     }
     let cancelled = false;
-    const targets = items.filter((i) => {
+    // Process every WATCHED-current item (all types, as before) PLUS every anime item
+    // regardless of watched state. Anime franchise numbering can persist a Continue
+    // Watching entry at an episode that does not exist in the entry's own list (e.g. a
+    // separate-entry sequel counted as an absolute episode 13 under a 12-episode Season 1
+    // id). Those phantom entries are never watched-current, so the old target filter
+    // skipped them and the card rendered a nonexistent episode forever (#760).
+    const candidates = items.filter((i) => {
       const cur = currentEpisode(i);
-      return (
-        cur != null &&
-        watchedPredicate(i, cur, traktWatched, simklWatched, anilistWatched, simklStatus)(
-          cur.season,
-          cur.episode,
-        )
+      if (cur == null) return false;
+      if (isAnimeCwItem(i) || ANIME_ID.test(i._id)) return true;
+      return watchedPredicate(i, cur, traktWatched, simklWatched, anilistWatched, simklStatus)(
+        cur.season,
+        cur.episode,
       );
     });
     void (async () => {
       const next = new Map<string, LibraryItem>();
       const remove = new Set<string>();
-      for (const i of targets) {
+      for (const i of candidates) {
         const cur = currentEpisode(i)!;
+        const isAnime = isAnimeCwItem(i) || ANIME_ID.test(i._id);
         let list = listCacheRef.current.get(i._id);
         let fetchOk = list !== undefined;
         if (list === undefined) {
@@ -165,12 +173,37 @@ export function useCwAdvance(
           }
         }
         if (!list) continue;
+        // Bulletproof phantom guard: an entry can never show an episode past the last one
+        // its own fully-fetched list actually contains. Ordering key = season*1e5+episode so
+        // it holds for both season-relative and absolute numbering. Only fires on a clean
+        // fetch with a non-empty list, so a transient/partial fetch never clears a good item.
+        const orderKey = (s: number, e: number) => s * 100000 + e;
+        if (fetchOk && list.length > 0) {
+          const maxKey = list.reduce((m, e) => Math.max(m, orderKey(e.season, e.episode)), 0);
+          if (
+            orderKey(cur.season, cur.episode) > maxKey &&
+            list.some((e) => e.season === cur.season)
+          ) {
+            remove.add(i._id);
+            continue;
+          }
+        }
+        const watchedCur = watchedPredicate(
+          i,
+          cur,
+          traktWatched,
+          simklWatched,
+          anilistWatched,
+          simklStatus,
+        )(cur.season, cur.episode);
+        if (!watchedCur) continue;
         const nextEp = nextUnwatchedAfter(
           list,
           cur,
           watchedPredicate(i, cur, traktWatched, simklWatched, anilistWatched, simklStatus),
+          episodeHiding ? (s, e) => isEpisodeHidden(i._id, s, e) : undefined,
         );
-        if (nextEp && nextEpAired(list, nextEp, isAnimeCwItem(i) || ANIME_ID.test(i._id))) {
+        if (nextEp && nextEpAired(list, nextEp, isAnime)) {
           next.set(i._id, {
             ...i,
             state: {
@@ -193,7 +226,7 @@ export function useCwAdvance(
             midEpisode &&
             finaleEp != null &&
             cur.episode < finaleEp.episode;
-          if (!freshMidResume) remove.add(i._id);
+          if (!freshMidResume && !midEpisode) remove.add(i._id);
         }
       }
       const lib = library ?? items;
@@ -231,7 +264,7 @@ export function useCwAdvance(
     return () => {
       cancelled = true;
     };
-  }, [items, tmdbKey, enabled, library, animeMode, watchedVersion, traktWatched, simklWatched, anilistWatched, simklStatus, animeVersion]);
+  }, [items, tmdbKey, enabled, library, animeMode, watchedVersion, traktWatched, simklWatched, anilistWatched, simklStatus, animeVersion, episodeHiding]);
 
   if (!enabled) return items;
   const base =

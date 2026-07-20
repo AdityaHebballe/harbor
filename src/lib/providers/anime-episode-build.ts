@@ -39,7 +39,12 @@ export function mergeAniZipEpisodes(episodes: KitsuEpisode[], aniZip: AniZipMapp
       ep.title = enrichedTitle;
     }
     if (az.overview && !ep.synopsis) ep.synopsis = az.overview;
-    if (az.image && !ep.thumbnail) ep.thumbnail = az.image;
+    if (az.image) {
+      if (ep.thumbnail && ep.thumbnail !== az.image && !ep.thumbnailFallback) {
+        ep.thumbnailFallback = ep.thumbnail;
+      }
+      ep.thumbnail = az.image;
+    }
     if (az.airDate) ep.airdate = az.airDate;
     if (az.runtime && !ep.length) ep.length = az.runtime;
     if (az.filler) ep.filler = true;

@@ -1,13 +1,11 @@
 import { Lock } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { CatAvatar } from "@/components/icons/cat-avatar";
 import { HarborMark } from "@/components/icons/harbor-mark";
+import { AccountMenu } from "@/chrome/account-menu/account-menu";
 import { NAV_ITEMS, applyNavCustomization } from "@/chrome/nav-items";
 import { ParentalPinModal } from "@/components/parental-pin-modal";
-import { useAuth } from "@/lib/auth";
 import { useT } from "@/lib/i18n";
 import { useParental } from "@/lib/parental";
-import { useProfiles } from "@/lib/profiles";
 import { useSettings } from "@/lib/settings";
 import { getThemeById } from "@/lib/theme";
 import { useView, type View } from "@/lib/view";
@@ -36,7 +34,6 @@ export function StremioRail() {
     <>
       <aside
         aria-hidden={chromeHidden}
-        data-tv-nav-zone
         className={`relative z-[60] flex w-20 shrink-0 flex-col transition-[opacity,transform] duration-[320ms] ease-[cubic-bezier(0.32,0.72,0.24,1)] ${
           chromeHidden
             ? "pointer-events-none -translate-x-2 rtl:translate-x-2 opacity-0"
@@ -84,7 +81,12 @@ export function StremioRail() {
               </span>
             </div>
           ) : (
-            <RailAvatar />
+            <AccountMenu
+              trigger="avatar"
+              placement="up"
+              align="start"
+              showSettings={false}
+            />
           )}
         </div>
       </aside>
@@ -103,47 +105,6 @@ export function StremioRail() {
         />
       )}
     </>
-  );
-}
-
-function RailAvatar() {
-  const { user } = useAuth();
-  const { settings } = useSettings();
-  const { activeProfile, openPicker } = useProfiles();
-  const t = useT();
-  const src = activeProfile?.avatar ?? settings.harborAvatar ?? user?.avatar ?? null;
-  const ring = activeProfile?.color
-    ? { boxShadow: `0 0 0 2px ${activeProfile.color}` }
-    : undefined;
-  const label =
-    activeProfile?.name ?? user?.fullname ?? user?.email?.split("@")[0] ?? t("profile.fallback");
-  return (
-    <button
-      type="button"
-      onClick={() => openPicker({ kind: "list" })}
-      aria-label={label}
-      title={label}
-      className="group flex h-16 w-full flex-col items-center justify-center gap-1 rounded-xl text-white/55 transition-colors hover:bg-white/[0.05] hover:text-white/85"
-    >
-      <span
-        className="h-9 w-9 shrink-0 overflow-hidden rounded-full bg-elevated"
-        style={ring}
-      >
-        {src ? (
-          <img
-            src={src}
-            alt=""
-            draggable={false}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <CatAvatar className="h-full w-full" />
-        )}
-      </span>
-      <span className="max-w-[5rem] truncate text-[10px] font-semibold leading-none opacity-0 transition-opacity group-hover:opacity-100">
-        {label}
-      </span>
-    </button>
   );
 }
 

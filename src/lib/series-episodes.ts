@@ -99,6 +99,7 @@ async function getAnimeEpisodes(id: string): Promise<PlayEpisode[] | null> {
         ep.imdbSeason = m.seasonNumber;
       }
       if (ep.imdbEpisode == null && m.episodeNumber != null) ep.imdbEpisode = m.episodeNumber;
+      if (ep.tvdbEpisodeId == null && m.tvdbId) ep.tvdbEpisodeId = m.tvdbId;
       const air = m.airDateUtc ?? m.airDate;
       if (air && (!ep.airDate || bogusAirdates)) ep.airDate = air;
       if (!ep.overview && m.overview) ep.overview = m.overview;
@@ -183,12 +184,12 @@ async function getAddonEpisodes(id: string): Promise<PlayEpisode[] | null> {
 export async function fetchAdjacentEpisodes(
   meta: Meta,
   current: { season: number; episode: number },
-  opts: { tmdbKey: string; kitsuStreamId?: string },
+  opts: { tmdbKey: string; kitsuStreamId?: string; skip?: (season: number, episode: number) => boolean },
 ): Promise<Adjacent> {
   const animeSeries = animeSeriesFromStreamId(opts.kitsuStreamId);
   if (animeSeries) {
     const eps = await getAnimeEpisodes(animeSeries);
-    if (eps) return computeAdjacent(eps, current);
+    if (eps) return computeAdjacent(eps, current, opts.skip);
   }
 
   if (meta.type !== "series" && !isAnimeId(meta.id)) return { prev: null, next: null };
@@ -198,7 +199,7 @@ export async function fetchAdjacentEpisodes(
     if (ttCache.has(key)) return ttCache.get(key)!;
     const eps = await loadCinemetaEpisodes(meta.id);
     if (!eps) return { prev: null, next: null };
-    const result = computeAdjacent(eps, current);
+    const result = computeAdjacent(eps, current, opts.skip);
     lruSet(ttCache, key, result, TT_CACHE_MAX);
     return result;
   }
@@ -206,12 +207,12 @@ export async function fetchAdjacentEpisodes(
   if (meta.id.startsWith("tmdb:tv:") && opts.tmdbKey) {
     const tvId = parseInt(meta.id.split(":")[2] ?? "", 10);
     if (!Number.isFinite(tvId)) return { prev: null, next: null };
-    return tmdbAdjacent(opts.tmdbKey, tvId, current);
+    return tmdbAdjacent(opts.tmdbKey, tvId, current, opts.skip);
   }
 
   const eps = await getNonStandardEpisodes(meta);
   if (!eps) return { prev: null, next: null };
-  return computeAdjacent(eps, current);
+  return computeAdjacent(eps, current, opts.skip);
 }
 
 export async function fetchUpcomingEpisodes(
@@ -364,6 +365,7 @@ export function nextUnwatchedAfter(
   eps: PlayEpisode[],
   from: { season: number; episode: number },
   isWatched: (season: number, episode: number) => boolean,
+  skip?: (season: number, episode: number) => boolean,
 ): PlayEpisode | null {
   const sorted = eps
     .filter((e) => e.season >= 1)
@@ -372,18 +374,32 @@ export function nextUnwatchedAfter(
   let idx = sorted.findIndex((e) => e.season === from.season && e.episode === from.episode);
   if (idx < 0) idx = 0;
   for (let i = idx; i < sorted.length; i++) {
+    if (skip?.(sorted[i].season, sorted[i].episode)) continue;
     if (!isWatched(sorted[i].season, sorted[i].episode)) return sorted[i];
   }
   return null;
 }
 
-function computeAdjacent(eps: PlayEpisode[], current: { season: number; episode: number }): Adjacent {
+function computeAdjacent(
+  eps: PlayEpisode[],
+  current: { season: number; episode: number },
+  skip?: (season: number, episode: number) => boolean,
+): Adjacent {
   const idx = eps.findIndex((v) => v.season === current.season && v.episode === current.episode);
   if (idx === -1) return { prev: null, next: null };
-  return {
-    prev: idx > 0 ? eps[idx - 1] : null,
-    next: idx < eps.length - 1 ? eps[idx + 1] : null,
-  };
+  let prev: PlayEpisode | null = null;
+  let next: PlayEpisode | null = null;
+  for (let i = idx - 1; i >= 0; i--) {
+    if (skip?.(eps[i].season, eps[i].episode)) continue;
+    prev = eps[i];
+    break;
+  }
+  for (let i = idx + 1; i < eps.length; i++) {
+    if (skip?.(eps[i].season, eps[i].episode)) continue;
+    next = eps[i];
+    break;
+  }
+  return { prev, next };
 }
 
 async function tmdbSeason(key: string, tvId: number, season: number): Promise<PlayEpisode[]> {
@@ -411,20 +427,39 @@ async function tmdbAdjacent(
   key: string,
   tvId: number,
   current: { season: number; episode: number },
+  skip?: (season: number, episode: number) => boolean,
 ): Promise<Adjacent> {
   const cur = await tmdbSeason(key, tvId, current.season);
   const idx = cur.findIndex((e) => e.episode === current.episode);
   let prev: PlayEpisode | null = null;
   let next: PlayEpisode | null = null;
-  if (idx > 0) prev = cur[idx - 1];
-  if (idx >= 0 && idx < cur.length - 1) next = cur[idx + 1];
+  if (idx >= 0) {
+    for (let i = idx - 1; i >= 0; i--) {
+      if (skip?.(cur[i].season, cur[i].episode)) continue;
+      prev = cur[i];
+      break;
+    }
+    for (let i = idx + 1; i < cur.length; i++) {
+      if (skip?.(cur[i].season, cur[i].episode)) continue;
+      next = cur[i];
+      break;
+    }
+  }
   if (!prev && current.season > 1) {
     const before = await tmdbSeason(key, tvId, current.season - 1);
-    if (before.length > 0) prev = before[before.length - 1];
+    for (let i = before.length - 1; i >= 0; i--) {
+      if (skip?.(before[i].season, before[i].episode)) continue;
+      prev = before[i];
+      break;
+    }
   }
   if (!next) {
     const after = await tmdbSeason(key, tvId, current.season + 1);
-    if (after.length > 0) next = after[0];
+    for (let i = 0; i < after.length; i++) {
+      if (skip?.(after[i].season, after[i].episode)) continue;
+      next = after[i];
+      break;
+    }
   }
   return { prev, next };
 }

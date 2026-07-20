@@ -596,7 +596,9 @@ async fn spawn_shadow(url: &str, session: &str, pending: Pending) -> Result<Shad
     {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
+    crate::proc_guard::configure_command(&mut cmd);
     let mut child = cmd.spawn().map_err(|e| format!("spawn shadow: {}", e))?;
+    crate::proc_guard::adopt(&child);
 
     tokio::time::sleep(Duration::from_millis(400)).await;
     if let Some(status) = child

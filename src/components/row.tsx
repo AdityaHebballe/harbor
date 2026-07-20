@@ -6,33 +6,21 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { NavChevron } from "./nav-arrow";
 import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
-import { resetPosterDock as resetPosterDockItems, updatePosterDock } from "@/lib/poster-dock";
 import { useView } from "@/lib/view";
-import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
+import { resetPosterDock as resetPosterDockItems, updatePosterDock } from "@/lib/poster-dock";
 
 const GAP = 20;
 const EAGER_COUNT = 6;
 const NEAR_MARGIN = "300px";
-
-function isRtlTrack(el: HTMLDivElement): boolean {
-  return getComputedStyle(el).direction === "rtl";
-}
-
-function readPos(el: HTMLDivElement): number {
-  return isRtlTrack(el) ? -el.scrollLeft : el.scrollLeft;
-}
-
-function writePos(el: HTMLDivElement, pos: number): void {
-  el.scrollLeft = isRtlTrack(el) ? -pos : pos;
-}
+const FAR_RELEASE_MS = 15000;
 
 export type RowShape = "portrait" | "landscape" | "service" | "rank" | "tile";
 
@@ -55,13 +43,24 @@ function LazyChild({
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (visible) return;
     if (!root) return;
     const el = ref.current;
     if (!el) return;
+    let hideTimer: number | null = null;
     const io = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) setVisible(true);
+        if (entries[0]?.isIntersecting) {
+          if (hideTimer != null) {
+            window.clearTimeout(hideTimer);
+            hideTimer = null;
+          }
+          setVisible(true);
+        } else if (!eager && hideTimer == null) {
+          hideTimer = window.setTimeout(() => {
+            hideTimer = null;
+            setVisible(false);
+          }, FAR_RELEASE_MS);
+        }
       },
       { root, rootMargin: NEAR_MARGIN },
     );
@@ -69,6 +68,7 @@ function LazyChild({
     const recheck = window.setTimeout(() => {
       const rect = el.getBoundingClientRect();
       const rr = root.getBoundingClientRect();
+      if (rr.width === 0 || rr.height === 0) return;
       const near = 300;
       const within =
         rect.right > rr.left - near &&
@@ -80,18 +80,12 @@ function LazyChild({
     return () => {
       io.disconnect();
       window.clearTimeout(recheck);
+      if (hideTimer != null) window.clearTimeout(hideTimer);
     };
-  }, [root, visible]);
+  }, [root, eager]);
 
   return (
-    <div
-      ref={ref}
-      style={{
-        ...(span ? { gridColumn: span } : undefined),
-        contentVisibility: visible ? "visible" : "auto",
-        containIntrinsicSize: visible ? undefined : "auto 200px",
-      }}
-    >
+    <div ref={ref} style={span ? { gridColumn: span } : undefined}>
       {visible ? children : <Skeleton shape={shape} />}
     </div>
   );
@@ -99,11 +93,12 @@ function LazyChild({
 
 function Skeleton({ shape }: { shape: RowShape }) {
   const { settings } = useSettings();
+  const radius = settings.posterRadius;
   if (shape === "service") {
     return <div className="h-20 w-full rounded-xl bg-elevated/40" />;
   }
   if (shape === "rank") {
-    return <div className="aspect-[228/268] w-full rounded-xl bg-elevated/30" />;
+    return <div className="aspect-[228/246] w-full bg-elevated/30" style={{ borderRadius: radius }} />;
   }
   if (shape === "tile") {
     return <div className="aspect-[5/4] w-full rounded-2xl bg-elevated/30" />;
@@ -112,7 +107,7 @@ function Skeleton({ shape }: { shape: RowShape }) {
   const hideText = shape === "portrait" && settings.hidePosterTitles;
   return (
     <div className="flex w-full min-w-0 flex-col gap-2.5">
-      <div className={`${aspect} rounded-xl bg-elevated/40`} />
+      <div className={`${aspect} bg-elevated/40`} style={{ borderRadius: radius }} />
       {!hideText && (
         <div className={`flex flex-col gap-1.5 ${shape === "landscape" ? "" : "h-9"}`}>
           <div className="h-3 w-3/5 rounded bg-elevated/35" />
@@ -131,6 +126,7 @@ export function Row({
   shape = "portrait",
   scrollKey,
   arrowsAlways = false,
+  alwaysActive = false,
   children,
   onEndReached,
   onViewAll,
@@ -174,13 +170,20 @@ export function Row({
     onEndRef.current = onEndReached;
   });
 
+  const rtlRef = useRef(false);
   const measure = () => {
     const container = containerRef.current;
     if (!container) return;
+    rtlRef.current = getComputedStyle(container).direction === "rtl";
     const available = container.clientWidth;
     if (available <= 0) return;
     const fits = Math.max(1, Math.floor((available + GAP) / (effMin + GAP)));
     setCellWidth((available - (fits - 1) * GAP) / fits);
+  };
+
+  const readPos = (el: HTMLDivElement) => (rtlRef.current ? -el.scrollLeft : el.scrollLeft);
+  const writePos = (el: HTMLDivElement, pos: number) => {
+    el.scrollLeft = rtlRef.current ? -pos : pos;
   };
 
   const measureScroll = () => {
@@ -193,22 +196,26 @@ export function Row({
     if (el.clientWidth > 0 && remaining < 800) onEndRef.current?.();
   };
 
-  // Keep native CSS grid rails — horizontal virtualization made posters look
-  // mid-scrolled / misaligned. LazyChild + IO is enough for row-sized lists.
-  const items = useMemo(() => Children.toArray(children), [children]);
-  const childCount = items.length;
-
+  const childCount = Children.count(children);
+  const restoredRef = useRef(false);
   const userInteractedRef = useRef(false);
-  const { rememberRowScroll } = useView();
+  const { rememberRowScroll, recallRowScroll } = useView();
   useLayoutEffect(() => {
     measure();
-    // Always pin rails to the first poster unless the user scrolled this session.
-    // Restoring saved scrollLeft made every page open mid-row ("posters scrolled").
-    if (trackEl && cellWidth != null && childCount > 0 && !userInteractedRef.current) {
-      if (readPos(trackEl) !== 0) writePos(trackEl, 0);
-    }
     measureScroll();
-  }, [children, childCount, cellWidth, trackEl, effMin]);
+    if (!trackEl || cellWidth == null) return;
+    if (scrollKey && !restoredRef.current && childCount > 0) {
+      const n = recallRowScroll(scrollKey);
+      const max = trackEl.scrollWidth - trackEl.clientWidth;
+      const target = n != null && n > 0 && max > 0 ? Math.min(n, max) : 0;
+      if (readPos(trackEl) !== target) writePos(trackEl, target);
+      restoredRef.current = true;
+      return;
+    }
+    if (!userInteractedRef.current && readPos(trackEl) !== 0) {
+      writePos(trackEl, 0);
+    }
+  }, [children, childCount, cellWidth, trackEl, scrollKey, recallRowScroll, effMin]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -216,6 +223,7 @@ export function Row({
     if (!container || !track) return;
     let roRaf: number | null = null;
     const ro = new ResizeObserver(() => {
+      if (container.offsetParent === null) return;
       if (roRaf != null) return;
       roRaf = requestAnimationFrame(() => {
         roRaf = null;
@@ -275,13 +283,13 @@ export function Row({
     const onReset = (e: Event) => {
       const detail = (e as CustomEvent<{ prefix?: string }>).detail;
       if (!scrollKey) return;
-      // Empty/missing prefix = reset every rail (nav change). Otherwise match prefix.
-      if (detail?.prefix && !scrollKey.startsWith(detail.prefix)) return;
+      if (!detail?.prefix || !scrollKey.startsWith(detail.prefix)) return;
       if (saveTimer != null) {
         window.clearTimeout(saveTimer);
         saveTimer = null;
       }
       writePos(track, 0);
+      rememberRowScroll(scrollKey, 0);
       userInteractedRef.current = false;
       measureScroll();
     };
@@ -308,8 +316,19 @@ export function Row({
     const el = trackRef.current;
     if (!el) return;
     userInteractedRef.current = true;
-    const delta = (isRtlTrack(el) ? -dir : dir) * el.clientWidth;
-    el.scrollBy({ left: delta, behavior: "smooth" });
+    cancelGlide();
+    const rtl = rtlRef.current;
+    const cur = rtl ? -el.scrollLeft : el.scrollLeft;
+    const max = el.scrollWidth - el.clientWidth;
+    const stride = strideRef.current;
+    const raw = cur + dir * el.clientWidth;
+    const target = Math.max(0, Math.min(max, Math.round(raw / stride) * stride));
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      el.scrollLeft = rtl ? -target : target;
+      return;
+    }
+    el.style.scrollSnapType = "none";
+    glideTo(el, target, false);
   };
 
   const drag = useRef({
@@ -325,14 +344,13 @@ export function Row({
   const rafId = useRef<number | null>(null);
   const strideRef = useRef(effMin + GAP);
   strideRef.current = (cellWidth ?? effMin) + GAP;
+
   const dockFrameRef = useRef<number | null>(null);
   const dockPointerXRef = useRef<number | null>(null);
-
   const resetPosterDock = useCallback(() => {
     const track = trackRef.current;
     if (track) resetPosterDockItems(track);
   }, []);
-
   const applyPosterDock = useCallback(() => {
     dockFrameRef.current = null;
     const track = trackRef.current;
@@ -341,17 +359,16 @@ export function Row({
       resetPosterDock();
       return;
     }
-
+    const rtl = rtlRef.current;
     updatePosterDock({
       track,
       pointerX,
       cellWidth: cellWidth ?? effMin,
       gap: GAP,
-      scrollPosition: readPos(track),
-      rtl: isRtlTrack(track),
+      scrollPosition: rtl ? -track.scrollLeft : track.scrollLeft,
+      rtl,
     });
   }, [cellWidth, dockEnabled, effMin, resetPosterDock]);
-
   const schedulePosterDock = useCallback(
     (clientX: number) => {
       dockPointerXRef.current = clientX;
@@ -361,7 +378,6 @@ export function Row({
     },
     [applyPosterDock],
   );
-
   useEffect(
     () => () => {
       if (dockFrameRef.current !== null) cancelAnimationFrame(dockFrameRef.current);
@@ -369,7 +385,6 @@ export function Row({
     },
     [resetPosterDock],
   );
-
   useEffect(() => {
     if (!dockEnabled) resetPosterDock();
   }, [dockEnabled, resetPosterDock]);
@@ -382,7 +397,7 @@ export function Row({
   };
 
   const glideTo = (el: HTMLDivElement, target: number, snappy = false) => {
-    const rtl = isRtlTrack(el);
+    const rtl = rtlRef.current;
     const start = rtl ? -el.scrollLeft : el.scrollLeft;
     const distance = target - start;
     if (Math.abs(distance) < 2) {
@@ -411,8 +426,6 @@ export function Row({
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    dockPointerXRef.current = null;
-    resetPosterDock();
     if (e.button !== 0 || e.pointerType === "touch") return;
     if (!(e.target as Element).closest("button")) return;
     const el = trackRef.current;
@@ -431,11 +444,11 @@ export function Row({
   };
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    const el = trackRef.current;
-    if (dockEnabled && e.pointerType !== "touch" && e.buttons === 0 && !d.active) {
+    if (dockEnabled && e.pointerType !== "touch" && e.buttons === 0 && !drag.current.active) {
       schedulePosterDock(e.clientX);
     }
+    const d = drag.current;
+    const el = trackRef.current;
     if (!d.active || !el) return;
     const dx = e.clientX - d.startX;
     if (!d.moved && Math.abs(dx) < 6) return;
@@ -480,7 +493,7 @@ export function Row({
     const v = d.vel;
     const projection = -((v * Math.abs(v)) / (2 * friction));
     const projectedRaw = el.scrollLeft + projection;
-    const projected = isRtlTrack(el) ? -projectedRaw : projectedRaw;
+    const projected = rtlRef.current ? -projectedRaw : projectedRaw;
     const stride = (cellWidth ?? effMin) + GAP;
     const max = el.scrollWidth - el.clientWidth;
     const targetIdx = Math.round(projected / stride);
@@ -498,6 +511,8 @@ export function Row({
       e.preventDefault();
     }
   };
+
+  const trackPad = dockEnabled ? "px-5 pb-5 pt-8 -mx-5 -mb-5 -mt-8" : "p-5 -m-5";
 
   return (
     <div className={`flex min-w-0 flex-col gap-5 ps-[9px] ${className}`}>
@@ -556,20 +571,19 @@ export function Row({
             }}
             onClickCapture={onClickCapture}
             onDragStart={(e) => e.preventDefault()}
-            className="harbor-row-track grid grid-flow-col items-start gap-5 overflow-x-auto px-5 pb-5 pt-8 -mx-5 -mb-5 -mt-8 scroll-ps-5 scroll-pe-5 [scroll-snap-type:x_mandatory] *:snap-start [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [overflow-anchor:none] overscroll-x-contain [&_img]:select-none [&_img]:[-webkit-user-drag:none]"
+            className={`harbor-row-track grid grid-flow-col items-start gap-5 overflow-x-auto overflow-y-hidden ${trackPad} scroll-ps-5 scroll-pe-5 [scroll-snap-type:x_mandatory] [&>*]:[scroll-snap-align:start] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [overflow-anchor:none] [overscroll-behavior-x:contain] [&_img]:select-none [&_img]:[-webkit-user-drag:none]`}
             style={{
               gridAutoColumns: cellWidth != null ? `${cellWidth}px` : `${effMin}px`,
-              willChange: "transform",
               transform: "translateZ(0)",
               contain: "layout style",
             }}
           >
-            {items.map((child, i) => {
+            {Children.map(children, (child, i) => {
               const span = isValidElement(child)
                 ? (child.props as { style?: { gridColumn?: string } }).style?.gridColumn
                 : undefined;
               return (
-                <LazyChild key={i} eager={i < EAGER_COUNT} shape={shape} span={span}>
+                <LazyChild eager={alwaysActive || i < EAGER_COUNT} shape={shape} span={span}>
                   {child}
                 </LazyChild>
               );
@@ -596,88 +610,33 @@ function EdgeArrow({
 }) {
   const t = useT();
   const label = t(side === "left" ? "Scroll left" : "Scroll right");
-
-  if (always) {
-    return (
-      <div
-        className={`pointer-events-none absolute inset-y-0 z-30 flex w-14 items-center transition-opacity duration-200 ${
-          side === "left" ? "inset-s-0 justify-start" : "inset-e-0 justify-end"
-        } ${visible ? "opacity-100" : "opacity-0"}`}
-      >
-        <ThreeLiquidGlassSurface
-          radius="9999px"
-          shaderRadius={1}
-          intensity={1}
-          variant="overlay"
-          backdropBlur
-          className={`h-11 w-11 pointer-events-auto ${
-            visible
-              ? "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100"
-              : "pointer-events-none opacity-0"
-          }`}
-          contentClassName="flex h-full w-full items-center justify-center"
-        >
-          <button
-            type="button"
-            onClick={onClick}
-            aria-label={label}
-            tabIndex={visible ? 0 : -1}
-            className="
-      flex h-full w-full
-      items-center justify-center
-      rounded-full bg-transparent
-      text-ink outline-none
-    "
-          >
-            {side === "left" ? (
-              <ChevronLeft size={22} strokeWidth={2.2} className="dir-icon" />
-            ) : (
-              <ChevronRight size={22} strokeWidth={2.2} className="dir-icon" />
-            )}
-          </button>
-        </ThreeLiquidGlassSurface>
-      </div>
-    );
-  }
-
-  const sideClass = side === "left" ? "start-0 justify-start" : "end-0 justify-end";
-
+  const enter = side === "left" ? "-translate-x-2.5" : "translate-x-2.5";
+  const chev = !visible
+    ? "opacity-0"
+    : always
+      ? "opacity-100"
+      : `opacity-0 ${enter} scale-[0.6] group-hover/edge:opacity-100 group-hover/edge:translate-x-0 group-hover/edge:scale-100 group-focus-visible/edge:opacity-100 group-focus-visible/edge:translate-x-0 group-focus-visible/edge:scale-100`;
   return (
     <div
-      className={`pointer-events-none absolute inset-y-0 z-30 flex w-14 items-center ${sideClass}`}
+      className={`pointer-events-none absolute inset-y-0 z-30 flex w-16 -translate-y-[7%] items-center ${
+        side === "left" ? "start-[-40px] justify-start" : "end-[-40px] justify-end"
+      }`}
     >
-      <ThreeLiquidGlassSurface
-        radius="9999px"
-        shaderRadius={1}
-        intensity={1}
-        variant="overlay"
-        backdropBlur
-        className={`h-11 w-11 pointer-events-auto ${
-          visible
-            ? "opacity-0 group-hover/row:opacity-100 focus-within:opacity-100"
-            : "pointer-events-none opacity-0"
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={label}
+        tabIndex={visible ? 0 : -1}
+        className={`group/edge grid h-full w-full place-items-center ${
+          visible ? "pointer-events-auto" : "pointer-events-none"
         }`}
-        contentClassName="flex h-full w-full items-center justify-center"
       >
-        <button
-          type="button"
-          onClick={onClick}
-          aria-label={label}
-          tabIndex={visible ? 0 : -1}
-          className="
-      flex h-full w-full
-      items-center justify-center
-      rounded-full bg-transparent
-      text-ink outline-none
-    "
+        <span
+          className={`grid place-items-center text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)] transition-all duration-[320ms] ease-[cubic-bezier(0.34,1.45,0.5,1)] group-active/edge:scale-90 ${chev}`}
         >
-          {side === "left" ? (
-            <ChevronLeft size={22} strokeWidth={2.2} className="dir-icon" />
-          ) : (
-            <ChevronRight size={22} strokeWidth={2.2} className="dir-icon" />
-          )}
-        </button>
-      </ThreeLiquidGlassSurface>
+          <NavChevron dir={side} size={54} />
+        </span>
+      </button>
     </div>
   );
 }

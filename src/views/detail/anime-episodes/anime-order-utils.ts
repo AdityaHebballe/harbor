@@ -32,7 +32,7 @@ export function buildAnimeOrder(
     if (bucket.length === 0) continue;
     const ordered: KitsuEpisode[] = bucket.map((e) => {
       const abs = ordering.absByEpId.get(e.id);
-      let match = byPair.get(`${e.seasonNumber}:${e.episodeNumber}`) ?? byTvdbId.get(e.id);
+      let match = byTvdbId.get(e.id) ?? byPair.get(`${e.seasonNumber}:${e.episodeNumber}`);
       if (!match && abs != null) match = byAbs.get(abs);
       if (match) {
         matched.add(match.id);
@@ -51,6 +51,7 @@ export function buildAnimeOrder(
         imdbSeason: e.seasonNumber,
         imdbEpisode: e.episodeNumber,
         absoluteNumber: abs ?? undefined,
+        tvdbEpisodeId: e.id > 0 ? e.id : undefined,
       };
     });
     const key = String(s.seasonNumber);

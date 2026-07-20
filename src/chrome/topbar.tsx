@@ -3,9 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BackChrome } from "@/chrome/back-chrome";
 import { HarborMark } from "@/components/icons/harbor-mark";
-import { TogetherPopover } from "@/components/together-modal";
+import { TogetherPopover, TogetherModalShell } from "@/components/together-modal";
 import { DownloadsButton } from "@/components/downloads-popover";
+import { BookmarksButton } from "@/components/bookmarks-popover";
+import { NotificationCenter } from "@/components/notification-center/notification-center";
+import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
 import { RecordingPill } from "@/chrome/recording-pill";
+import { SleepTimerButton } from "@/chrome/sleep-timer-button";
 import {
   effectiveBinding,
   eventToBinding,
@@ -24,7 +28,6 @@ import { useView } from "@/lib/view";
 import { useWindowFullscreen } from "@/lib/use-window-fullscreen";
 import { toggleWindowFullscreen } from "@/lib/fullscreen-state";
 import { close, minimize } from "@/lib/window";
-import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
 
 const IS_TAURI = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -36,6 +39,21 @@ export function Topbar({ connecting = false }: { connecting?: boolean } = {}) {
   const [closeConfirm, setCloseConfirm] = useState(false);
   const preview = useThemePreview();
   const fullscreen = useWindowFullscreen();
+  const [scrolled, setScrolled] = useState(false);
+  const scrolledRef = useRef(false);
+  useEffect(() => {
+    const onScroll = (e: Event) => {
+      const el = e.target;
+      if (!(el instanceof HTMLElement) || el.tagName !== "MAIN") return;
+      const next = el.scrollTop > 40;
+      if (next !== scrolledRef.current) {
+        scrolledRef.current = next;
+        setScrolled(next);
+      }
+    };
+    document.addEventListener("scroll", onScroll, true);
+    return () => document.removeEventListener("scroll", onScroll, true);
+  }, []);
   if (chromeHidden && !connecting) return null;
   const layout = kid ? "sidebar" : preview ? preview.layout : activeLayout(settings.theme);
   const onLiveRoot = topKind === "live";
@@ -51,13 +69,32 @@ export function Topbar({ connecting = false }: { connecting?: boolean } = {}) {
     ? "w-[14rem] sm:w-[18rem] lg:w-[22rem] xl:w-[24rem]"
     : "w-[14rem] sm:w-[20rem] lg:w-[24rem] xl:w-[28rem] hover:w-[18rem] sm:hover:w-[24rem] lg:hover:w-[28rem] xl:hover:w-[34rem] focus-within:w-[18rem] sm:focus-within:w-[24rem] lg:focus-within:w-[28rem] xl:focus-within:w-[34rem]";
   const dragProps = IS_TAURI && !fullscreen ? { "data-tauri-drag-region": true } : {};
+  const hybridBar =
+    IS_TAURI && !settings.useNativeTitleBar && settings.hybridTitleBar && !fullscreen;
   return (
     <header
+      data-cleannav={settings.transparentTopBar ? "on" : undefined}
       className={`fixed inset-x-0 top-0 ${topKind === "picker" || connecting ? "z-[130]" : "z-[55]"} h-20`}
     >
+      {settings.topbarScrollBlur && !settings.transparentTopBar && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 transition-opacity duration-[350ms] ease-out"
+          style={{
+            opacity: scrolled ? 1 : 0,
+            background: "color-mix(in oklch, var(--color-canvas), transparent 20%)",
+            backdropFilter: "blur(14px) saturate(115%)",
+            WebkitBackdropFilter: "blur(14px) saturate(115%)",
+            maskImage: "linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, #000 0%, #000 62%, transparent 100%)",
+          }}
+        />
+      )}
       <div
         {...dragProps}
-        className="relative z-10 grid h-full grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-8"
+        className={`relative z-10 grid h-full grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 sm:px-8 ${
+          hybridBar ? "pt-11" : ""
+        }`}
       >
         <div
           {...dragProps}
@@ -91,72 +128,40 @@ export function Topbar({ connecting = false }: { connecting?: boolean } = {}) {
           {...dragProps}
           className={`min-w-0 max-w-full transition-[width] duration-200 ease-out ${searchWidth}`}
         >
-          {!hideSearch && !kid && <SearchPill />}
+          {!hideSearch && !kid && !hybridBar && <SearchPill />}
         </div>
-        <div {...dragProps} className="flex h-full min-w-0 items-center justify-end gap-2">
+        <div
+          {...dragProps}
+          className="flex h-full min-w-0 items-center justify-end gap-2"
+        >
           <RecordingPill />
+          {settings.navbarSleepTimer && <SleepTimerButton />}
           <DownloadsButton />
+          {!kid && <NotificationCenter />}
+          {!kid && <BookmarksButton />}
           {!onLiveRoot && !kid && <TogetherButton />}
-          {IS_TAURI && !settings.useNativeTitleBar && (
+          {IS_TAURI && !settings.useNativeTitleBar && !settings.hybridTitleBar && (
             <div className="ms-1 flex items-center gap-2">
               <Control label={t("chrome.minimize")} onClick={minimize}>
                 <svg width="18" height="18" viewBox="0 0 13 13" fill="none">
-                  <path
-                    d="M3 6.5h7"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
+                  <path d="M3 6.5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
               </Control>
-              <Control
-                label={fullscreen ? t("chrome.restore") : t("chrome.maximize")}
-                onClick={() => void toggleWindowFullscreen()}
-              >
+              <Control label={fullscreen ? t("chrome.restore") : t("chrome.maximize")} onClick={() => void toggleWindowFullscreen()}>
                 <svg width="18" height="18" viewBox="0 0 13 13" fill="none">
                   {fullscreen ? (
                     <>
-                      <rect
-                        x="2.5"
-                        y="4.5"
-                        width="6"
-                        height="6"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        rx="1"
-                      />
-                      <path
-                        d="M5 4.5V3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H9"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        fill="none"
-                      />
+                      <rect x="2.5" y="4.5" width="6" height="6" stroke="currentColor" strokeWidth="1.4" rx="1" />
+                      <path d="M5 4.5V3a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5v5a.5.5 0 0 1-.5.5H9" stroke="currentColor" strokeWidth="1.4" fill="none" />
                     </>
                   ) : (
-                    <rect
-                      x="3"
-                      y="3"
-                      width="7"
-                      height="7"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      rx="1.2"
-                    />
+                    <rect x="3" y="3" width="7" height="7" stroke="currentColor" strokeWidth="1.4" rx="1.2" />
                   )}
                 </svg>
               </Control>
-              <Control
-                label={t("common.close")}
-                onClick={kid ? () => setCloseConfirm(true) : close}
-                danger
-              >
+              <Control label={t("common.close")} onClick={kid ? () => setCloseConfirm(true) : close} danger>
                 <svg width="18" height="18" viewBox="0 0 13 13" fill="none">
-                  <path
-                    d="M3.5 3.5l6 6M9.5 3.5l-6 6"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
+                  <path d="M3.5 3.5l6 6M9.5 3.5l-6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
                 </svg>
               </Control>
             </div>
@@ -170,13 +175,7 @@ export function Topbar({ connecting = false }: { connecting?: boolean } = {}) {
   );
 }
 
-function CloseConfirmKids({
-  onConfirm,
-  onCancel,
-}: {
-  onConfirm: () => void;
-  onCancel: () => void;
-}) {
+function CloseConfirmKids({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   const t = useT();
   return createPortal(
     <div
@@ -230,43 +229,34 @@ export function TogetherButton({
   connectStyle?: "tab" | "popover";
 } = {}) {
   const { snapshot, modalOpen, openModal, closeModal, clientId } = useTogether();
-
   const { avatar: selfAvatar, color: selfColor } = useSelfIdentity();
-
+  const { settings } = useSettings();
+  const cleanModal = settings.transparentTopBar;
   const t = useT();
   const live = snapshot.state === "joined";
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!modalOpen) return;
-
-    const onDown = (event: MouseEvent) => {
-      if (!wrapRef.current?.contains(event.target as Node)) {
-        closeModal();
-      }
+    if (!modalOpen || cleanModal) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) closeModal();
     };
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeModal();
-      }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeModal();
     };
-
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [modalOpen, closeModal]);
+  }, [modalOpen, closeModal, cleanModal]);
 
   const visible = snapshot.participants.slice(0, TOPBAR_MAX_AVATARS);
-
   const overflow = Math.max(0, snapshot.participants.length - TOPBAR_MAX_AVATARS);
 
   const above = popoverPlacement === "above-left";
-
+  const tabOpen = modalOpen && !cleanModal && !above;
   const idleSize = live
     ? variant === "ghost"
       ? "h-9 gap-2 ps-3 pe-2"
@@ -274,158 +264,82 @@ export function TogetherButton({
     : variant === "ghost"
       ? "h-9 w-9 justify-center"
       : "h-11 w-11 justify-center";
-
-  const sizing =
-    modalOpen && !above ? (live ? "h-14 gap-2 px-3" : "h-14 w-11 justify-center") : idleSize;
-
-  /*
-   * شكل الزجاج يتغير عند اتصاله بالـPopover.
-   */
-  const glassRadius = modalOpen
-    ? above
-      ? "0 0 8px 8px"
-      : "8px 8px 0 0"
-    : variant === "ghost"
-      ? "9999px"
-      : "12px";
-
-  const glassChrome = modalOpen
+  const sizing = tabOpen ? (live ? "h-14 gap-2 px-3" : "h-14 w-11 justify-center") : idleSize;
+  const idleChrome = `border border-transparent ${variant === "ghost" ? "rounded-full" : "rounded-xl"} ${
+    live
+      ? variant === "ghost"
+        ? "text-ink hover:bg-white/12"
+        : "bg-elevated/70 text-ink hover:bg-elevated"
+      : variant === "ghost"
+        ? "text-ink-muted hover:bg-white/12 hover:text-ink"
+        : "bg-elevated/70 text-ink-muted hover:bg-elevated hover:text-ink"
+  }`;
+  const chrome = tabOpen
     ? `z-[51] harbor-together-surface border border-edge text-ink ${
-        above ? "border-t-0" : "border-b-0"
+        above ? "rounded-t-none rounded-b-lg border-t-0" : "rounded-b-none rounded-t-lg border-b-0"
       }`
-    : `border border-white/[0.10] ${live ? "text-ink" : "text-ink-muted hover:text-ink"}`;
+    : idleChrome;
 
   return (
-    <div
-      ref={wrapRef}
-      className={`relative ${
-        modalOpen && !above ? "harbor-wt-wrap flex flex-col self-stretch justify-end" : ""
-      }`}
-    >
-      <ThreeLiquidGlassSurface
-        radius={glassRadius}
-        shaderRadius={variant === "ghost" ? 1 : modalOpen ? 0.3 : 0.48}
-        intensity={0.78}
-        style={{
-          background: "transparent",
-          boxShadow: "none",
-        }}
-        className={`
-          relative inline-flex
-          transition-colors duration-150
-          ${glassChrome}
-          ${modalOpen && !above ? "harbor-wt-tab" : ""}
-        `}
-        contentClassName="h-full w-full"
+    <div ref={wrapRef} className={`relative ${tabOpen ? "harbor-wt-wrap flex flex-col self-stretch justify-end" : ""}`}>
+      <button
+        aria-label={t("chrome.watchTogether")}
+        aria-haspopup="dialog"
+        aria-expanded={modalOpen}
+        onClick={() => (modalOpen ? closeModal() : openModal())}
+        className={`harbor-together-btn relative flex items-center transition-colors duration-150 ${tabOpen ? "harbor-wt-tab" : ""} ${sizing} ${chrome}`}
       >
-        <button
-          type="button"
-          aria-label={t("chrome.watchTogether")}
-          onClick={() => {
-            if (modalOpen) {
-              closeModal();
-            } else {
-              openModal();
-            }
-          }}
-          className={`
-            harbor-together-btn
-            relative flex items-center
-            rounded-[inherit]
-            border-0 bg-transparent
-            outline-none
-            transition-colors duration-150
-            ${sizing}
-          `}
-        >
-          {live ? (
-            <>
-              <span className="font-mono text-[11.5px] tracking-[0.22em] text-ink">
-                {snapshot.room}
-              </span>
-
-              <div className="flex -space-x-1.5">
-                {visible.map((participant) => {
-                  const self = participant.id === clientId;
-
-                  const fallbackColor = `oklch(0.78 0.13 ${nameHue(participant.name)})`;
-
-                  const avatarSrc = self ? selfAvatar : (participant.avatar ?? null);
-
-                  const color = self
-                    ? (selfColor ?? fallbackColor)
-                    : (participant.color ?? fallbackColor);
-
-                  if (avatarSrc) {
-                    return (
-                      <span
-                        key={participant.id}
-                        title={participant.name}
-                        className="
-                          flex h-6 w-6
-                          items-center justify-center
-                          overflow-hidden rounded-full
-                          ring-2 ring-elevated
-                        "
-                        style={{
-                          boxShadow: `inset 0 0 0 1.5px ${color}`,
-                        }}
-                      >
-                        <img
-                          src={avatarSrc}
-                          alt=""
-                          draggable={false}
-                          className="h-full w-full object-cover"
-                        />
-                      </span>
-                    );
-                  }
-
+        {live ? (
+          <>
+            <span className="font-mono text-[11.5px] tracking-[0.22em] text-ink">
+              {snapshot.room}
+            </span>
+            <div className="flex -space-x-1.5">
+              {visible.map((p) => {
+                const self = p.id === clientId;
+                const fallbackColor = `oklch(0.78 0.13 ${nameHue(p.name)})`;
+                const avatarSrc = self ? selfAvatar : p.avatar ?? null;
+                const color = self ? selfColor ?? fallbackColor : p.color ?? fallbackColor;
+                if (avatarSrc) {
                   return (
                     <span
-                      key={participant.id}
-                      title={participant.name}
-                      className="
-                        flex h-6 w-6
-                        items-center justify-center
-                        rounded-full
-                        text-[10px] font-semibold
-                        text-canvas
-                        ring-2 ring-elevated
-                      "
-                      style={{
-                        backgroundColor: color,
-                      }}
+                      key={p.id}
+                      title={p.name}
+                      className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full ring-2 ring-elevated"
+                      style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }}
                     >
-                      {(participant.name.trim()[0] || "?").toUpperCase()}
+                      <img
+                        src={avatarSrc}
+                        alt=""
+                        draggable={false}
+                        className="h-full w-full object-cover"
+                      />
                     </span>
                   );
-                })}
-
-                {overflow > 0 && (
+                }
+                return (
                   <span
-                    className="
-                      flex h-6 min-w-[24px]
-                      items-center justify-center
-                      rounded-full
-                      bg-canvas px-1
-                      text-[10px] font-semibold
-                      text-ink-muted
-                      ring-2 ring-elevated
-                    "
+                    key={p.id}
+                    title={p.name}
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-semibold text-canvas ring-2 ring-elevated"
+                    style={{ backgroundColor: color }}
                   >
-                    +{overflow}
+                    {(p.name.trim()[0] || "?").toUpperCase()}
                   </span>
-                )}
-              </div>
-            </>
-          ) : (
-            <Users size={17} strokeWidth={1.9} />
-          )}
-        </button>
-      </ThreeLiquidGlassSurface>
-
-      {modalOpen && (
+                );
+              })}
+              {overflow > 0 && (
+                <span className="flex h-6 min-w-[24px] items-center justify-center rounded-full bg-canvas px-1 text-[10px] font-semibold text-ink-muted ring-2 ring-elevated">
+                  +{overflow}
+                </span>
+              )}
+            </div>
+          </>
+        ) : (
+          <Users size={17} strokeWidth={1.9} />
+        )}
+      </button>
+      {modalOpen && !cleanModal && (
         <div
           className={`harbor-wt-modal absolute z-50 ${
             above ? "bottom-[calc(100%-1px)] start-0" : "end-0 top-[calc(100%-1px)]"
@@ -434,6 +348,7 @@ export function TogetherButton({
           <TogetherPopover placement={popoverPlacement} connectStyle={connectStyle} />
         </div>
       )}
+      {modalOpen && cleanModal && <TogetherModalShell />}
     </div>
   );
 }
@@ -448,24 +363,39 @@ function SearchPill() {
   const { setOpen } = useSearch();
   const { settings } = useSettings();
   const t = useT();
-
   const binding = effectiveBinding("globalSearchFocus", settings.hotkeys ?? {});
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!shouldHandleGlobalKeyboardEvent(e)) return;
       if (eventToBinding(e) !== binding) return;
-
       e.preventDefault();
       setOpen(true);
     };
-
     window.addEventListener("keydown", onKey);
-
-    return () => {
-      window.removeEventListener("keydown", onKey);
-    };
+    return () => window.removeEventListener("keydown", onKey);
   }, [binding, setOpen]);
+
+  const pill = (
+    <button
+      type="button"
+      data-tauri-drag-region="false"
+      onClick={() => setOpen(true)}
+      className={
+        settings.liquidGlass
+          ? "harbor-search-pill flex h-full w-full items-center gap-3 rounded-full bg-transparent px-5 text-start outline-none"
+          : "harbor-search-pill flex h-11 w-full items-center gap-3 rounded-full border border-edge-soft/60 bg-elevated/80 px-5 text-start outline-none transition-colors duration-200 hover:bg-elevated"
+      }
+    >
+      <Search size={16} strokeWidth={1.75} className="shrink-0 text-ink-subtle" />
+      <span className="flex-1 truncate text-[14px] text-ink-subtle">{t("search.placeholder")}</span>
+      <kbd className="hidden shrink-0 rounded-md border border-edge-soft bg-canvas/50 px-1.5 py-0.5 font-mono text-[10.5px] font-medium text-ink-subtle sm:inline">
+        {formatBindingForDisplay(binding)}
+      </kbd>
+    </button>
+  );
+
+  if (!settings.liquidGlass) return pill;
 
   return (
     <ThreeLiquidGlassSurface
@@ -476,46 +406,10 @@ function SearchPill() {
         background: "transparent",
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.05)",
       }}
-      className="
-        h-11 w-full
-        border border-white/[0.08]
-      "
+      className="h-11 w-full border border-white/[0.08]"
       contentClassName="flex h-full w-full"
     >
-      <button
-        type="button"
-        data-tauri-drag-region="false"
-        onClick={() => setOpen(true)}
-        className="
-          harbor-search-pill
-          flex h-full w-full
-          items-center gap-3
-          rounded-full
-          bg-transparent px-5
-          text-start outline-none
-        "
-      >
-        <Search size={16} strokeWidth={1.75} className="shrink-0 text-ink-subtle" />
-
-        <span className="flex-1 truncate text-[14px] text-ink-subtle">
-          {t("search.placeholder")}
-        </span>
-
-        <kbd
-          className="
-            hidden shrink-0
-            rounded-md
-            border border-white/[0.10]
-            bg-transparent
-            px-1.5 py-0.5
-            font-mono text-[10.5px]
-            font-medium text-ink-subtle
-            sm:inline
-          "
-        >
-          {formatBindingForDisplay(binding)}
-        </kbd>
-      </button>
+      {pill}
     </ThreeLiquidGlassSurface>
   );
 }

@@ -16,7 +16,7 @@ export function useEpisodeEnrich({
   imdbId: string | null;
   tvdbKey: string;
   omdbKey: string;
-}): Episode[] {
+}): { episodes: Episode[]; imdbRatings: Map<string, number> } {
   const [tvdbBySeason, setTvdbBySeason] = useState<Map<number, Map<number, TvdbEpisode>>>(new Map());
   const [omdbBySeason, setOmdbBySeason] = useState<Map<number, Map<number, number>>>(new Map());
   const [harborImdb, setHarborImdb] = useState<Map<string, number>>(new Map());
@@ -66,7 +66,7 @@ export function useEpisodeEnrich({
 
   const tvdbForSeason = tvdbBySeason.get(active);
   const omdbForSeason = omdbBySeason.get(active);
-  return useMemo<Episode[]>(() => {
+  const enriched = useMemo<Episode[]>(() => {
     if (!tvdbForSeason && !omdbForSeason && harborImdb.size === 0) return episodes;
     return episodes.map((ep): Episode => {
       let next: Episode = ep;
@@ -92,4 +92,5 @@ export function useEpisodeEnrich({
       return next;
     });
   }, [episodes, tvdbForSeason, omdbForSeason, harborImdb, active]);
+  return { episodes: enriched, imdbRatings: harborImdb };
 }
