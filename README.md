@@ -9,8 +9,7 @@
 
 ### A Stremio Client Built for Adventure!
 
-
-Offering things like a native player, a stream ranking engine, Wikidata, watch parties, PiP, DVR, Live TV, anime, a theme engine, and much more. Check out our website at www.harbor.site for an immersive experience. 
+Offering things like a native player, a stream ranking engine, Wikidata, watch parties, PiP, DVR, Live TV, anime, a theme engine, and much more. Check out our website at www.harbor.site for an immersive experience.
 
 <br/>
 
@@ -35,20 +34,16 @@ Offering things like a native player, a stream ranking engine, Wikidata, watch p
   <sub>Harbor on launch: a rotating hero, Continue Watching, and full width rails. Works on Cinemeta out of the box; richer with a free TMDB key.</sub>
 </p>
 
-
-
 > [!IMPORTANT]
 > Harbor is a media player and a client for the open Stremio addon protocol. It hosts, indexes, and ships no media, and it bundles no content addons. You bring your own addons and sources. See the [Disclaimer](#disclaimer).
 >Harbor is not for-profit and is a passion project, you are free to sell, re-use or profit off of it. All of your bugs, issues and feedbacks will be addressed promptly as long as scope permits. Please leave a Issue if you have feedback or a bug, so we can better address you. It is HIGHLY reccomended that you build your OWN Harbor from the latest source when available, as our bundled releases will not include windows/os certification/sig (it is a free project) so to avoid any popups we suggest building it yourself. We will try to push updates frequently but we are sometimes segmented by our timezones so it may take some time for your bugs to be rolled into the update endpoint and for us to test it! Thank you for trying it out and helping us make it a better project!
 >Stremio has released their **[Supporter tier](https://blog.stremio.com/stremio-supporters-a-way-to-sustain-our-development/)** PLEASE CONSIDER SUPPORTING THEM AND BUYING THIS. We heavily encourage you to use Stremio's Official Apps on Mobile, and Tvs. Harbor is NOT a stremio competitor, it is a different flavor of player for the ecosystem. To get the most out of Harbor, please sign up with a [stremio account](https://stremio.com) (it's free) To Support Stremio visit : https://www.stremio.com/donate (P.S.A Harbor is not endorsed by or created by Stremio ltd or it's contributors it is a independent open sourced project)
 <br/>
 
-
-
 ATTENTION: HARBOR DOES NOT AND WILL NOT ASK YOU FOR DONATIONS! If someone claims to be us and asks you for donations, IT IS NOT US. Have an issue? Open it on github so you and everyone else can know and see exactly how we messed up, and how we will fix it! Yes we do see your emails to bugs@harbor.site and Bug reports to the bug endpoint FYI the fastest way to get our attention is through github, we will still handle unique reports that have not been already sorted. Want to donate to a good cause visit: National Pediatric Cancer Foundation (https://nationalpcf.org/), Electronic Frontier Foundation (https://www.eff.org/) or St.Jude's (https://www.stjude.org/) email us with a receipt of your donation and we will implement your features in a priority manner. Include NPCF , EFF or SaintJude in title so we can track you! If you have a preferred cause visit https://www.charitynavigator.org/ and donate to a top rated charity of your choice and include CHARITY in email title
 <br/>
 <br/>
-HARBOR IS A OPEN CONCEPT AND NOT A ENTITY. WE DO NOT PROFIT OR ACCEPT MONEY FOR IT. WE DO NOT PROVIDE ANY CONTENT OR TELL YOU HOW TO DO IT. IT IS JUST CODE ON A REPO. IT'S CONTRIBUTORS ARE NOT RESPONSIBLE FOR WHAT YOU DO WITH IT OR WHAT STREMIO ADDONS AND SOURCES YOU ALREADY HAVE. FOLLOW ALL LAWS OF YOUR JURIDSTICTION. 
+HARBOR IS A OPEN CONCEPT AND NOT A ENTITY. WE DO NOT PROFIT OR ACCEPT MONEY FOR IT. WE DO NOT PROVIDE ANY CONTENT OR TELL YOU HOW TO DO IT. IT IS JUST CODE ON A REPO. IT'S CONTRIBUTORS ARE NOT RESPONSIBLE FOR WHAT YOU DO WITH IT OR WHAT STREMIO ADDONS AND SOURCES YOU ALREADY HAVE. FOLLOW ALL LAWS OF YOUR JURIDSTICTION.
 <br/>
 <br/>
 <details>
@@ -87,10 +82,10 @@ HARBOR IS A OPEN CONCEPT AND NOT A ENTITY. WE DO NOT PROFIT OR ACCEPT MONEY FOR 
 
 ## Why Harbor
 
-**Harbor** is a self contained desktop client for the Stremio ecosystem. Out of the box it runs on Cinemeta. Add a free TMDB key and it blossoms into your ultimate companion for discovering and watching content. Harbor was built around the Stremio addon ecosystem with deep native integration of popular services and features into the UI. 
+**Harbor** is a self contained desktop client for the Stremio ecosystem. Out of the box it runs on Cinemeta. Add a free TMDB key and it blossoms into your ultimate companion for discovering and watching content. Harbor was built around the Stremio addon ecosystem with deep native integration of popular services and features into the UI.
 
 - **A native player.** libmpv decodes virtually any codec and container, with HDR passthrough, skip intro/outro, Anime4K upscaling shaders, and more. Delivering the same quality you are used to, but on a native custom player.
-- **Customize it your way.** Harbor is built in rust and tauri, allowing full on demand customization of the entire application. Harbor does not inject into stremio web, it is its own from scratch shell, layered over the stremio ecosystem, allowing you to go beyond the traditional themeing. Customize the player's UI, your fonts, seek bar, colors or the entire thing! 
+- **Customize it your way.** Harbor is built in rust and tauri, allowing full on demand customization of the entire application. Harbor does not inject into stremio web, it is its own from scratch shell, layered over the stremio ecosystem, allowing you to go beyond the traditional themeing. Customize the player's UI, your fonts, seek bar, colors or the entire thing!
 - **Theme Studio & Editor** Noob friendly theme studio lets anyone create their own custom theme with no code. Those that want control over every file can use a built in code editor for your themes.
 - **Intelligent stream ranking.** A pure Rust engine (compiled to WASM, with a TypeScript fallback) that parses every stream, filters out scams and fakes, and ranks high quality sources first.
 - **Corpus Engine.** During the initial release of In-cinema movies, Harbor gates the results based on heuristic factors like file size, average quality consensus, year and metadata ranking and other factors to deliver you a cleaner experience during the period of a fresh release. Harbor will surface the most likely CAMS, TeleSyncs/Telecines and other reasonable options without you needing to do anything.
@@ -99,10 +94,10 @@ HARBOR IS A OPEN CONCEPT AND NOT A ENTITY. WE DO NOT PROFIT OR ACCEPT MONEY FOR 
 - **Stremio-addons.net Integration.** The first platform with direct community ratings, top trending, and manifest feed to the [Stremio-addons.net](https://stremio-addons.net) API
 - **Watch together, on your own relay.** A synced watch party with live on screen cursors and drawing, on a relay that deploys to your own Cloudflare account in one click. No central server.
 - **Live TV and Multiview.** Bring M3U or Xtream playlists and get a real EPG grid guide, favorites, catchup, and up to four channels at once in a grid. Missed the show? play a rerun or record the next episode using built in DVR. Switch channels while in the live player at any time with the TV Guide
-- **Stream switcher** In player switcher allows you to hop streams if you get served a bad one without leaving the player and going through results again. Play next episodes with ease on the player UI controls or in a full "Next Up" sidebar. 
+- **Stream switcher** In player switcher allows you to hop streams if you get served a bad one without leaving the player and going through results again. Play next episodes with ease on the player UI controls or in a full "Next Up" sidebar.
 - **Casts across the room.** DLNA/UPnP, Chromecast, AirPlay, and Roku via a bundled Rust cast server and a web cast receiver.
-- **Integrations.** Feature rich discord rich presence integration, webhooks for Discord and Telegram, Trakt Sync, and native integrations to TMDB, OMDB, Fanart.Tv, RPDB and more! Customize the  location and what badges are shown.
-- **And much more! (seriously this would be very long)** 
+- **Integrations.** Feature rich discord rich presence integration, webhooks for Discord and Telegram, Trakt Sync, and native integrations to TMDB, OMDB, Fanart.Tv, RPDB and more! Customize the location and what badges are shown.
+- **And much more! (seriously this would be very long)**
 <p align="right"><a href="#readme-top">&#9650; back to top</a></p>
 
 ## Feature Tour
@@ -625,7 +620,6 @@ Harbor stands on the shoulders of a generous open ecosystem and the people who b
 - **libmpv** for a world class playback engine, and the **Anime4K** project for its upscaling shaders.
 - **Tauri**, **React**, **Vite**, **Tailwind CSS**, **Rust**, and **Lucide** for the foundation.
 - **OpenSubtitles**, **Wyzie**, **AniSkip**, and **TheIntroDB** for subtitles and skip data.
-
 
 Thank you to everyone, named and unnamed, whose open work Harbor builds upon.
 
