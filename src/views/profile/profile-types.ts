@@ -64,6 +64,7 @@ export type ProfileSummary = {
   showcase?: ShowcaseItem;
   featuredLists?: FeaturedList[];
   socials?: ResolvedSocial[];
+  shownBadges?: string[];
   isOwner: boolean;
   friendStatus?: "none" | "friends" | "outgoing" | "incoming" | "blocked";
   friendEdgeId?: string;
@@ -78,6 +79,7 @@ export type ProfileSummary = {
   customHtml?: string;
   customCss?: string;
   canvasHeight?: number;
+  hideTopBanner?: boolean;
 };
 
 export type Friend = {
@@ -87,6 +89,7 @@ export type Friend = {
   slogan?: string;
   online: boolean;
   status?: string;
+  mutual?: boolean;
 };
 
 export type Badge = {
@@ -119,6 +122,8 @@ export type Comment = {
   authorAvatarUrl?: string;
   body: string;
   at: string;
+  likeCount?: number;
+  liked?: boolean;
   flagged?: boolean;
   edited?: boolean;
 };
@@ -147,6 +152,7 @@ export type CustomizationInput = {
   customCss: string;
   canvasHeight: number;
   customEnabled: boolean;
+  hideTopBanner: boolean;
 };
 
 export type LoadState = "loading" | "ready" | "error" | "empty";

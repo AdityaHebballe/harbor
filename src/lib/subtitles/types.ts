@@ -4,7 +4,7 @@ export type SubResult = {
   lang: string;
   langName?: string;
   title?: string;
-  source: "wyzie" | "addon" | "opensubtitles" | "jimaku" | "podnapisi" | "subdl" | "gestdown";
+  source: "wyzie" | "addon" | "opensubtitles" | "jimaku" | "podnapisi" | "subdl" | "gestdown" | "subsource";
   format?: "srt" | "vtt" | "ass" | "ssa" | "sub";
   encoding?: string;
   fps?: number;
@@ -18,6 +18,9 @@ export type SubResult = {
 export type SubtitleLoadMetadata = {
   format?: "srt" | "vtt" | "ass" | "ssa" | "sub";
   encoding?: string;
+  release?: string;
+  provider?: string;
+  matchScore?: number;
 };
 
 export type SubSearchQuery = {

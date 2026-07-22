@@ -16,6 +16,7 @@ export type ReaderPrefs = {
   doubleGap: number;
   flipSound: boolean;
   focusMode: boolean;
+  hideChapterEndHint: boolean;
 };
 
 export type { MangaChapter, MangaPage };

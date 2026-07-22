@@ -154,6 +154,34 @@ export function applyTokens(token: string, refresh?: string | null): void {
   setSession({ ...session, token, refresh: refresh ?? session.refresh });
 }
 
+let refreshing: Promise<boolean> | null = null;
+export function refreshToken(): Promise<boolean> {
+  if (refreshing) return refreshing;
+  const refresh = session?.refresh ?? null;
+  if (!refresh) return Promise.resolve(false);
+  refreshing = (async () => {
+    try {
+      const r = await fetch(`${API}/identity/api/token/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh }),
+      });
+      if (!r.ok) return false;
+      const d = (await r.json().catch(() => null)) as { token?: unknown; refresh?: unknown } | null;
+      if (d && typeof d.token === "string") {
+        applyTokens(d.token, typeof d.refresh === "string" ? d.refresh : undefined);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
+}
+
 export function subscribeAuthor(fn: () => void): () => void {
   subs.add(fn);
   return () => {

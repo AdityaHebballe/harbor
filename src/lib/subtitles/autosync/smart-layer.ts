@@ -178,6 +178,17 @@ function fuse(estimates: Estimate[]): { transform: AffineTransform; spread: numb
   };
 }
 
+const FAST_MIN_ANCHORS = 8;
+const FAST_MAX_RESIDUAL = 0.6;
+
+export function consensusAnchorFit(res: ConsensusResult): { offsetSec: number; ratio: number } | null {
+  if (res.verdict !== "right" || !res.textAnchors) return null;
+  if (res.textAnchors.length < FAST_MIN_ANCHORS) return null;
+  const fit = robustFit(res.textAnchors);
+  if (!fit || fit.n < FAST_MIN_ANCHORS || fit.residualSec > FAST_MAX_RESIDUAL) return null;
+  return { offsetSec: fit.offsetSec, ratio: fit.ratio };
+}
+
 export function consensusSignal(res: ConsensusResult, lead: SyncTransform | null): SignalEvidence {
   const agrees =
     res.verdict === "right" &&

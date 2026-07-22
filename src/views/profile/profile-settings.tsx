@@ -8,12 +8,13 @@ import { setPrivate } from "@/lib/social/privacy";
 import { useSettings } from "@/lib/settings";
 import { saveSettings } from "./profile-api";
 import { MyListsPicker } from "./my-lists-picker";
+import { ShownBadgesPicker, pickableBadges } from "./shown-badges-picker";
 import { ProfileMedia } from "./profile-media";
 import { LocationSelect } from "./location-select";
 import { CustomizationPanel } from "./customization/customization-panel";
 import { AboutEditor } from "./customization/about-editor";
 import { useCustomUrlAvailability, type UrlStatus } from "./use-customurl-availability";
-import type { ProfileSettingsInput, ProfileSummary } from "./profile-types";
+import type { Badge, ProfileSettingsInput, ProfileSummary } from "./profile-types";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -51,10 +52,12 @@ const inputCls =
 
 export function ProfileSettings({
   summary,
+  badges,
   onClose,
   onSaved,
 }: {
   summary: ProfileSummary;
+  badges?: Badge[];
   onClose: () => void;
   onSaved: (next: ProfileSummary) => void;
 }) {
@@ -74,7 +77,9 @@ export function ProfileSettings({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pickingLists, setPickingLists] = useState(false);
+  const [pickingBadges, setPickingBadges] = useState(false);
   const [customizing, setCustomizing] = useState(false);
+  const badgeOptions = pickableBadges(badges ?? []);
   const bodyRef = useRef<HTMLDivElement>(null);
   const urlStatus = useCustomUrlAvailability(form.customUrl, summary.handle, summary.customUrl ?? "");
 
@@ -206,6 +211,22 @@ export function ProfileSettings({
               </button>
             </div>
 
+            {badgeOptions.length > 0 && (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-medium text-ink">Shown badges</div>
+                  <div className="text-[12px] text-ink-subtle">Choose which badges appear by your name, and their order</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPickingBadges(true)}
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink ring-1 ring-edge-soft hover:bg-elevated"
+                >
+                  Choose
+                </button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-3 pt-1">
               <div className="min-w-0">
                 <div className="text-[13px] font-medium text-ink">Customize profile</div>
@@ -285,6 +306,14 @@ export function ProfileSettings({
         </div>
       </div>
       {pickingLists && <MyListsPicker onClose={() => setPickingLists(false)} />}
+      {pickingBadges && (
+        <ShownBadgesPicker
+          badges={badges ?? []}
+          current={summary.shownBadges ?? []}
+          onClose={() => setPickingBadges(false)}
+          onSaved={onSaved}
+        />
+      )}
     </>
   );
 }

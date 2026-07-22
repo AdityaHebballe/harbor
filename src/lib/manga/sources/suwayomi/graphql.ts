@@ -95,25 +95,23 @@ export async function gqlBrowse(
 
 export async function gqlManga(client: SuwayomiClient, mangaId: string): Promise<any | null> {
   if (!isDigits(mangaId)) return null;
-  const q = `mutation {
+  const q = `query {
+    manga(id: ${mangaId}) { id title thumbnailUrl author artist status description sourceId initialized }
+  }`;
+  const data = await gql(client, q);
+  const cached = data?.manga ?? null;
+  if (cached && cached.initialized !== false) return cached;
+  const fq = `mutation {
     fetchMangaAndChapters(input: { id: ${mangaId}, fetchManga: true, fetchChapters: false }) {
       manga { id title thumbnailUrl author artist status description sourceId }
     }
   }`;
-  const data = await gqlData(client, q);
-  return data.fetchMangaAndChapters?.manga ?? null;
+  const fdata = await gql(client, fq);
+  if (data == null && fdata == null) throw new Error("suwayomi_graphql_error");
+  return fdata?.fetchMangaAndChapters?.manga ?? cached;
 }
 
-export async function gqlChapters(client: SuwayomiClient, mangaId: string): Promise<RestChapter[]> {
-  if (!isDigits(mangaId)) return [];
-  const q = `mutation {
-    fetchChapters(input: { mangaId: ${mangaId} }) {
-      chapters { id name chapterNumber scanlator uploadDate pageCount isDownloaded }
-    }
-  }`;
-  const data = await gqlData(client, q);
-  const chapters = data.fetchChapters?.chapters;
-  if (!Array.isArray(chapters)) throw new Error("suwayomi_graphql_shape");
+function mapGqlChapters(chapters: any[]): RestChapter[] {
   return chapters
     .filter((ch: any) => ch?.id != null)
     .map((ch: any) => {
@@ -129,6 +127,29 @@ export async function gqlChapters(client: SuwayomiClient, mangaId: string): Prom
         downloaded: !!ch.isDownloaded,
       };
     });
+}
+
+export async function gqlChapters(client: SuwayomiClient, mangaId: string): Promise<RestChapter[]> {
+  if (!isDigits(mangaId)) return [];
+  const q = `query {
+    chapters(condition: { mangaId: ${mangaId} }) {
+      nodes { id name chapterNumber scanlator uploadDate pageCount isDownloaded }
+    }
+  }`;
+  const data = await gql(client, q);
+  const cachedNodes = data?.chapters?.nodes;
+  if (Array.isArray(cachedNodes) && cachedNodes.length > 0) return mapGqlChapters(cachedNodes);
+  const fq = `mutation {
+    fetchChapters(input: { mangaId: ${mangaId} }) {
+      chapters { id name chapterNumber scanlator uploadDate pageCount isDownloaded }
+    }
+  }`;
+  const fdata = await gql(client, fq);
+  if (data == null && fdata == null) throw new Error("suwayomi_graphql_error");
+  const fetched = fdata?.fetchChapters?.chapters;
+  if (Array.isArray(fetched)) return mapGqlChapters(fetched);
+  if (Array.isArray(cachedNodes)) return mapGqlChapters(cachedNodes);
+  throw new Error("suwayomi_graphql_shape");
 }
 
 export async function gqlPageUrls(client: SuwayomiClient, chapterId: string): Promise<string[]> {

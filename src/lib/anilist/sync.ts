@@ -135,6 +135,8 @@ export async function markAnimeWatching(harborId: string, title: string): Promis
     const cur = await anilistRequest<EntryResponse>(ENTRY_QUERY, { id: mediaId });
     const entry = cur?.Media?.mediaListEntry;
     if (entry && entry.status !== "PLANNING") return;
+    const total = cur?.Media?.episodes ?? 0;
+    if (entry && total > 0 && entry.progress >= total) return;
     await anilistRequest<{ SaveMediaListEntry: { id: number } | null }>(SAVE_STATUS_MUTATION, {
       mediaId,
       status: "CURRENT",
@@ -179,7 +181,10 @@ export async function syncAnimeProgress(
     const total = media.episodes ?? 0;
     let target = ep;
     if (abs != null && total > 0 && abs <= total && ep <= current && abs > current) target = abs;
-    if (total > 0 && target > total) target = total;
+    if (total > 0 && target > total) {
+      if (target > total + 1) return;
+      target = total;
+    }
     if (target <= current) {
       sent[harborId] = Math.max(sent[harborId] ?? 0, current);
       saveSent(sent);

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { langScore, pickBestTrack } from "@/lib/subtitles/language";
-import { searchSubtitles } from "@/lib/subtitles/search";
+import { searchSubtitles, streamMatchScore } from "@/lib/subtitles/search";
+import { providerLabel, releaseOf } from "@/lib/subtitles/provider-label";
 import { readPlayerPrefs, type PerShowPrefs } from "@/lib/player-prefs";
 import { tmdbImdbId } from "@/lib/providers/tmdb";
 import type { Addon } from "@/lib/addons";
@@ -106,7 +107,8 @@ export function useTrackAutoload(params: {
       !!src.meta.id?.startsWith("mal:") ||
       (src.meta.genres ?? []).some((g) => g.toLowerCase() === "anime");
     const rawLangs = resolveLangPreference(settings.preferredSubLangs, settings.preferredLanguages);
-    const langs = subIsAnime ? rawLangs : rawLangs.filter((l) => !isJapanese(l));
+    const strippedLangs = rawLangs.filter((l) => !isJapanese(l));
+    const langs = subIsAnime || strippedLangs.length === 0 ? rawLangs : strippedLangs;
     const candidateIds = buildStreamIds(
       src.meta.id,
       src.episode,
@@ -135,6 +137,22 @@ export function useTrackAutoload(params: {
         ? await resolveVideoHash(src)
         : {};
       if (videoHash) console.info(`[subs/autoload] moviehash ${videoHash} (${videoSize})`);
+      const streamHints = {
+        release: src.streamRef?.title ?? src.streamRef?.parsedTitle ?? null,
+        source: src.streamRef?.source ?? null,
+        resolution: src.streamRef?.resolution ?? null,
+      };
+      const subExtra =
+        (enabled.subdl === true && settings.subdlApiKey) ||
+        (enabled.subsource === true && settings.subsourceApiKey)
+          ? {
+              userAgent: "Harbor",
+              netAllowed: true,
+              subdlApiKey: settings.subdlApiKey || null,
+              subsourceApiKey: settings.subsourceApiKey || null,
+              enabled: { subdl: enabled.subdl === true, subsource: enabled.subsource === true },
+            }
+          : undefined;
       const results = await searchSubtitles(
         {
           imdbId: searchImdbId,
@@ -156,11 +174,8 @@ export function useTrackAutoload(params: {
           },
           addons: readyAddons ?? [],
           preferredLangs: langs,
-          streamHints: {
-            release: src.streamRef?.title ?? src.streamRef?.parsedTitle ?? null,
-            source: src.streamRef?.source ?? null,
-            resolution: src.streamRef?.resolution ?? null,
-          },
+          streamHints,
+          extra: subExtra,
         },
       );
       console.info(`[subs/autoload] search returned ${results.length} subs`);
@@ -173,9 +188,12 @@ export function useTrackAutoload(params: {
       console.info(`[subs/autoload] ${matches.length} match preferred langs`);
       const loaded = await loadFirstWorkingSubtitle(matches, async (r) => {
         if (autoSubLoadKeyRef.current !== key) return false;
-        const ok = await b.addSubtitle(r.url, r.lang, labelForTrack(r), false, {
+        const ok = await b.addSubtitle(r.url, r.lang, providerLabel(r), false, {
           format: r.format,
           encoding: r.encoding,
+          release: releaseOf(r),
+          provider: providerLabel(r),
+          matchScore: streamMatchScore(r, streamHints),
         });
         return ok === true;
       });
@@ -207,9 +225,12 @@ export function useTrackAutoload(params: {
       let added = 0;
       for (const r of extras) {
         if (autoSubLoadKeyRef.current !== key) return;
-        const ok = await b.addSubtitle(r.url, r.lang, labelForTrack(r), false, {
+        const ok = await b.addSubtitle(r.url, r.lang, providerLabel(r), false, {
           format: r.format,
           encoding: r.encoding,
+          release: releaseOf(r),
+          provider: providerLabel(r),
+          matchScore: streamMatchScore(r, streamHints),
         });
         if (ok === true) added++;
       }
@@ -269,8 +290,11 @@ export function useTrackAutoload(params: {
       !!src.meta.id?.startsWith("kitsu:") ||
       !!src.meta.id?.startsWith("mal:") ||
       (src.meta.genres ?? []).some((g) => g.toLowerCase() === "anime");
-    const stripJaForNonAnime = (langs: string[]) =>
-      isAnime ? langs : langs.filter((l) => !isJapanese(l));
+    const stripJaForNonAnime = (langs: string[]) => {
+      if (isAnime) return langs;
+      const kept = langs.filter((l) => !isJapanese(l));
+      return kept.length > 0 ? kept : langs;
+    };
     const baseAudio = stripJaForNonAnime(
       resolveLangPreference(settings.preferredAudioLangs, settings.preferredLanguages),
     );
@@ -341,8 +365,8 @@ export function useTrackAutoload(params: {
   }, [engine, src.url, src.meta.id, snap.audioTracks, snap.subtitleTracks, snap.rate, settings]);
 
   useEffect(() => {
-    bridgeRef.current?.setSubDelay(0);
-  }, [src.url]);
+    bridgeRef.current?.setSubDelay(readPlayerPrefs(src.meta.id)?.subDelaySec ?? 0);
+  }, [src.url, src.meta.id]);
 
   useEffect(() => {
     if (!subsOffFor(readPlayerPrefs(src.meta.id), settings)) return;
@@ -417,23 +441,4 @@ async function resolveVideoHash(
     return {};
   }
   return {};
-}
-
-function labelForTrack(r: { title?: string; source: string; release?: string | null }): string {
-  const sourceLabel =
-    r.source === "opensubtitles"
-      ? "OpenSubtitles"
-      : r.source === "wyzie"
-        ? "Wyzie"
-        : r.source === "addon"
-          ? r.title || "Addon"
-          : r.source;
-  const release = r.release?.trim();
-  if (release && release !== r.title) {
-    return `${sourceLabel} · ${release}`;
-  }
-  if (r.title && r.title !== sourceLabel && r.source !== "addon") {
-    return `${sourceLabel} · ${r.title}`;
-  }
-  return sourceLabel;
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { deleteComment, fetchComments, postComment, ProfileApiError } from "./profile-api";
+import { deleteComment, fetchComments, postComment, ProfileApiError, setCommentLike } from "./profile-api";
 import type { Comment, LoadState } from "./profile-types";
 import { stripUrls, validateComment, type ComposeIssue } from "./text-safety";
 
@@ -12,6 +12,7 @@ export type CommentsController = {
   loadMore: () => void;
   submit: (raw: string) => Promise<ComposeIssue>;
   remove: (id: string) => void;
+  toggleLike: (id: string) => void;
   sending: boolean;
 };
 
@@ -83,5 +84,21 @@ export function useComments(handle: string): CommentsController {
     [handle, authKey, comments],
   );
 
-  return { state, comments, cursor, hasMore, loadMore, submit, remove, sending };
+  const toggleLike = useCallback(
+    (id: string) => {
+      if (!authKey) return;
+      const cur = comments.find((c) => c.id === id);
+      if (!cur) return;
+      const nextLiked = !cur.liked;
+      const apply = (liked: boolean, count: number) =>
+        setComments((cs) => cs.map((c) => (c.id === id ? { ...c, liked, likeCount: count } : c)));
+      apply(nextLiked, Math.max(0, (cur.likeCount ?? 0) + (nextLiked ? 1 : -1)));
+      void setCommentLike(handle, id, nextLiked)
+        .then((r) => apply(r.liked, r.likeCount))
+        .catch(() => apply(!!cur.liked, cur.likeCount ?? 0));
+    },
+    [handle, authKey, comments],
+  );
+
+  return { state, comments, cursor, hasMore, loadMore, submit, remove, toggleLike, sending };
 }

@@ -11,6 +11,7 @@ import {
   type GroupDetail,
   type GroupMember,
 } from "@/lib/social/groups";
+import { useT } from "@/lib/i18n";
 import { Avatar } from "./profile-bits";
 import { fileToWebp } from "./group-image-utils";
 import { InviteMemberModal } from "./invite-member-modal";
@@ -26,6 +27,7 @@ function MemberRow({
   onOpen?: (h: string) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-elevated/60">
       <button
@@ -39,11 +41,11 @@ function MemberRow({
         </div>
       </button>
       {member.role === "owner" ? (
-        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-accent">Owner</span>
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-[0.1em] text-accent">{t("Owner")}</span>
       ) : canRemove ? (
         <button
           onClick={onRemove}
-          aria-label={`Remove ${member.alias}`}
+          aria-label={t("Remove {alias}", { alias: member.alias })}
           className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-danger/15 hover:text-danger"
         >
           <X size={16} />
@@ -64,6 +66,7 @@ export function GroupDetailModal({
   onChanged: () => void;
   onOpenProfile?: (h: string) => void;
 }) {
+  const t = useT();
   const [detail, setDetail] = useState<GroupDetail | null>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [busy, setBusy] = useState(false);
@@ -102,7 +105,7 @@ export function GroupDetailModal({
       setDetail(await joinGroup(id));
       onChanged();
     } catch (e) {
-      setError((e as Error).message || "Could not join.");
+      setError((e as Error).message || t("Could not join."));
     } finally {
       setBusy(false);
     }
@@ -116,7 +119,7 @@ export function GroupDetailModal({
       onChanged();
       onClose();
     } catch (e) {
-      setError((e as Error).message || "Could not leave.");
+      setError((e as Error).message || t("Could not leave."));
       setBusy(false);
     }
   };
@@ -128,7 +131,7 @@ export function GroupDetailModal({
       setDetail(await removeMember(id, userId));
       onChanged();
     } catch (e) {
-      setError((e as Error).message || "Could not remove member.");
+      setError((e as Error).message || t("Could not remove member."));
     } finally {
       setBusy(false);
     }
@@ -143,7 +146,7 @@ export function GroupDetailModal({
       setDetail(await setGroupAvatar(id, blob));
       onChanged();
     } catch (e) {
-      setError((e as Error).message || "Could not update group photo.");
+      setError((e as Error).message || t("Could not update group photo."));
     } finally {
       setPhotoBusy(false);
     }
@@ -157,7 +160,7 @@ export function GroupDetailModal({
       onChanged();
       onClose();
     } catch (e) {
-      setError((e as Error).message || "Could not delete group.");
+      setError((e as Error).message || t("Could not delete group."));
       setBusy(false);
     }
   };
@@ -182,7 +185,7 @@ export function GroupDetailModal({
                       type="button"
                       onClick={() => fileRef.current?.click()}
                       disabled={photoBusy}
-                      aria-label={detail.avatarUrl ? "Change group photo" : "Add group photo"}
+                      aria-label={detail.avatarUrl ? t("Change group photo") : t("Add group photo")}
                       className="absolute -bottom-1 -end-1 grid h-7 w-7 place-items-center rounded-full bg-elevated text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-raised hover:text-ink disabled:opacity-60"
                     >
                       {photoBusy ? <Loader2 size={13} className="animate-spin" /> : <Camera size={13} />}
@@ -203,7 +206,7 @@ export function GroupDetailModal({
               <div className="min-w-0">
                 <h2 className="truncate font-display text-[19px] font-medium text-ink">{detail.name}</h2>
                 <p className="text-[12px] text-ink-subtle">
-                  {detail.memberCount} {detail.memberCount === 1 ? "member" : "members"}
+                  {detail.memberCount} {detail.memberCount === 1 ? t("member") : t("members")}
                 </p>
               </div>
             </div>
@@ -212,7 +215,7 @@ export function GroupDetailModal({
           )}
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
           >
             <X size={18} />
@@ -226,7 +229,7 @@ export function GroupDetailModal({
         )}
 
         {phase === "error" && (
-          <p className="px-5 py-16 text-center text-[13px] text-ink-subtle">This group could not be loaded.</p>
+          <p className="px-5 py-16 text-center text-[13px] text-ink-subtle">{t("This group could not be loaded.")}</p>
         )}
 
         {phase === "ready" && detail && (
@@ -237,13 +240,13 @@ export function GroupDetailModal({
 
             <div className="mt-3 min-h-0 flex-1 overflow-y-auto px-3 pb-2">
               <div className="flex items-center justify-between px-2 pb-1">
-                <span className="text-[11px] uppercase tracking-[0.1em] text-ink-subtle">Members</span>
+                <span className="text-[11px] uppercase tracking-[0.1em] text-ink-subtle">{t("Members")}</span>
                 {detail.isOwner && (
                   <button
                     onClick={() => setInviting(true)}
                     className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium text-ink-muted transition-colors hover:bg-elevated/60 hover:text-ink"
                   >
-                    <UserPlus size={14} /> Invite member
+                    <UserPlus size={14} /> {t("Invite member")}
                   </button>
                 )}
               </div>
@@ -266,20 +269,20 @@ export function GroupDetailModal({
               {detail.isOwner ? (
                 confirmingDelete ? (
                   <div className="flex w-full items-center justify-between gap-3">
-                    <span className="text-[13px] text-ink-muted">Delete this group for everyone?</span>
+                    <span className="text-[13px] text-ink-muted">{t("Delete this group for everyone?")}</span>
                     <div className="flex shrink-0 gap-2">
                       <button
                         onClick={() => setConfirmingDelete(false)}
                         className="inline-flex min-h-11 items-center rounded-[10px] px-3 text-[14px] font-medium text-ink-muted transition-colors hover:bg-surface"
                       >
-                        Keep
+                        {t("Keep")}
                       </button>
                       <button
                         onClick={() => void destroy()}
                         disabled={busy}
                         className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-danger px-4 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-50"
                       >
-                        {busy && <Loader2 size={16} className="animate-spin" />} Delete
+                        {busy && <Loader2 size={16} className="animate-spin" />} {t("Delete")}
                       </button>
                     </div>
                   </div>
@@ -288,7 +291,7 @@ export function GroupDetailModal({
                     onClick={() => setConfirmingDelete(true)}
                     className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-[14px] font-medium text-ink-muted transition-colors hover:bg-danger/15 hover:text-danger"
                   >
-                    <Trash2 size={17} /> Delete group
+                    <Trash2 size={17} /> {t("Delete group")}
                   </button>
                 )
               ) : detail.isMember ? (
@@ -297,7 +300,7 @@ export function GroupDetailModal({
                   disabled={busy}
                   className="inline-flex min-h-11 items-center gap-2 rounded-[10px] px-3 text-[14px] font-medium text-ink-muted transition-colors hover:bg-danger/15 hover:text-danger disabled:opacity-50"
                 >
-                  {busy ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={17} />} Leave group
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={17} />} {t("Leave group")}
                 </button>
               ) : (
                 <button
@@ -305,7 +308,7 @@ export function GroupDetailModal({
                   disabled={busy}
                   className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-50"
                 >
-                  {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={17} />} Join group
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={17} />} {t("Join group")}
                 </button>
               )}
             </div>

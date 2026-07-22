@@ -65,13 +65,14 @@ async function callOne(addon: Addon, type: string, id: string, extra: string): P
   dlog(`[addons] Fetching from ${addon.manifest.name}: ${url}`);
   try {
     const res = await safeFetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) {
+    let subs: RawAddonSub[] = [];
+    if (res.ok) {
+      const data = (await res.json()) as { subtitles?: RawAddonSub[] };
+      subs = Array.isArray(data?.subtitles) ? data.subtitles : [];
+      dlog(`[addons] ${addon.manifest.name} returned ${subs.length} subtitles`);
+    } else {
       dlog(`[addons] ${addon.manifest.name} returned ${res.status}`);
-      return [];
     }
-    const data = (await res.json()) as { subtitles?: RawAddonSub[] };
-    const subs = Array.isArray(data?.subtitles) ? data.subtitles : [];
-    dlog(`[addons] ${addon.manifest.name} returned ${subs.length} subtitles`);
     if (subs.length === 0 && extra) {
       const bareRes = await safeFetch(`${base}/subtitles/${type}/${id}.json`, {
         headers: { Accept: "application/json" },

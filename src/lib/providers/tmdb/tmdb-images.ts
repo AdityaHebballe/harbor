@@ -72,6 +72,29 @@ export async function tmdbLocalizedPoster(key: string, metaId: string): Promise<
   return best?.file_path ? `${IMG}/w342${best.file_path}` : undefined;
 }
 
+const defaultPosterCache = new Map<string, string | null>();
+registerCache("tmdb:defaultPoster", () => defaultPosterCache.size);
+
+export async function tmdbDefaultPoster(key: string, metaId: string): Promise<string | undefined> {
+  if (!key) return undefined;
+  const match = metaId.match(/^tmdb:(movie|tv):(\d+)$/);
+  if (!match) return undefined;
+  const cached = defaultPosterCache.get(metaId);
+  if (cached !== undefined) return cached ?? undefined;
+  const [, kind, id] = match;
+  const data = await get<RawImages>(key, `${kind}/${id}/images`, {
+    include_image_language: "en,null",
+  }).catch(() => null);
+  const posters = data?.posters ?? [];
+  const rank = (iso?: string | null) => (iso === "en" ? 2 : iso == null || iso === "" ? 1 : 0);
+  const best = [...posters].sort(
+    (a, b) => rank(b.iso_639_1) - rank(a.iso_639_1) || (b.vote_average ?? 0) - (a.vote_average ?? 0),
+  )[0];
+  const url = best?.file_path ? `${IMG}/w342${best.file_path}` : undefined;
+  lruSet(defaultPosterCache, metaId, url ?? null, MOVIE_ASSETS_MAX);
+  return url;
+}
+
 export async function tmdbMovieImages(key: string, metaId: string): Promise<string[]> {
   const data = await fetchMovieAssets(key, metaId);
   const seen = new Set<string>();

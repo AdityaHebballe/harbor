@@ -6,7 +6,7 @@ export function resolveStreamLink(stream: { url?: string; externalUrl?: string }
   return stream.url ?? stream.externalUrl ?? null;
 }
 
-async function copyText(text: string): Promise<boolean> {
+export async function copyText(text: string): Promise<boolean> {
   try {
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);

@@ -853,6 +853,19 @@ export function PlayerView({ src }: { src: PlayerSrc }) {
     showVolumeFeedback(next, false);
   }, [showVolumeFeedback, isKid, settings.playerVolumeSfx]);
 
+  const onLoaderRetry = useCallback(() => {
+    const b = bridgeRef.current;
+    if (b) {
+      void b.load({
+        url: src.url,
+        subtitles: src.subtitles,
+        notWebReady: src.notWebReady,
+        isLive: src.meta.id?.startsWith("iptv:"),
+        headers: src.headers,
+      });
+    }
+  }, [src]);
+
   const overlayProps: PlayerOverlayLayersProps = {
     snap,
     engine,
@@ -889,12 +902,7 @@ export function PlayerView({ src }: { src: PlayerSrc }) {
     engineStats,
     isP2pEngine,
     setLoaderShowing,
-    onLoaderRetry: () => {
-      const b = bridgeRef.current;
-      if (b) {
-        void b.load({ url: src.url, subtitles: src.subtitles, notWebReady: src.notWebReady, isLive: src.meta.id?.startsWith("iptv:"), headers: src.headers });
-      }
-    },
+    onLoaderRetry,
     bridgeRef,
     strokes,
     hideOthersDrawings,

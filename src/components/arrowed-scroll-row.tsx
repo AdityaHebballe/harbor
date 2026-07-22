@@ -122,7 +122,8 @@ export function ArrowedScrollRow({
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         onClickCapture={onClickCapture}
-        className={`-my-3 flex gap-3 overflow-x-auto px-1 py-3 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${grabbing ? "cursor-grabbing" : "cursor-grab"}`}
+        className={`-my-3 flex gap-3 overflow-x-auto px-1 py-3 select-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [overflow-anchor:none] [overscroll-behavior-x:contain] ${grabbing ? "cursor-grabbing" : "cursor-grab"}`}
+        style={{ contain: "layout style", transform: "translateZ(0)" }}
       >
         {children}
       </div>

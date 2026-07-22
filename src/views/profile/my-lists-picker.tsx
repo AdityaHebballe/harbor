@@ -2,13 +2,14 @@ import { Check, ListVideo, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Poster } from "@/components/poster";
 import { useCustomLists } from "@/lib/custom-lists";
+import { useT } from "@/lib/i18n";
 import { currentAuthor } from "@/lib/theme-auth";
 import {
   MAX_FEATURED_LISTS,
+  buildFeaturedPayload,
   fetchFeaturedLists,
   readLocalLists,
   saveFeaturedLists,
-  toFeaturedList,
   toPickableList,
   type FeaturedList,
   type PickableList,
@@ -35,14 +36,17 @@ function matchSelection(featured: FeaturedList[], lists: PickableList[]): string
 function ListRow({
   list,
   selected,
+  ghost,
   disabled,
   onToggle,
 }: {
   list: PickableList;
   selected: boolean;
+  ghost?: boolean;
   disabled: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <button
       onClick={onToggle}
@@ -62,7 +66,8 @@ function ListRow({
       <div className="min-w-0 flex-1">
         <div className="truncate text-[14px] font-medium text-ink">{list.name}</div>
         <div className="text-[12px] text-ink-subtle">
-          {list.items.length} {list.items.length === 1 ? "title" : "titles"}
+          {list.items.length} {list.items.length === 1 ? t("title") : t("titles")}
+          {ghost && <span> · {t("not in your library")}</span>}
         </div>
       </div>
       <div className="flex shrink-0 gap-1">
@@ -77,18 +82,38 @@ function ListRow({
 }
 
 export function MyListsPicker({ onClose }: { onClose?: () => void }) {
+  const t = useT();
   const local = useCustomLists();
   const lists = useMemo(() => local.map(toPickableList), [local]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [served, setServed] = useState<FeaturedList[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const ghosts = useMemo(() => {
+    const localNames = new Set(lists.map((l) => normName(l.name)));
+    return served
+      .filter((s) => !localNames.has(normName(s.name)))
+      .map((s) => ({ id: "srv:" + s.id, name: s.name, items: s.items }));
+  }, [lists, served]);
+  const entries = useMemo(() => [...lists, ...ghosts], [lists, ghosts]);
+  const ghostIds = useMemo(() => new Set(ghosts.map((g) => g.id)), [ghosts]);
 
   useEffect(() => {
     const handle = currentAuthor()?.handle;
     if (!handle) return;
     const ctrl = new AbortController();
     fetchFeaturedLists(handle, ctrl.signal)
-      .then((featured) => setSelected(matchSelection(featured, readLocalLists())))
+      .then((featured) => {
+        setServed(featured);
+        const localPick = readLocalLists();
+        const localNames = new Set(localPick.map((l) => normName(l.name)));
+        const matched = matchSelection(featured, localPick);
+        const gIds = featured.filter((f) => !localNames.has(normName(f.name))).map((f) => "srv:" + f.id);
+        setSelected([...matched, ...gIds]);
+        setLoaded(true);
+      })
       .catch(() => {});
     return () => ctrl.abort();
   }, []);
@@ -110,18 +135,18 @@ export function MyListsPicker({ onClose }: { onClose?: () => void }) {
   };
 
   const save = async () => {
+    if (!loaded) return;
     setSaving(true);
     setError(null);
     try {
-      const byId = new Map(lists.map((l) => [l.id, l] as const));
-      const payload = selected
+      const byId = new Map(entries.map((l) => [l.id, l] as const));
+      const picked = selected
         .map((id) => byId.get(id))
-        .filter((l): l is PickableList => !!l)
-        .map(toFeaturedList);
-      await saveFeaturedLists(payload);
+        .filter((l): l is PickableList => !!l);
+      await saveFeaturedLists(buildFeaturedPayload(picked, served), true);
       onClose?.();
     } catch {
-      setError("Could not save. Try again.");
+      setError(t("Could not save. Try again."));
     } finally {
       setSaving(false);
     }
@@ -129,13 +154,13 @@ export function MyListsPicker({ onClose }: { onClose?: () => void }) {
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4" role="dialog" aria-modal>
-      <button aria-label="Close" className="absolute inset-0 bg-black/55" onClick={onClose} />
+      <button aria-label={t("Close")} className="absolute inset-0 bg-black/55" onClick={onClose} />
       <div className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[20px] bg-surface ring-1 ring-edge">
         <div className="flex items-center justify-between border-b border-edge-soft px-6 py-4">
-          <h2 className="font-display text-[20px] text-ink">Featured lists</h2>
+          <h2 className="font-display text-[20px] text-ink">{t("Featured lists")}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="flex h-11 w-11 items-center justify-center rounded-[10px] text-ink-muted hover:bg-elevated"
           >
             <X size={20} />
@@ -144,20 +169,21 @@ export function MyListsPicker({ onClose }: { onClose?: () => void }) {
 
         <div className="flex-1 space-y-2 overflow-y-auto px-6 py-5">
           <p className="pb-1 text-[13px] text-ink-muted">
-            Pick up to {MAX_FEATURED_LISTS} lists to show on your public profile.
+            {t("Pick up to {max} lists to show on your public profile.", { max: MAX_FEATURED_LISTS })}
           </p>
-          {lists.length === 0 ? (
+          {entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-[10px] border border-dashed border-edge py-12 text-center">
               <ListVideo size={24} className="text-ink-subtle" />
-              <p className="mt-2 text-[14px] text-ink-muted">You have no lists yet</p>
-              <p className="mt-1 text-[12px] text-ink-subtle">Create lists in your library to feature them here</p>
+              <p className="mt-2 text-[14px] text-ink-muted">{t("You have no lists yet")}</p>
+              <p className="mt-1 text-[12px] text-ink-subtle">{t("Create lists in your library to feature them here")}</p>
             </div>
           ) : (
-            lists.map((list) => (
+            entries.map((list) => (
               <ListRow
                 key={list.id}
                 list={list}
                 selected={selected.includes(list.id)}
+                ghost={ghostIds.has(list.id)}
                 disabled={!selected.includes(list.id) && selected.length >= MAX_FEATURED_LISTS}
                 onToggle={() => toggle(list.id)}
               />
@@ -168,21 +194,21 @@ export function MyListsPicker({ onClose }: { onClose?: () => void }) {
 
         <div className="flex items-center justify-between gap-3 border-t border-edge-soft px-6 py-4">
           <span className="text-[13px] tabular-nums text-ink-subtle">
-            {selected.length}/{MAX_FEATURED_LISTS} selected
+            {t("{selected}/{max} selected", { selected: selected.length, max: MAX_FEATURED_LISTS })}
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
               className="inline-flex min-h-11 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink-muted hover:bg-elevated"
             >
-              Cancel
+              {t("Cancel")}
             </button>
             <button
               onClick={() => void save()}
-              disabled={saving}
+              disabled={saving || !loaded}
               className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <Check size={20} /> {saving ? "Saving" : "Save"}
+              <Check size={20} /> {saving ? t("Saving") : t("Save")}
             </button>
           </div>
         </div>

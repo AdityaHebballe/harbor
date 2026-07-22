@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Loader2, Upload } from "lucide-react";
 import { fileToFaviconWebp, uploadFavicon } from "@/lib/social/favicon";
 import type { CustomizationInput, ProfileSummary } from "../profile-types";
+import { IMAGE_URL_MAX } from "./customization-types";
 
 const inputCls =
   "w-full min-h-11 rounded-[10px] bg-elevated px-3 text-[14px] text-ink outline-none ring-1 ring-edge-soft placeholder:text-ink-subtle focus:ring-edge";
@@ -44,7 +45,7 @@ export function FaviconField({
       <div className="flex gap-2">
         <input
           value={form.profileFavicon}
-          maxLength={400}
+          maxLength={IMAGE_URL_MAX}
           onChange={(e) => set("profileFavicon", e.target.value)}
           className={`${inputCls} flex-1`}
           placeholder="https://example.com/icon.png"

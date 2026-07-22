@@ -22,7 +22,8 @@ export function FloatingBack({
     topKind === "anime-award" ||
     topKind === "service" ||
     topKind === "addon-detail" ||
-    topKind === "queue";
+    topKind === "queue" ||
+    topKind === "list";
   if (!deep) return null;
   void exitPlayback;
   const onClick = goBack;

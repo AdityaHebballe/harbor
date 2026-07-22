@@ -17,7 +17,7 @@ import { listPager } from "@/lib/list-pager";
 import { CATALOG_REQUEST_TIMEOUT_MS, upsertOrdered, withTimeout } from "@/lib/progressive-rows";
 import { hasPageRowChanges, resetPageRows, usePageRows } from "@/lib/page-rows";
 import { useSettings } from "@/lib/settings";
-import { cwSortKey, isAnimeCwItem, isCwMember, library, type LibraryItem } from "@/lib/stremio";
+import { ANIME_CLOUD_ID, cwSortKey, isAnimeCwItem, isCwMember, library, type LibraryItem } from "@/lib/stremio";
 import { localCwEntry, localCwVersion, subscribeLocalCw } from "@/lib/local-cw";
 import { clearLocalCw } from "@/lib/local-cw";
 import {
@@ -167,7 +167,7 @@ export function Shows({ active = true }: { active?: boolean }) {
   const continueWatching = useMemo(
     () =>
       items
-        .filter((i) => i.type === "series" && isCwMember(i) && !isCwDismissed(i))
+        .filter((i) => i.type === "series" && !ANIME_CLOUD_ID.test(i._id) && isCwMember(i) && !isCwDismissed(i))
         .filter((i) => !settings.cwPerProfile || localCwEntry(i._id) !== null)
         .map((i) => ({ i, k: cwSortKey(i) }))
         .sort((a, b) => b.k - a.k)
@@ -178,13 +178,14 @@ export function Shows({ active = true }: { active?: boolean }) {
 
   const manualWatchedVer = useSyncExternalStore(subscribeManualWatched, manualWatchedVersion);
   const resurfaceLibrary = useMemo(() => {
+    const base = items.filter((i) => !ANIME_CLOUD_ID.test(i._id));
     const manual = manualWatchedLibraryItems().filter((i) => !isAnimeCwItem(i));
-    if (manual.length === 0) return items;
-    const cwMemberIds = new Set(items.filter(isCwMember).map((i) => i._id));
+    if (manual.length === 0) return base;
+    const cwMemberIds = new Set(base.filter(isCwMember).map((i) => i._id));
     const usable = manual.filter((i) => !cwMemberIds.has(i._id));
-    if (usable.length === 0) return items;
+    if (usable.length === 0) return base;
     const overrideIds = new Set(usable.map((i) => i._id));
-    return [...items.filter((i) => !overrideIds.has(i._id)), ...usable];
+    return [...base.filter((i) => !overrideIds.has(i._id)), ...usable];
   }, [items, manualWatchedVer]);
   const cwItems = useCwAdvance(
     continueWatching,

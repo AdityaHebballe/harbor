@@ -71,8 +71,10 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
   const delayNonZero = delaySec !== 0;
   const autoSync = useAutoSyncHandle();
   const selectedTrack = useMemo(() => tracks.find((t) => t.id === selectedId) ?? null, [tracks, selectedId]);
-  const canAutoSync = selectedTrack?.external === true;
   const autoSyncBusy = autoSync?.status === "analyzing";
+  const autoSyncApplied = autoSync?.status === "synced" || autoSync?.status === "best-effort";
+  const autoSyncOn = autoSyncBusy || autoSyncApplied;
+  const canAutoSync = selectedTrack?.external === true || autoSyncOn;
 
   const loadLocal = async () => {
     setLocalError(null);
@@ -114,7 +116,15 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
 
         <div className="flex items-center gap-1">
           <Tooltip
-            label={canAutoSync ? tr("Auto-sync this subtitle now") : tr("Pick an external subtitle to auto-sync")}
+            label={
+              autoSyncBusy
+                ? tr("Cancel auto-sync")
+                : autoSyncApplied
+                  ? tr("Turn off auto-sync")
+                  : canAutoSync
+                    ? tr("Auto-sync this subtitle now")
+                    : tr("Pick an external subtitle to auto-sync")
+            }
             side="bottom"
             align="end"
           >
@@ -123,14 +133,21 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
               disabled={!canAutoSync}
               onClick={() => {
                 if (!canAutoSync) return;
+                if (autoSyncOn) {
+                  autoSync?.stop();
+                  return;
+                }
                 autoSync?.run();
                 onClose();
               }}
               aria-label={tr("Auto sync")}
+              aria-pressed={autoSyncOn}
               className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-[12.5px] font-semibold transition-colors ${
-                canAutoSync
-                  ? "bg-accent/10 text-accent hover:bg-accent/20"
-                  : "cursor-not-allowed text-ink-subtle/50"
+                autoSyncOn
+                  ? "bg-accent text-canvas hover:brightness-110"
+                  : canAutoSync
+                    ? "text-ink-muted hover:bg-raised hover:text-ink"
+                    : "cursor-not-allowed text-ink-subtle/50"
               }`}
             >
               {autoSyncBusy ? (
@@ -138,7 +155,7 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
               ) : (
                 <Wand2 size={14} strokeWidth={2.2} />
               )}
-              {tr("Auto sync")}
+              {autoSyncBusy ? tr("Cancel sync") : autoSyncApplied ? tr("Synced: on") : tr("Auto sync")}
             </button>
           </Tooltip>
 

@@ -128,6 +128,34 @@ export function DisplaySection() {
           value={settings.posterDockMagnification}
           onChange={(posterDockMagnification) => update({ posterDockMagnification })}
         />
+        {settings.posterDockMagnification && (
+          <div className="flex items-center gap-4 px-1 py-1.5">
+            <span className="w-32 shrink-0 text-[13.5px] font-medium text-ink">
+              {t("Animation speed")}
+            </span>
+            <input
+              type="range"
+              min="250"
+              max="1500"
+              step="10"
+              value={settings.posterDockTransitionMs}
+              onChange={(event) => update({ posterDockTransitionMs: Number(event.target.value) })}
+              className="h-1 flex-1 appearance-none rounded-full bg-edge-soft accent-ink"
+            />
+            <span className="w-16 shrink-0 text-end text-[13px] tabular-nums text-ink-muted">
+              {settings.posterDockTransitionMs}ms
+            </span>
+            {settings.posterDockTransitionMs !== 760 && (
+              <button
+                type="button"
+                onClick={() => update({ posterDockTransitionMs: 760 })}
+                className="shrink-0 text-[12.5px] font-medium text-ink-subtle transition-colors hover:text-ink"
+              >
+                {t("Reset")}
+              </button>
+            )}
+          </div>
+        )}
         {settings.liquidGlass && (
           <>
             <ToggleRow

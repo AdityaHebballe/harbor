@@ -76,11 +76,11 @@ function resumeForItem(i: LibraryItem): { ms: number; t: number } | null {
 }
 
 export function cwSortKey(i: LibraryItem): number {
+  const lastWatched = Date.parse(i.state?.lastWatched ?? "");
+  if (Number.isFinite(lastWatched)) return lastWatched;
   const m = i._mtime as unknown;
   const mtime = typeof m === "number" ? m : Date.parse(String(m ?? ""));
   if (Number.isFinite(mtime)) return mtime;
-  const lastWatched = Date.parse(i.state?.lastWatched ?? "");
-  if (Number.isFinite(lastWatched)) return lastWatched;
   return resumeForItem(i)?.t ?? 0;
 }
 
@@ -90,14 +90,11 @@ export function isCwMember(i: LibraryItem): boolean {
     const local = resumeForItem(i)?.ms ?? 0;
     return local > 0;
   }
-  if ((i.state.flaggedWatched ?? 0) > 0) return false;
-  const duration = i.state.duration ?? 0;
-  if (duration > 0 && i.state.timeOffset > 0 && i.state.timeOffset / duration >= CW_FINISHED_RATIO) {
-    return false;
-  }
   if (i.state.timeOffset > 0) return true;
+  if ((i.state.flaggedWatched ?? 0) > 0) return false;
   const local = resumeForItem(i)?.ms ?? 0;
   if (local <= 0) return false;
+  const duration = i.state.duration ?? 0;
   if (duration > 0 && local / duration >= CW_FINISHED_RATIO) return false;
   return true;
 }
@@ -171,6 +168,7 @@ export async function libraryGetOneStrict(authKey: string, id: string): Promise<
 }
 
 export async function libraryPut(authKey: string, item: LibraryItem): Promise<void> {
+  if (ANIME_CLOUD_ID.test(item._id) && item.removed !== true) return;
   await call<unknown>("datastorePut", {
     authKey,
     collection: "libraryItem",
@@ -197,10 +195,10 @@ export async function removeStremioLibraryItem(authKey: string, id: string): Pro
 
 export const CLOUD_OK = /^(tt\d|kitsu:|mal:|anilist:|anidb:|tmdb:)/;
 
-const ANIME_CLOUD_ID = /^(kitsu|mal|anilist|anidb):/;
+export const ANIME_CLOUD_ID = /^(kitsu|mal|anilist|anidb):/;
 export function cloudWriteId(metaId: string, resolved: string | null, verified: boolean): string | null {
   if (metaId.startsWith("tt")) return metaId;
-  if (ANIME_CLOUD_ID.test(metaId)) return CLOUD_OK.test(metaId) ? metaId : null;
+  if (ANIME_CLOUD_ID.test(metaId)) return null;
   if (verified && resolved && resolved.startsWith("tt")) return resolved;
   return CLOUD_OK.test(metaId) ? metaId : null;
 }

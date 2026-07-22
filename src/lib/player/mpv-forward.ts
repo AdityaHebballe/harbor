@@ -76,7 +76,10 @@ export function createForwardingMpvBridge(): ForwardingBridge {
     },
     setAnime4kShaders(shaders) {
       const sep = isWindowsDesktop() ? ";" : ":";
-      void set("glsl-shaders", shaders.filter(Boolean).join(sep));
+      void set("glsl-shaders", shaders.filter(Boolean).map((s) => s.replace(/\\/g, "/")).join(sep));
+    },
+    setShaderProps(props) {
+      for (const [name, value] of Object.entries(props)) void set(name, value);
     },
     async addSubtitle(url, lang, title, select, metadata) {
       try {

@@ -27,8 +27,10 @@ import { DvrButton } from "./dvr-button";
 import { SpeedMenu } from "./speed-menu";
 import { AspectMenu } from "./aspect-menu";
 import { Anime4kMenu } from "./anime4k-menu";
+import { ShaderMenu } from "./shader-menu";
 import { HdrToggleStremioBtn } from "./hdr-toggle-btn";
 import { RtxHdrToggleStremioBtn } from "./rtx-hdr-toggle-btn";
+import { RtxVsrToggleStremioBtn } from "./rtx-vsr-toggle-btn";
 import type { Anime4kChoice } from "@/views/player/hooks/use-anime4k";
 import { DrawToggle } from "./draw-toggle";
 import { CastButton } from "./cast-button";
@@ -349,12 +351,25 @@ export function RenderedStremioControl({
           onOpenChange={ctx.setAnime4kMenuOpen}
         />
       );
+    case "shader-menu":
+      if (ctx.engine === "html5" || !ctx.onAnime4kMode) return null;
+      return (
+        <ShaderMenu
+          mode={(ctx.anime4kMode as Anime4kChoice) ?? "auto"}
+          onMode={ctx.onAnime4kMode}
+          anime4kAvailable={!!ctx.anime4kAvailable}
+          onOpenChange={ctx.setAnime4kMenuOpen}
+        />
+      );
     case "hdr-toggle":
       if (ctx.engine === "html5") return null;
       return <HdrToggleStremioBtn />;
     case "rtx-hdr-toggle":
       if (ctx.engine === "html5") return null;
       return <RtxHdrToggleStremioBtn meta={ctx.meta} />;
+    case "rtx-vsr-toggle":
+      if (ctx.engine === "html5") return null;
+      return <RtxVsrToggleStremioBtn meta={ctx.meta} />;
     case "cast":
       return <CastButton onClick={ctx.onCast} capabilities={ctx.capabilities} />;
     case "subtitle-menu":

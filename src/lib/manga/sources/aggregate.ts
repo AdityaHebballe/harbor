@@ -124,7 +124,7 @@ export async function streamAggregateChapters(
     ...others.map((p) =>
       withTimeout(
         (async () => {
-          const hit = (await p.search(title as string, 0).catch(() => []))[0];
+          const hit = pickSameTitle(await p.search(title as string, 0).catch(() => []), title as string);
           if (!hit) return;
           const labeled = labelChapters(await p.chapters(hit.id).catch(() => []), p);
           if (labeled.length) onChunk(labeled);
@@ -141,6 +141,20 @@ function labelChapters(chs: MangaChapter[], p: MangaProvider): MangaChapter[] {
     id: prefixId(p.id, c.id),
     group: c.group ? `${p.name} · ${c.group}` : p.name,
   }));
+}
+
+function normTitle(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function pickSameTitle(hits: MangaSummary[], title: string): MangaSummary | null {
+  const key = normTitle(title);
+  if (!key) return null;
+  return (
+    hits.find(
+      (h) => normTitle(h.title) === key || (h.altTitle != null && normTitle(h.altTitle) === key),
+    ) ?? null
+  );
 }
 
 export async function ownSourceChapters(id: string): Promise<MangaChapter[]> {
@@ -171,7 +185,7 @@ export const aggregateProvider: MangaProvider = {
       others.map((p) =>
         withTimeout(
           (async () => {
-            const hit = (await p.search(title, 0).catch(() => []))[0];
+            const hit = pickSameTitle(await p.search(title, 0).catch(() => []), title);
             if (!hit) return [] as MangaChapter[];
             const chs = await p.chapters(hit.id).catch(() => []);
             return labelChapters(chs, p);
@@ -179,6 +193,7 @@ export const aggregateProvider: MangaProvider = {
           [] as MangaChapter[],
         ),
       ),
+
     );
     return [...ownChs, ...extra.flat()];
   },

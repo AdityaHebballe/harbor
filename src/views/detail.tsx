@@ -38,7 +38,6 @@ import { useContentDrag } from "@/lib/window-drag";
 import { CLOUD_OK, cloudWriteId, episodeFromVideoId, libraryGetOne, type LibraryItem } from "@/lib/stremio";
 import { decodeWatchedEpisodes, stremioMovieWatched } from "@/lib/stremio-watched";
 import { setEpisodesWatchedStremio } from "@/lib/stremio-watched-sync";
-import { isDetectedAnime } from "@/lib/anime-detect";
 import { useHideAnimeMetas } from "@/lib/anime-hide";
 import { isMovieWatchedLocal, movieWatchedVersion, subscribeMovieWatched } from "@/lib/movie-watched";
 import { manualEpisodeKeys, manualWatchedState, manualWatchedVersion, subscribeManualWatched } from "@/lib/manual-watched";
@@ -936,7 +935,7 @@ export function DetailView({
   const stremioVideosRef = useRef<{ imdb: string; videos: NonNullable<Meta["videos"]> } | null>(null);
   useEffect(() => {
     if (seriesWatchedVer === prevSeriesWatchedVerRef.current) return;
-    if (!authKey || !isSeries || isAnime || isDetectedAnime(meta.id)) return;
+    if (!authKey || !isSeries || idAnime || meta.type === "anime") return;
     const imdb =
       meta.id.startsWith("tt") ? meta.id : detail?.imdbId?.startsWith("tt") ? detail.imdbId : null;
     const cid = cloudWriteId(meta.id, detail?.imdbId ?? null, !!detail?.imdbId);

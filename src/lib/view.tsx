@@ -1,13 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { subscribeOpenProfile } from "@/lib/social/open-profile";
 import type { Meta } from "./cinemeta";
+import type { PeopleDept, RankSource } from "./harbor-rank";
 import { profileFromMeta, trackEvent } from "./discover";
 import type { StreamingService } from "./settings";
 import { useTogether } from "./together/provider";
 import type { SportsGame } from "./sports/espn";
 import { beginMarathonAdvance } from "./fullscreen-state";
 
-export type View = "home" | "settings" | "anime" | "discover" | "catalogs" | "addons" | "calendar" | "movies" | "shows" | "kids" | "library" | "live" | "vod" | "downloads" | "wrapped" | "manga";
+export type View = "home" | "settings" | "anime" | "discover" | "catalogs" | "addons" | "calendar" | "movies" | "shows" | "kids" | "library" | "live" | "vod" | "downloads" | "wrapped" | "manga" | "people";
 
 export type PlayEpisode = {
   season: number;
@@ -100,12 +101,14 @@ export type Frame =
   | { kind: "vod" }
   | { kind: "downloads" }
   | { kind: "manga"; mangaId?: string }
+  | { kind: "people"; source?: RankSource; dept?: PeopleDept; focusSource?: boolean; nonce: number }
   | { kind: "service"; service: StreamingService }
   | { kind: "meta"; meta: Meta; liveContext?: boolean; episodeHint?: { season: number; episode: number }; seasonEntryId?: string }
   | { kind: "addon-collection"; meta: Meta }
   | { kind: "episode-detail"; seriesId: string; season: number; episode: number; seriesMeta?: Meta }
   | { kind: "person"; id: number }
   | { kind: "profile"; handle: string }
+  | { kind: "list"; handle: string; listId: string }
   | { kind: "collection"; id: number }
   | { kind: "collections" }
   | { kind: "filter"; filter: MetaFilter }
@@ -159,10 +162,15 @@ type ViewValue = {
   openPerson: (id: number | null) => void;
   profileHandle: string | null;
   openProfile: (handle: string) => void;
+  listHandle: string | null;
+  listId: string | null;
+  openList: (handle: string, listId: string) => void;
   collectionId: number | null;
   openCollection: (id: number) => void;
   mangaId: string | null;
   openManga: (mangaId?: string) => void;
+  peopleInit: { source?: RankSource; dept?: PeopleDept; focusSource?: boolean; nonce: number } | null;
+  openPeople: (opts?: { source?: RankSource; dept?: PeopleDept; focusSource?: boolean }) => void;
   addonCollectionMeta: Meta | null;
   openQueue: () => void;
   filter: MetaFilter | null;
@@ -255,6 +263,8 @@ function frameKey(f: Frame): string {
       return "downloads";
     case "manga":
       return f.mangaId ? `manga:${f.mangaId}` : "manga";
+    case "people":
+      return "people";
     case "service":
       return `service:${f.service}`;
     case "meta":
@@ -267,6 +277,8 @@ function frameKey(f: Frame): string {
       return `person:${f.id}`;
     case "profile":
       return `profile:${f.handle}`;
+    case "list":
+      return `list:${f.handle}:${f.listId}`;
     case "collection":
       return `collection:${f.id}`;
     case "collections":
@@ -374,6 +386,7 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       if (f.kind === "vod") return "vod";
       if (f.kind === "downloads") return "downloads";
       if (f.kind === "manga") return "manga";
+      if (f.kind === "people") return "people";
       if (f.kind === "home") return "home";
     }
     return "home";
@@ -391,10 +404,26 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   const personId = personFrame ? personFrame.id : null;
   const profileFrame = lastOfKind(stack, "profile");
   const profileHandle = profileFrame ? profileFrame.handle : null;
+  const listFrame = lastOfKind(stack, "list");
+  const listHandle = listFrame ? listFrame.handle : null;
+  const listId = listFrame ? listFrame.listId : null;
   const collectionFrame = lastOfKind(stack, "collection");
   const collectionId = collectionFrame ? collectionFrame.id : null;
   const mangaFrame = lastOfKind(stack, "manga");
   const mangaId = mangaFrame ? mangaFrame.mangaId ?? null : null;
+  const peopleFrame = lastOfKind(stack, "people");
+  const peopleInit = useMemo(
+    () =>
+      peopleFrame
+        ? {
+            source: peopleFrame.source,
+            dept: peopleFrame.dept,
+            focusSource: peopleFrame.focusSource,
+            nonce: peopleFrame.nonce,
+          }
+        : null,
+    [peopleFrame?.source, peopleFrame?.dept, peopleFrame?.focusSource, peopleFrame?.nonce],
+  );
   const addonCollectionFrame = lastOfKind(stack, "addon-collection");
   const addonCollectionMeta = addonCollectionFrame ? addonCollectionFrame.meta : null;
   const episodeDetail = useMemo(
@@ -587,6 +616,11 @@ export function ViewProvider({ children }: { children: ReactNode }) {
         rowScrollMem.current.clear();
         return [{ kind: "manga" }];
       }
+      if (v === "people") {
+        scrollMem.current.clear();
+        rowScrollMem.current.clear();
+        return [{ kind: "people", nonce: Date.now() }];
+      }
       if (t.kind === "settings") return s;
       return pushFrame(s, { kind: "settings" });
     });
@@ -695,6 +729,16 @@ export function ViewProvider({ children }: { children: ReactNode }) {
   }, [setNavStack]);
   useEffect(() => subscribeOpenProfile(openProfile), [openProfile]);
 
+  const openList = useCallback((handle: string, listId: string) => {
+    const h = handle.trim().toLowerCase();
+    if (!h || !listId) return;
+    setNavStack((cur) => {
+      const t = cur[cur.length - 1];
+      if (t.kind === "list" && t.handle === h && t.listId === listId) return cur;
+      return pushFrame(cur, { kind: "list", handle: h, listId });
+    });
+  }, [setNavStack]);
+
   const openQueue = useCallback(() => {
     setNavStack((cur) => {
       const t = cur[cur.length - 1];
@@ -718,6 +762,24 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       return pushFrame(cur, { kind: "manga", mangaId });
     });
   }, [setNavStack]);
+
+  const openPeople = useCallback(
+    (opts?: { source?: RankSource; dept?: PeopleDept; focusSource?: boolean }) => {
+      setNavStack((cur) => {
+        const top = cur[cur.length - 1];
+        const frame: Frame = {
+          kind: "people",
+          source: opts?.source,
+          dept: opts?.dept,
+          focusSource: opts?.focusSource,
+          nonce: Date.now(),
+        };
+        if (top.kind === "people") return [...cur.slice(0, -1), frame];
+        return pushFrame(cur, frame);
+      });
+    },
+    [setNavStack],
+  );
 
   const openMatchDetail = useCallback((game: SportsGame) => {
     setNavStack((cur) => {
@@ -895,10 +957,15 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       openPerson,
       profileHandle,
       openProfile,
+      listHandle,
+      listId,
+      openList,
       collectionId,
       openCollection,
       mangaId,
       openManga,
+      peopleInit,
+      openPeople,
       addonCollectionMeta,
       episodeDetail,
       openEpisodeDetail,
@@ -953,10 +1020,15 @@ export function ViewProvider({ children }: { children: ReactNode }) {
       promoteMetaToRoot,
       personId,
       profileHandle,
+      listHandle,
+      listId,
+      openList,
       collectionId,
       openCollection,
       mangaId,
       openManga,
+      peopleInit,
+      openPeople,
       addonCollectionMeta,
       episodeDetail,
       openEpisodeDetail,

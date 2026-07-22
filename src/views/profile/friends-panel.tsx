@@ -1,5 +1,6 @@
 import { UserPlus, Users } from "lucide-react";
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 import { AddFriendsModal } from "./add-friends-modal";
 import { Avatar } from "./profile-bits";
 import { UserHoverCard } from "./user-hover-card";
@@ -34,6 +35,7 @@ export function FriendsPanel({
   onOpen?: (h: string) => void;
   isOwner?: boolean;
 }) {
+  const t = useT();
   const [addOpen, setAddOpen] = useState(false);
   const [shown, setShown] = useState(FRIENDS_PAGE);
   const online = friends.filter((f) => f.online);
@@ -43,11 +45,12 @@ export function FriendsPanel({
   const vOnline = visible.filter((f) => f.online);
   const vOffline = visible.filter((f) => !f.online);
   const remaining = ordered.length - visible.length;
+  const mutual = friends.filter((f) => f.mutual);
   return (
-    <section aria-label="Friends" className="rounded-[14px] bg-surface p-4 ring-1 ring-edge-soft">
+    <section aria-label={t("Friends")} className="rounded-[14px] bg-surface p-4 ring-1 ring-edge-soft">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
-          <Users size={20} /> Friends
+          <Users size={20} /> {t("Friends")}
         </div>
         <div className="flex items-center gap-2">
           {isOwner && (
@@ -55,7 +58,7 @@ export function FriendsPanel({
               onClick={() => setAddOpen(true)}
               className="inline-flex h-8 items-center gap-1.5 rounded-full bg-elevated px-3 text-[12px] font-semibold text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-raised hover:text-ink"
             >
-              <UserPlus size={14} /> Add
+              <UserPlus size={14} /> {t("Add")}
             </button>
           )}
           <span className="text-[12px] tabular-nums text-ink-subtle">
@@ -63,16 +66,32 @@ export function FriendsPanel({
           </span>
         </div>
       </div>
+      {!isOwner && mutual.length > 0 && (
+        <div className="mb-3 flex items-center gap-2.5 border-b border-edge-soft/60 pb-3">
+          <div className="flex -space-x-2">
+            {mutual.slice(0, 5).map((f) => (
+              <span key={f.handle} className="inline-flex rounded-full ring-2 ring-surface">
+                <Avatar src={f.avatarUrl} size={24} alias={f.alias} />
+              </span>
+            ))}
+          </div>
+          <span className="text-[12.5px] font-medium text-ink-muted">
+            {mutual.length === 1
+              ? t("1 friend in common")
+              : t("{count} friends in common", { count: mutual.length })}
+          </span>
+        </div>
+      )}
       {friends.length === 0 ? (
         <p className="py-6 text-center text-[13px] text-ink-subtle">
-          {isOwner ? "Add friends to see them here." : "No friends to show yet"}
+          {isOwner ? t("Add friends to see them here.") : t("No friends to show yet")}
         </p>
       ) : (
         <div className="flex flex-col gap-1.5">
-          <div className="flex max-h-[440px] flex-col gap-0.5 overflow-y-auto [scrollbar-width:thin]">
+          <div className="harbor-scroll flex max-h-[440px] flex-col gap-0.5 overflow-y-auto pe-0.5">
             {vOnline.length > 0 && (
               <div className="px-2 pb-1 pt-0.5 text-[11px] uppercase tracking-[0.1em] text-success">
-                Online now
+                {t("Online now")}
               </div>
             )}
             {vOnline.map((f) => (
@@ -80,7 +99,7 @@ export function FriendsPanel({
             ))}
             {vOffline.length > 0 && (
               <div className="px-2 pb-1 pt-3 text-[11px] uppercase tracking-[0.1em] text-ink-subtle">
-                Offline
+                {t("Offline")}
               </div>
             )}
             {vOffline.map((f) => (
@@ -92,7 +111,7 @@ export function FriendsPanel({
               onClick={() => setShown((s) => s + FRIENDS_STEP)}
               className="min-h-9 rounded-[10px] text-[12.5px] font-medium text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
             >
-              Show {Math.min(remaining, FRIENDS_STEP)} more
+              {t("Show {count} more", { count: Math.min(remaining, FRIENDS_STEP) })}
             </button>
           )}
         </div>

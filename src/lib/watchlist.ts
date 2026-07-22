@@ -5,7 +5,7 @@ import { addToWatchlist as simklAdd, removeFromWatchlist as simklRemove } from "
 import { stremioIdToSimklTarget } from "@/lib/simkl/ids";
 import { isAuthenticated as simklConnected } from "@/lib/simkl/session";
 import { setItemWithRecovery, freeStorageSpace } from "@/lib/storage-recovery";
-import { cloudWriteId, saveStremioBookmark, removeStremioBookmark } from "@/lib/stremio";
+import { ANIME_CLOUD_ID, cloudWriteId, saveStremioBookmark, removeStremioBookmark } from "@/lib/stremio";
 import { readActiveStremioAuthKey } from "@/lib/auth";
 
 const KEY = "harbor.watchlist.v1";
@@ -215,6 +215,7 @@ async function syncWithStremio(input: string | WatchlistInput, added: boolean): 
       const withMeta = cloudWriteId(id, imdb, false);
       if (withImdb) forms.add(withImdb);
       if (withMeta) forms.add(withMeta);
+      if (ANIME_CLOUD_ID.test(id)) forms.add(id);
       for (const rid of forms) await removeStremioBookmark(authKey, rid);
     }
   } catch (e) {

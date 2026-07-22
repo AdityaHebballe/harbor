@@ -24,8 +24,10 @@ export type SectionId =
   | "player"
   | "mpv"
   | "anime"
+  | "shaders"
   | "playerLayout"
   | "hotkeys"
+  | "controllers"
   | "theme"
   | "badges"
   | "awardIcons"
@@ -62,22 +64,29 @@ export function Section({
   title,
   subtitle,
   newId,
+  bare,
   children,
 }: {
   title: string;
   subtitle?: string;
   newId?: string;
+  bare?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section id={settingsAnchor(title)} className="scroll-mt-28 flex flex-col gap-4 rounded-2xl border border-edge-soft bg-elevated/40 p-7">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <h2 className="text-[19px] font-medium tracking-tight text-ink">{title}</h2>
-          {newId && <NewBadge id={newId} />}
+    <section
+      id={settingsAnchor(title)}
+      className={bare ? "scroll-mt-28" : "scroll-mt-28 flex flex-col gap-4 rounded-2xl border border-edge-soft bg-elevated/40 p-7"}
+    >
+      {!bare && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h2 className="text-[19px] font-medium tracking-tight text-ink">{title}</h2>
+            {newId && <NewBadge id={newId} />}
+          </div>
+          {subtitle && <p className="text-[13.5px] leading-relaxed text-ink-muted">{subtitle}</p>}
         </div>
-        {subtitle && <p className="text-[13.5px] leading-relaxed text-ink-muted">{subtitle}</p>}
-      </div>
+      )}
       {children}
     </section>
   );
@@ -152,7 +161,7 @@ export function KeyField({
         </div>
         <div className="flex items-center gap-3">
           {headerExtra}
-          {!headerExtra && value.length > 0 && !showSave && (
+          {value.length > 0 && !showSave && (
             <span className="flex items-center gap-1.5 text-[11px] font-medium text-accent transition-colors">
               <span className="h-1.5 w-1.5 rounded-full bg-accent shadow-[0_0_6px_rgba(0,200,140,0.5)]" />
               {saved ? t("Saved") : t("Active")}

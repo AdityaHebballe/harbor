@@ -1,5 +1,5 @@
 import type { CustomizationInput, ProfileSummary } from "../profile-types";
-import { CANVAS_MAX, CANVAS_MIN, SUGGESTED_FONTS } from "./customization-types";
+import { CANVAS_MAX, CANVAS_MIN, IMAGE_URL_MAX, SUGGESTED_FONTS } from "./customization-types";
 import { FaviconField } from "./favicon-field";
 
 const inputCls =
@@ -98,7 +98,7 @@ export function CustomizationEditors({
       <Row label="Page background image" hint="https URL, optional">
         <input
           value={form.pageBgImage}
-          maxLength={400}
+          maxLength={IMAGE_URL_MAX}
           onChange={(e) => set("pageBgImage", e.target.value)}
           className={inputCls}
           placeholder="https://example.com/backdrop.jpg"
@@ -106,6 +106,25 @@ export function CustomizationEditors({
           spellCheck={false}
         />
       </Row>
+
+      <div className="flex items-center justify-between gap-3 rounded-[10px] bg-elevated px-3 py-2.5 ring-1 ring-edge-soft">
+        <div className="min-w-0">
+          <div className="text-[13px] font-medium text-ink">Hide top banner</div>
+          <div className="text-[12px] text-ink-subtle">Let your full page background show without the top cover.</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.hideTopBanner}
+          aria-label="Hide top banner"
+          onClick={() => set("hideTopBanner", !form.hideTopBanner)}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors ${form.hideTopBanner ? "bg-accent" : "bg-edge"}`}
+        >
+          <span
+            className={`block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${form.hideTopBanner ? "translate-x-5" : "translate-x-0"}`}
+          />
+        </button>
+      </div>
 
       <FaviconField form={form} set={set} onSaved={onSaved} />
     </div>

@@ -3,10 +3,11 @@ import { meta as fetchMeta } from "@/lib/cinemeta";
 import { imdbToKitsu } from "@/lib/providers/anime-mapping";
 import { setItemWithRecovery } from "@/lib/storage-recovery";
 
-const STORAGE_KEY = "harbor.anime.detected.v1";
+const STORAGE_KEY = "harbor.anime.detected.v2";
 
 function load(): Set<string> {
   try {
+    localStorage.removeItem("harbor.anime.detected.v1");
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw);
@@ -75,10 +76,14 @@ function hasAnimationGenre(m: { genres?: string[] }): boolean {
   });
 }
 
+function primaryCountry(m: { country?: string }): string {
+  return (m.country ?? "").split(",")[0].trim().toLowerCase();
+}
+
 function isJapaneseAnime(m: { genres?: string[]; country?: string; originalLanguage?: string }): boolean {
   if ((m.genres ?? []).some((g) => g.toLowerCase() === "anime")) return true;
   if (!hasAnimationGenre(m)) return false;
-  const c = (m.country ?? "").toLowerCase();
+  const c = primaryCountry(m);
   const lang = (m.originalLanguage ?? "").toLowerCase();
   return c.includes("japan") || c === "jp" || c === "jpn" || lang === "ja" || lang === "jpn";
 }
@@ -95,7 +100,8 @@ export async function detectAnimeForCw(items: Array<{ _id: string; type: string 
         | null;
       checked.add(id);
       let anime = !!m && isJapaneseAnime(m);
-      if (!anime && (!m || hasAnimationGenre(m) || (m.genres ?? []).length === 0)) {
+      const originUnknown = !m || !primaryCountry(m);
+      if (!anime && originUnknown && (!m || hasAnimationGenre(m) || (m.genres ?? []).length === 0)) {
         anime = (await imdbToKitsu(id).catch(() => null)) != null;
       }
       if (anime) {

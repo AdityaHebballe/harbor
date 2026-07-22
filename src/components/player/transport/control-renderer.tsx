@@ -40,8 +40,10 @@ import { VolumeControl } from "./volume-control";
 import { SpeedMenu } from "./speed-menu";
 import { AspectMenu } from "./aspect-menu";
 import { Anime4kMenu } from "./anime4k-menu";
+import { ShaderMenu } from "./shader-menu";
 import { HdrToggleBigBtn } from "./hdr-toggle-btn";
 import { RtxHdrToggleBigBtn } from "./rtx-hdr-toggle-btn";
+import { RtxVsrToggleBigBtn } from "./rtx-vsr-toggle-btn";
 import type { Anime4kChoice } from "@/views/player/hooks/use-anime4k";
 import { DrawToggle } from "./draw-toggle";
 import { CastButton } from "./cast-button";
@@ -407,6 +409,17 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
         />
       );
     }
+    case "shader-menu": {
+      if (ctx.tight || ctx.engine === "html5" || !ctx.onAnime4kMode) return null;
+      return (
+        <ShaderMenu
+          mode={(ctx.anime4kMode as Anime4kChoice) ?? "auto"}
+          onMode={ctx.onAnime4kMode}
+          anime4kAvailable={!!ctx.anime4kAvailable}
+          onOpenChange={ctx.setAnime4kMenuOpen}
+        />
+      );
+    }
     case "hdr-toggle": {
       if (ctx.tight || ctx.engine === "html5") return null;
       return <HdrToggleBigBtn />;
@@ -414,6 +427,10 @@ export function renderControl(id: PlayerControlId, ctx: ControlContext): ReactNo
     case "rtx-hdr-toggle": {
       if (ctx.tight || ctx.engine === "html5") return null;
       return <RtxHdrToggleBigBtn meta={ctx.meta} />;
+    }
+    case "rtx-vsr-toggle": {
+      if (ctx.tight || ctx.engine === "html5") return null;
+      return <RtxVsrToggleBigBtn meta={ctx.meta} />;
     }
     case "draw-toggle": {
       if (ctx.compact || !ctx.showDraw) return null;

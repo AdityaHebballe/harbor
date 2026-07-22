@@ -1,8 +1,9 @@
-import { Row } from "@/components/row";
+import type { ReactNode } from "react";
 import type { StoreTheme } from "@/lib/theme-store";
-import { ThemeCard } from "./theme-card";
+import { MarketRail } from "./market/market-rail";
 
 export function StoreRail({
+  icon,
   title,
   subtitle,
   themes,
@@ -11,6 +12,7 @@ export function StoreRail({
   onOpen,
   onViewAll,
 }: {
+  icon: ReactNode;
   title: string;
   subtitle?: string;
   themes: StoreTheme[];
@@ -19,20 +21,17 @@ export function StoreRail({
   onOpen: (t: StoreTheme) => void;
   onViewAll?: () => void;
 }) {
-  if (themes.length === 0) return null;
   return (
-    <Row
+    <MarketRail
+      icon={icon}
       title={title}
-      titleExtra={subtitle ? <span className="truncate text-[12.5px] text-ink-subtle">{subtitle}</span> : undefined}
-      shape="landscape"
-      min={252}
+      subtitle={subtitle}
+      items={themes}
+      kind="theme"
+      ranked={ranked}
       scrollKey={scrollKey}
+      onOpen={(it) => onOpen(it as StoreTheme)}
       onViewAll={onViewAll}
-      viewAllLabel="Browse all"
-    >
-      {themes.map((t, i) => (
-        <ThemeCard key={t.id} theme={t} rank={ranked ? i + 1 : undefined} onOpen={onOpen} />
-      ))}
-    </Row>
+    />
   );
 }

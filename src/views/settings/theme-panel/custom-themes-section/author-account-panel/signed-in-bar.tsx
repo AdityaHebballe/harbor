@@ -32,20 +32,12 @@ export function SignedInBar({ author, stats }: { author: Author; stats?: AuthorS
   const initials = author.username.slice(0, 2).toUpperCase();
 
   return (
-    <div className="relative overflow-hidden rounded-[16px] border border-edge-soft bg-surface">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-70"
-        style={{
-          background:
-            "radial-gradient(120% 150% at 0% 0%, var(--color-accent-soft) 0%, transparent 46%)",
-        }}
-      />
+    <div className="relative overflow-hidden rounded-[16px] bg-surface ring-1 ring-edge-soft">
       <div className="relative flex flex-wrap items-center gap-4 p-6">
         {author.avatar ? (
-          <img src={author.avatar} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover ring-1 ring-accent/25" />
+          <img src={author.avatar} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover ring-1 ring-edge-soft" />
         ) : (
-          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-accent/15 text-[20px] font-bold tracking-tight text-accent ring-1 ring-accent/25">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-elevated text-[20px] font-bold tracking-tight text-ink-muted ring-1 ring-edge-soft">
             {initials}
           </span>
         )}
@@ -64,10 +56,10 @@ export function SignedInBar({ author, stats }: { author: Author; stats?: AuthorS
           <AvatarButton author={author} />
           <button
             onClick={() => setPwOpen((v) => !v)}
-            className={`flex h-9 items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] font-semibold transition-colors ${
+            className={`flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold ring-1 transition-colors ${
               pwOpen
-                ? "border-edge bg-elevated/40 text-ink"
-                : "border-edge-soft text-ink-muted hover:border-edge hover:text-ink"
+                ? "bg-elevated/40 text-ink ring-edge"
+                : "text-ink-muted ring-edge-soft hover:text-ink hover:ring-edge"
             }`}
           >
             <KeyRound size={14} strokeWidth={2.2} /> Change password
@@ -75,7 +67,7 @@ export function SignedInBar({ author, stats }: { author: Author; stats?: AuthorS
           <button
             onClick={signOut}
             disabled={signingOut}
-            className="flex h-9 items-center gap-1.5 rounded-full border border-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-danger/40 hover:text-danger disabled:opacity-50"
+            className="flex h-9 items-center gap-1.5 rounded-full ring-1 ring-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:text-danger hover:ring-danger/40 disabled:opacity-50"
           >
             {signingOut ? <Loader2 size={14} className="animate-spin" /> : <LogOut size={14} />} Sign out
           </button>
@@ -135,7 +127,7 @@ function AvatarButton({ author }: { author: Author }) {
           onClick={use}
           disabled={busy != null || !profileAvatar}
           title={hint ?? "Re-sync from your Harbor profile picture"}
-          className="flex h-9 items-center gap-1.5 rounded-full border border-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-edge hover:text-ink disabled:opacity-50"
+          className="flex h-9 items-center gap-1.5 rounded-full ring-1 ring-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:text-ink hover:ring-edge disabled:opacity-50"
         >
           {busy === "set" ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} strokeWidth={2.2} />} Update photo
         </button>
@@ -144,7 +136,7 @@ function AvatarButton({ author }: { author: Author }) {
           disabled={busy != null}
           aria-label="Remove community photo"
           title="Remove your community photo"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-edge-soft text-ink-muted transition-colors hover:border-danger/40 hover:text-danger disabled:opacity-50"
+          className="flex h-9 w-9 items-center justify-center rounded-full ring-1 ring-edge-soft text-ink-muted transition-colors hover:text-danger hover:ring-danger/40 disabled:opacity-50"
         >
           {busy === "remove" ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} strokeWidth={2.2} />}
         </button>
@@ -156,7 +148,7 @@ function AvatarButton({ author }: { author: Author }) {
       onClick={use}
       disabled={busy != null || !profileAvatar}
       title={hint ?? "Show your Harbor profile picture on the community"}
-      className="flex h-9 items-center gap-1.5 rounded-full border border-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-edge hover:text-ink disabled:opacity-50"
+      className="flex h-9 items-center gap-1.5 rounded-full ring-1 ring-edge-soft px-3.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:text-ink hover:ring-edge disabled:opacity-50"
     >
       {busy === "set" ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} strokeWidth={2.2} />} Use my photo
     </button>
@@ -230,7 +222,7 @@ function ChangePassword({ onDone }: { onDone: () => void }) {
           type="submit"
           disabled={!ready || busy || done}
           className={`flex h-10 items-center gap-1.5 rounded-[8px] px-4 text-[13px] font-semibold transition-opacity disabled:opacity-40 ${
-            done ? "bg-emerald-400 text-black" : "bg-ink text-canvas hover:opacity-90"
+            done ? "bg-success text-canvas" : "bg-ink text-canvas hover:opacity-90"
           }`}
         >
           {busy ? <Loader2 size={14} className="animate-spin" /> : done ? <Check size={14} className="harbor-pop" /> : null}

@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { createGroup, setGroupAvatar, type GroupDetail } from "@/lib/social/groups";
 import { Avatar } from "./profile-bits";
 import { fileToWebp } from "./group-image-utils";
+import { useT } from "@/lib/i18n";
 
 export function CreateGroupModal({
   onClose,
@@ -12,6 +13,7 @@ export function CreateGroupModal({
   onClose: () => void;
   onCreated: (g: GroupDetail) => void;
 }) {
+  const t = useT();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [pickedBlob, setPickedBlob] = useState<Blob | null>(null);
@@ -41,7 +43,7 @@ export function CreateGroupModal({
       setPickedBlob(blob);
       setPreview(URL.createObjectURL(blob));
     } catch (e) {
-      setError((e as Error).message || "Could not read image.");
+      setError((e as Error).message || t("Could not read image."));
     }
   };
 
@@ -51,7 +53,7 @@ export function CreateGroupModal({
     setBusy(true);
     setError(null);
     const created = await createGroup(trimmed, description).catch((e) => {
-      setError((e as Error).message || "Could not create group.");
+      setError((e as Error).message || t("Could not create group."));
       return null;
     });
     if (!created) {
@@ -77,10 +79,10 @@ export function CreateGroupModal({
         className="animate-modal-in flex w-[min(94vw,460px)] flex-col rounded-2xl border border-edge-soft bg-elevated shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]"
       >
         <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="font-display text-[19px] font-medium text-ink">Create group</h2>
+          <h2 className="font-display text-[19px] font-medium text-ink">{t("Create group")}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="grid h-9 w-9 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
           >
             <X size={18} />
@@ -95,7 +97,7 @@ export function CreateGroupModal({
               onClick={() => fileRef.current?.click()}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] bg-surface px-3 text-[13px] font-medium text-ink ring-1 ring-edge-soft transition-colors hover:bg-raised"
             >
-              <Camera size={15} /> {preview ? "Change photo" : "Add photo"}
+              <Camera size={15} /> {preview ? t("Change photo") : t("Add photo")}
             </button>
             <input
               ref={fileRef}
@@ -108,7 +110,7 @@ export function CreateGroupModal({
 
           <label className="block">
             <div className="mb-1.5 flex items-baseline justify-between">
-              <span className="text-[13px] font-medium text-ink">Name</span>
+              <span className="text-[13px] font-medium text-ink">{t("Name")}</span>
               <span className="text-[12px] text-ink-subtle">{name.length}/48</span>
             </div>
             <input
@@ -116,14 +118,14 @@ export function CreateGroupModal({
               value={name}
               maxLength={48}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Late-night sci-fi crew"
+              placeholder={t("Late-night sci-fi crew")}
               className="w-full min-h-11 rounded-[10px] bg-surface px-3 text-[14px] text-ink outline-none ring-1 ring-edge-soft placeholder:text-ink-subtle focus:ring-edge"
             />
           </label>
 
           <label className="block">
             <div className="mb-1.5 flex items-baseline justify-between">
-              <span className="text-[13px] font-medium text-ink">Description</span>
+              <span className="text-[13px] font-medium text-ink">{t("Description")}</span>
               <span className="text-[12px] text-ink-subtle">{description.length}/200</span>
             </div>
             <textarea
@@ -131,7 +133,7 @@ export function CreateGroupModal({
               maxLength={200}
               rows={3}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="What this group is about (optional)"
+              placeholder={t("What this group is about (optional)")}
               className="w-full resize-none rounded-[10px] bg-surface px-3 py-2.5 text-[14px] text-ink outline-none ring-1 ring-edge-soft placeholder:text-ink-subtle focus:ring-edge"
             />
           </label>
@@ -146,7 +148,7 @@ export function CreateGroupModal({
             onClick={onClose}
             className="inline-flex min-h-11 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink-muted transition-colors hover:bg-surface"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={() => void submit()}
@@ -154,7 +156,7 @@ export function CreateGroupModal({
             className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {busy && <Loader2 size={16} className="animate-spin" />}
-            {busy ? "Creating" : "Create"}
+            {busy ? t("Creating") : t("Create")}
           </button>
         </div>
       </div>

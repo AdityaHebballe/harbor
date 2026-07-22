@@ -4,6 +4,7 @@ export const CANVAS_MIN = 200;
 export const CANVAS_MAX = 1400;
 export const CANVAS_DEFAULT = 520;
 export const MARKUP_CAP = 16384;
+export const IMAGE_URL_MAX = 2048;
 
 export const SUGGESTED_FONTS = [
   "Inter",
@@ -19,7 +20,7 @@ export const SUGGESTED_FONTS = [
 const FONT_RE = /^[A-Za-z0-9 ]{1,48}$/;
 const COLOR_HEX_RE = /^#[0-9a-fA-F]{3,8}$/;
 const COLOR_FN_RE = /^(rgb|rgba|hsl|hsla)\([0-9.,%\s]{1,60}\)$/;
-const IMAGE_RE = /^https:\/\/[^\s"'<>()\\]{1,400}$/;
+const IMAGE_RE = new RegExp(`^https://[^\\s"'<>\\\\]{1,${IMAGE_URL_MAX}}$`);
 
 export function validFont(value: string): boolean {
   return FONT_RE.test(value);

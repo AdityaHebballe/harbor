@@ -8,6 +8,7 @@ import {
   type CrowdTier,
 } from "./confidence";
 import {
+  evaluateBestEffort,
   evaluateGate,
   outcomeRank,
   DEFAULT_BOUNDS,
@@ -25,7 +26,7 @@ import {
   type EpisodeRef,
 } from "./metadata-priors";
 import type { SwapCues } from "./opensubtitles";
-import { escalateTryHarder, consensusSignal, wrongContentOutcome } from "./smart-layer";
+import { escalateTryHarder, consensusAnchorFit, consensusSignal, wrongContentOutcome } from "./smart-layer";
 
 export type SourceKind = "local" | "http" | "hls" | "debrid" | "torrent";
 
@@ -222,7 +223,10 @@ export async function runAutoSync(
 ): Promise<PipelineOutcome> {
   const prior = opts.prior ?? DEFAULT_PRIOR;
   const bounds = buildBounds(ctx, ports);
-  const qualityBefore = await ports.measureQuality(ctx, IDENTITY);
+  const qualityBeforeP = ports.measureQuality(ctx, IDENTITY);
+  const consensusP: Promise<ConsensusResult | null> = ports.consensus
+    ? ports.consensus(ctx).catch(() => null)
+    : Promise.resolve(null);
   const priorRuntimeOk = runtimeOk(ctx);
   const evidence: SignalEvidence[] = [];
   const tiersRun: TierId[] = [];
@@ -249,7 +253,7 @@ export async function runAutoSync(
       requireImprovement?: boolean;
     } = {},
   ): Promise<GateDecision> => {
-    const before = over.qualityBefore ?? qualityBefore;
+    const before = over.qualityBefore ?? (await qualityBeforeP);
     const qualityAfter = over.qualityAfter ?? (await ports.measureQuality(ctx, transform));
     const confidence = fuseConfidence(evidence, prior);
     return evaluateGate({
@@ -310,8 +314,9 @@ export async function runAutoSync(
   }
 
   let consensusRes: ConsensusResult | null = null;
+  let consensusEvidencePushed = false;
   if (ports.consensus) {
-    consensusRes = await ports.consensus(ctx);
+    consensusRes = await consensusP;
     if (consensusRes) {
       tiersRun.push("consensus");
       if (consensusRes.verdict === "wrong") {
@@ -319,6 +324,38 @@ export async function runAutoSync(
         const out = wrongContentOutcome(consensusRes, fuseConfidence(evidence, prior).pCorrect, evidence, tiersRun);
         keep(out);
         if (!opts.tryHarder) return out;
+      }
+    }
+  }
+
+  if (consensusRes && consensusRes.verdict === "right") {
+    const fastFit = consensusAnchorFit(consensusRes);
+    if (fastFit) {
+      const fastT: SyncTransform = { kind: "affine", offsetSec: fastFit.offsetSec, ratio: fastFit.ratio };
+      evidence.push(consensusSignal(consensusRes, fastT));
+      consensusEvidencePushed = true;
+      const fastAfter = await ports.measureQuality(ctx, fastT);
+      let decision = await gateFor(fastT, false, { qualityAfter: fastAfter });
+      let bestEffort = false;
+      if (decision.decision !== "apply") {
+        const be = evaluateBestEffort({
+          transform: fastT,
+          confidence: fuseConfidence(evidence, prior),
+          qualityBefore: await qualityBeforeP,
+          qualityAfter: fastAfter,
+          bounds,
+          exactIdentity: false,
+          inputAlreadyGood: false,
+        });
+        if (be.decision === "apply") {
+          decision = be;
+          bestEffort = true;
+        }
+      }
+      if (decision.decision === "apply") {
+        const out: PipelineOutcome = { decision, candidate: fastT, evidence, tiersRun, bestEffort };
+        keep(out);
+        return out;
       }
     }
   }
@@ -346,7 +383,7 @@ export async function runAutoSync(
     }
   }
 
-  if (consensusRes && consensusRes.verdict !== "wrong") {
+  if (consensusRes && consensusRes.verdict !== "wrong" && !consensusEvidencePushed) {
     evidence.push(consensusSignal(consensusRes, lead));
   }
 
@@ -377,7 +414,7 @@ export async function runAutoSync(
 
   if (lead) {
     const leadBefore =
-      ctx.sourceKind === "torrent" ? await ports.measureQuality(ctx, IDENTITY) : qualityBefore;
+      ctx.sourceKind === "torrent" ? await ports.measureQuality(ctx, IDENTITY) : await qualityBeforeP;
     let decision = await gateFor(lead, false, { asrWordMatch, qualityBefore: leadBefore });
     if (metaVerdict?.hardRefuse && decision.decision !== "refuse") {
       const reason = `wrong content: ${metaVerdict.reasons[0] ?? "metadata hard refuse"}`;
@@ -386,8 +423,8 @@ export async function runAutoSync(
     keep({ decision, candidate: lead, evidence, tiersRun });
   }
 
-  if (opts.tryHarder && best.decision.decision !== "apply" && !best.subSwap) {
-    const esc = await escalateTryHarder({ ctx, ports, lead, leadNcc, consensus: consensusRes, bounds, qualityBefore, evidence, tiersRun });
+  if (best.decision.decision !== "apply" && !best.subSwap && (opts.tryHarder || !!ports.asrTranscribe)) {
+    const esc = await escalateTryHarder({ ctx, ports, lead, leadNcc, consensus: consensusRes, bounds, qualityBefore: await qualityBeforeP, evidence, tiersRun });
     if (esc) keep(esc);
   }
 

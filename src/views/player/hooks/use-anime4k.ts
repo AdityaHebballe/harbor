@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from "react";
 import type { PlayerBridge } from "@/lib/player/bridge";
 import { anime4kChain, type Anime4kMode, type Anime4kTier } from "@/lib/player/anime4k-modes";
+import { generalShaderChain, generalShaderKey, shaderCompanionProps } from "@/lib/player/shader-chain";
 import { useSettings, type Settings } from "@/lib/settings";
 import type { PlayerSrc } from "@/lib/view";
 
@@ -66,15 +67,22 @@ export function useAnime4k(
   const choice = (settings.playerAnime4kOverride as Anime4kChoice) || "auto";
   const available = !!settings.playerAnime4kFolder;
   const dims: Anime4kDims = { srcWidth: videoWidth, displayWidth: screenWidthPx() };
+  const generalKey = generalShaderKey(settings);
+
+  const applyShaders = (c: Anime4kChoice) => {
+    const chain = [...anime4kShadersFor(settings, src, c, dims), ...generalShaderChain(settings)];
+    bridgeRef.current?.setAnime4kShaders(chain);
+    bridgeRef.current?.setShaderProps?.(shaderCompanionProps(settings));
+  };
 
   useEffect(() => {
-    bridgeRef.current?.setAnime4kShaders(anime4kShadersFor(settings, src, choice, dims));
+    applyShaders(choice);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [srcKey, videoWidth]);
+  }, [srcKey, videoWidth, generalKey]);
 
   const setMode = (c: string) => {
     update({ playerAnime4kOverride: c });
-    bridgeRef.current?.setAnime4kShaders(anime4kShadersFor(settings, src, c as Anime4kChoice, dims));
+    applyShaders(c as Anime4kChoice);
   };
 
   const displayMode: Anime4kChoice =

@@ -4,13 +4,15 @@ import type { SubResult, SubSearchQuery } from "@/lib/subtitles/types";
 import { podnapisiSource } from "./sub-source-podnapisi";
 import { subdlSource } from "./sub-source-subdl";
 import { gestdownSource } from "./sub-source-gestdown";
+import { subsourceSource } from "./sub-source-subsource";
 
-export type SubProviderId = "podnapisi" | "subdl" | "gestdown";
+export type SubProviderId = "podnapisi" | "subdl" | "gestdown" | "subsource";
 export type SubFormat = "srt" | "vtt" | "ass" | "ssa" | "sub" | "zip" | "unknown";
 
 export type ProviderCtx = {
   userAgent: string;
   subdlApiKey?: string | null;
+  subsourceApiKey?: string | null;
   enabled?: Partial<Record<SubProviderId, boolean>>;
   netAllowed?: boolean;
   timeoutMs?: number;
@@ -205,13 +207,14 @@ export function partitionForGate(
   return { exact, ambiguous };
 }
 
-const ALL_SOURCES: SubSource[] = [podnapisiSource, subdlSource, gestdownSource];
+const ALL_SOURCES: SubSource[] = [podnapisiSource, subdlSource, gestdownSource, subsourceSource];
 
 export function pickSources(q: SubSearchQuery, ctx: ProviderCtx): SubSource[] {
   const series = isSeries(q);
   return ALL_SOURCES.filter((s) => {
     if (ctx.enabled && ctx.enabled[s.id] === false) return false;
     if (s.id === "subdl" && !ctx.subdlApiKey) return false;
+    if (s.id === "subsource" && !ctx.subsourceApiKey) return false;
     return series ? s.supportsTv : s.supportsMovie;
   });
 }
@@ -256,4 +259,4 @@ export function toSubResult(c: SourceSubCandidate): ExtraSubResult {
   };
 }
 
-export { podnapisiSource, subdlSource, gestdownSource };
+export { podnapisiSource, subdlSource, gestdownSource, subsourceSource };

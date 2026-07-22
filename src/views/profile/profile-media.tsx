@@ -1,5 +1,6 @@
 import { Camera, ImageIcon, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
+import { useT } from "@/lib/i18n";
 import { useProfiles } from "@/lib/profiles";
 import { useSettings } from "@/lib/settings";
 import { fileToBannerWebp, removeBanner, uploadBanner } from "@/lib/social/banner";
@@ -9,13 +10,13 @@ import { currentAuthor } from "@/lib/theme-auth";
 import { Avatar } from "./profile-bits";
 import type { ProfileSummary } from "./profile-types";
 
-async function fileToWebp(file: File, max: number): Promise<Blob> {
+async function fileToWebp(file: File, max: number, t: ReturnType<typeof useT>): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
-      img.onerror = () => reject(new Error("That image could not be read."));
+      img.onerror = () => reject(new Error(t("That image could not be read.")));
       img.src = url;
     });
     const size = Math.min(max, Math.max(img.width, img.height));
@@ -23,13 +24,13 @@ async function fileToWebp(file: File, max: number): Promise<Blob> {
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas unavailable.");
+    if (!ctx) throw new Error(t("Canvas unavailable."));
     const scale = Math.max(size / img.width, size / img.height);
     const w = img.width * scale;
     const h = img.height * scale;
     ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), "image/webp", 0.9));
-    if (!blob) throw new Error("Could not process image.");
+    if (!blob) throw new Error(t("Could not process image."));
     return blob;
   } finally {
     URL.revokeObjectURL(url);
@@ -43,6 +44,7 @@ export function ProfileMedia({
   summary: ProfileSummary;
   onSaved: (next: ProfileSummary) => void;
 }) {
+  const t = useT();
   const { activeProfile, updateProfile } = useProfiles();
   const { update: updateSettings } = useSettings();
   const [avatarUrl, setAvatarUrl] = useState<string | undefined>(summary.avatarUrl || currentAuthor()?.avatar || undefined);
@@ -63,7 +65,7 @@ export function ProfileMedia({
     setAvatarBusy(true);
     setError(null);
     try {
-      const blob = await fileToWebp(file, 512);
+      const blob = await fileToWebp(file, 512, t);
       const result = await uploadAvatar(blob);
       const next = result.avatarUrl ?? undefined;
       setAvatarUrl(next);
@@ -71,7 +73,7 @@ export function ProfileMedia({
       markAvatarSynced(next ?? null);
       onSaved({ ...summary, avatarUrl: next });
     } catch (e) {
-      setError((e as Error).message || "Could not update photo.");
+      setError((e as Error).message || t("Could not update photo."));
     } finally {
       setAvatarBusy(false);
     }
@@ -88,7 +90,7 @@ export function ProfileMedia({
       markAvatarSynced(null);
       onSaved({ ...summary, avatarUrl: undefined });
     } catch (e) {
-      setError((e as Error).message || "Could not remove photo.");
+      setError((e as Error).message || t("Could not remove photo."));
     } finally {
       setAvatarBusy(false);
     }
@@ -104,7 +106,7 @@ export function ProfileMedia({
       setBannerUrl(next.bannerUrl);
       onSaved({ ...summary, bannerUrl: next.bannerUrl });
     } catch (e) {
-      setError((e as Error).message || "Could not update banner.");
+      setError((e as Error).message || t("Could not update banner."));
     } finally {
       setBannerBusy(false);
     }
@@ -119,7 +121,7 @@ export function ProfileMedia({
       setBannerUrl(undefined);
       onSaved({ ...summary, bannerUrl: next.bannerUrl });
     } catch (e) {
-      setError((e as Error).message || "Could not remove banner.");
+      setError((e as Error).message || t("Could not remove banner."));
     } finally {
       setBannerBusy(false);
     }
@@ -137,7 +139,7 @@ export function ProfileMedia({
               disabled={avatarBusy}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] bg-elevated px-3 text-[13px] font-medium text-ink ring-1 ring-edge-soft hover:bg-raised disabled:opacity-50"
             >
-              <Camera size={15} /> {avatarBusy ? "Saving" : "Change photo"}
+              <Camera size={15} /> {avatarBusy ? t("Saving") : t("Change photo")}
             </button>
             {avatarUrl && (
               <button
@@ -146,11 +148,11 @@ export function ProfileMedia({
                 disabled={avatarBusy}
                 className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-medium text-ink-muted transition-colors hover:text-danger disabled:opacity-50"
               >
-                <Trash2 size={15} /> Remove
+                <Trash2 size={15} /> {t("Remove")}
               </button>
             )}
           </div>
-          <span className="text-[12px] text-ink-subtle">Stored as a small optimized webp.</span>
+          <span className="text-[12px] text-ink-subtle">{t("Stored as a small optimized webp.")}</span>
         </div>
         <input
           ref={fileRef}
@@ -162,7 +164,7 @@ export function ProfileMedia({
       </div>
 
       <div className="space-y-2">
-        <span className="text-[13px] font-medium text-ink">Profile background</span>
+        <span className="text-[13px] font-medium text-ink">{t("Profile background")}</span>
         <div className="relative aspect-[3/1] w-full overflow-hidden rounded-[14px] bg-elevated ring-1 ring-edge-soft">
           {bannerUrl ? (
             <img src={bannerUrl} alt="" className="h-full w-full object-cover" draggable={false} />
@@ -180,7 +182,7 @@ export function ProfileMedia({
             disabled={bannerBusy}
             className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] bg-elevated px-3 text-[13px] font-medium text-ink ring-1 ring-edge-soft hover:bg-raised disabled:opacity-50"
           >
-            <ImageIcon size={20} /> {bannerBusy ? "Saving" : bannerUrl ? "Change banner" : "Add banner"}
+            <ImageIcon size={20} /> {bannerBusy ? t("Saving") : bannerUrl ? t("Change banner") : t("Add banner")}
           </button>
           {bannerUrl && (
             <button
@@ -189,7 +191,7 @@ export function ProfileMedia({
               disabled={bannerBusy}
               className="inline-flex min-h-9 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-medium text-ink-muted transition-colors hover:text-danger disabled:opacity-50"
             >
-              <Trash2 size={15} /> Remove
+              <Trash2 size={15} /> {t("Remove")}
             </button>
           )}
         </div>

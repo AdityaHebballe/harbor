@@ -65,9 +65,10 @@ export function addonAccepts(addon: Addon, resource: string, type: string, id: s
   );
   if (specific.length > 0) {
     return specific.some((r) => {
-      const typeOk = Array.isArray(r.types) && r.types.includes(type);
-      const idOk =
-        !r.idPrefixes || r.idPrefixes.length === 0 || r.idPrefixes.some((p) => id.startsWith(p));
+      const types = r.types ?? m.types ?? [];
+      const typeOk = types.includes(type);
+      const prefixes = r.idPrefixes ?? m.idPrefixes;
+      const idOk = !prefixes || prefixes.length === 0 || prefixes.some((p) => id.startsWith(p));
       return typeOk && idOk;
     });
   }

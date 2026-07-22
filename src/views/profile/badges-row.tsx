@@ -1,5 +1,6 @@
 import { Award } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useT } from "@/lib/i18n";
 import { HoverTooltip } from "@/components/hover-tooltip";
 import { NavArrow } from "@/components/nav-arrow";
 import { SectionHeader } from "./section-header";
@@ -32,6 +33,7 @@ function BadgeChip({ b }: { b: Badge }) {
 }
 
 function Arrow({ dir, onClick }: { dir: "prev" | "next"; onClick: () => void }) {
+  const t = useT();
   const left = dir === "prev";
   return (
     <div
@@ -42,7 +44,7 @@ function Arrow({ dir, onClick }: { dir: "prev" | "next"; onClick: () => void }) 
       <NavArrow
         dir={left ? "left" : "right"}
         onClick={onClick}
-        label={left ? "Scroll left" : "Scroll right"}
+        label={left ? t("Scroll left") : t("Scroll right")}
         size={26}
         className="pointer-events-auto h-11 w-11"
       />
@@ -109,15 +111,16 @@ export function BadgesRow({
   onViewAll?: () => void;
   handle?: string;
 }) {
+  const t = useT();
   return (
-    <section aria-label="Badges" className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
+    <section aria-label={t("Badges")} className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
       <SectionHeader
         icon={<Award size={20} />}
-        label="Badges"
+        label={t("Badges")}
         onViewAll={badges.length > 0 ? onViewAll : undefined}
       />
       {badges.length === 0 ? (
-        <p className="py-6 text-center text-[13px] text-ink-subtle">No badges earned yet</p>
+        <p className="py-6 text-center text-[13px] text-ink-subtle">{t("No badges earned yet")}</p>
       ) : (
         <BadgesScroller badges={badges} />
       )}

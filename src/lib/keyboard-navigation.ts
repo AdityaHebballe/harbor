@@ -34,8 +34,13 @@ const TV_NAV_KEY: Record<Dir | "back", string> = {
   back: "Escape",
 };
 
-export function dispatchTvNav(action: Dir | "select" | "back"): void {
+export function dispatchTvNav(action: Dir | "select" | "back" | "home"): void {
   if (typeof window === "undefined") return;
+  if (action === "home") {
+    const homeNav = document.querySelector('[data-harbor-nav="home"]');
+    if (homeNav instanceof HTMLElement) homeNav.click();
+    return;
+  }
   if (action === "select") {
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (active && !isEditable(active)) active.click();

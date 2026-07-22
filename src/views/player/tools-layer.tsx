@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ComponentProps } from "react";
 import { ClipChooser } from "@/components/player/clip-chooser";
 import { GifRecordPill } from "@/components/player/gif-record-pill";
@@ -10,7 +11,7 @@ import type { useGifRecorder } from "./hooks/use-gif-recorder";
 type SkipProps = ComponentProps<typeof SkipPillContainer>;
 type QuickToolsProps = ComponentProps<typeof QuickTools>;
 
-export function ToolsLayer({
+export const ToolsLayer = memo(function ToolsLayer({
   pipMode,
   drawMode,
   showWaiting,
@@ -100,4 +101,4 @@ export function ToolsLayer({
       )}
     </>
   );
-}
+});

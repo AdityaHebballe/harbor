@@ -12,7 +12,9 @@ import { createPortal } from "react-dom";
 import { requestOpenProfile } from "@/lib/social/open-profile";
 import { regionFlagSrc } from "@/lib/region-flags";
 import { useReducedMotion } from "@/lib/use-reduced-motion";
+import { useT } from "@/lib/i18n";
 import { fetchBadges, fetchSummary } from "./profile-api";
+import { orderShownBadges } from "./badge-catalog";
 import { HoverTooltip } from "@/components/hover-tooltip";
 import { Avatar, VerifiedCheck } from "./profile-bits";
 import { useSelfAvatar } from "./use-self-avatar";
@@ -20,19 +22,20 @@ import type { Badge, ProfileSummary } from "./profile-types";
 
 type CardData = { summary: ProfileSummary; badges: Badge[] };
 
-const cache = new Map<string, CardData>();
+const TTL = 30000;
+const cache = new Map<string, { data: CardData; at: number }>();
 const inflight = new Map<string, Promise<CardData>>();
 
 function loadCard(handle: string): Promise<CardData> {
   const key = handle.toLowerCase();
   const cached = cache.get(key);
-  if (cached) return Promise.resolve(cached);
+  if (cached && Date.now() - cached.at < TTL) return Promise.resolve(cached.data);
   const pending = inflight.get(key);
   if (pending) return pending;
   const req = Promise.all([fetchSummary(key), fetchBadges(key).catch(() => [] as Badge[])])
     .then(([summary, badges]) => {
       const data: CardData = { summary, badges };
-      cache.set(key, data);
+      cache.set(key, { data, at: Date.now() });
       inflight.delete(key);
       return data;
     })
@@ -145,24 +148,26 @@ function HoverCard({
   onEnter: () => void;
   onLeave: () => void;
 }) {
+  const t = useT();
   const reduced = useReducedMotion();
   const self = useSelfAvatar();
   const key = handle.toLowerCase();
-  const [data, setData] = useState<CardData | null>(() => cache.get(key) ?? null);
+  const [data, setData] = useState<CardData | null>(() => cache.get(key)?.data ?? null);
   const [failed, setFailed] = useState(false);
   const [placed, setPlaced] = useState<{ top: number; left: number } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (data) return;
     let cancelled = false;
     loadCard(key)
       .then((d) => !cancelled && setData(d))
-      .catch(() => !cancelled && setFailed(true));
+      .catch(() => {
+        if (!cancelled && !cache.get(key)) setFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [key, data]);
+  }, [key]);
 
   useLayoutEffect(() => {
     const el = cardRef.current;
@@ -176,10 +181,10 @@ function HoverCard({
   }, [anchor, data, failed]);
 
   const summary = data?.summary;
-  const badges = data?.badges ?? [];
+  const badges = orderShownBadges(data?.badges ?? [], data?.summary?.shownBadges);
   const mine = !!self.handle && self.handle.toLowerCase() === key;
   const cardAvatar = mine ? self.avatar ?? summary?.avatarUrl : summary?.avatarUrl;
-  const bio = summary?.description?.trim() || summary?.slogan?.trim();
+  const bio = summary?.slogan?.trim();
   const locationFlag = summary?.location ? regionFlagSrc(summary.location) : null;
 
   return createPortal(
@@ -187,7 +192,7 @@ function HoverCard({
       ref={cardRef}
       role="button"
       tabIndex={-1}
-      aria-label={`Open @${summary?.handle ?? handle} profile`}
+      aria-label={t("Open @{handle} profile", { handle: summary?.handle ?? handle })}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
       onClick={() => requestOpenProfile(handle)}
@@ -230,7 +235,7 @@ function HoverCard({
             <div className="mt-2 flex items-center gap-2 text-[11.5px] text-ink-muted">
               <span className="inline-flex items-center gap-1.5">
                 <span className={`h-2 w-2 rounded-full ${summary.online ? "bg-success" : "bg-ink-subtle"}`} />
-                {summary.online ? "Online" : "Offline"}
+                {summary.online ? t("Online") : t("Offline")}
               </span>
               {summary.location && (
                 <>
@@ -274,7 +279,7 @@ function HoverCard({
             )}
           </>
         ) : failed ? (
-          <p className="mt-3 text-[12px] text-ink-subtle">Preview unavailable. Click to open profile.</p>
+          <p className="mt-3 text-[12px] text-ink-subtle">{t("Preview unavailable. Click to open profile.")}</p>
         ) : (
           <div className="mt-3 space-y-2">
             <div className={`h-3 w-24 rounded bg-raised ${reduced ? "" : "animate-pulse"}`} />

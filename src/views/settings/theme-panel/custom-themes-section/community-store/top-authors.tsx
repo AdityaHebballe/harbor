@@ -1,5 +1,6 @@
 import { ArrowDownToLine } from "lucide-react";
 import { UserHoverCard } from "@/views/profile/user-hover-card";
+import { requestOpenProfile } from "@/lib/social/open-profile";
 import type { AuthorStat } from "./use-store-themes";
 import { fmtCount } from "./format";
 
@@ -28,11 +29,12 @@ export function TopAuthors({ authors, onSelect }: { authors: AuthorStat[]; onSel
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {top.map((a, i) => {
           const hue = hueOf(a.author);
+          const h = a.handle;
           const card = (
             <button
               type="button"
               onClick={() => onSelect(a.author)}
-              className="group flex w-full items-center gap-3 rounded-[4px] border border-edge-soft bg-surface p-3 text-start outline-none transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-edge hover:shadow-[0_16px_32px_-24px_rgba(0,0,0,0.6)] focus-visible:ring-2 focus-visible:ring-accent active:translate-y-0 motion-reduce:transform-none"
+              className="group flex w-full items-center gap-3 rounded-[12px] bg-surface p-3 text-start outline-none ring-1 ring-edge-soft transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_32px_-24px_rgba(0,0,0,0.6)] hover:ring-edge focus-visible:ring-2 focus-visible:ring-accent active:translate-y-0 motion-reduce:transform-none"
             >
               <span className="w-4 shrink-0 text-center text-[14px] font-bold tabular-nums text-ink-subtle">{i + 1}</span>
               {a.avatar ? (
@@ -53,9 +55,31 @@ export function TopAuthors({ authors, onSelect }: { authors: AuthorStat[]; onSel
               )}
               <span className="flex min-w-0 flex-col">
                 <span className="flex min-w-0 items-baseline gap-1.5">
-                  <span className="truncate text-[14px] font-semibold text-ink">{a.author}</span>
-                  {a.handle && (
-                    <span className="shrink-0 truncate font-display text-[11.5px] text-ink-subtle">@{a.handle}</span>
+                  {h ? (
+                    <span
+                      role="link"
+                      tabIndex={0}
+                      title={`Open @${h} profile`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        requestOpenProfile(h);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          requestOpenProfile(h);
+                        }
+                      }}
+                      className="truncate cursor-pointer text-[14px] font-semibold text-ink underline-offset-2 outline-none hover:text-accent hover:underline focus-visible:text-accent focus-visible:underline"
+                    >
+                      {a.author}
+                    </span>
+                  ) : (
+                    <span className="truncate text-[14px] font-semibold text-ink">{a.author}</span>
+                  )}
+                  {h && (
+                    <span className="shrink-0 truncate font-display text-[11.5px] text-ink-subtle">@{h}</span>
                   )}
                 </span>
                 <span className="flex items-center gap-1.5 text-[11.5px] text-ink-subtle">
@@ -69,8 +93,8 @@ export function TopAuthors({ authors, onSelect }: { authors: AuthorStat[]; onSel
               </span>
             </button>
           );
-          return a.handle ? (
-            <UserHoverCard key={a.author} handle={a.handle}>
+          return h ? (
+            <UserHoverCard key={a.author} handle={h}>
               {card}
             </UserHoverCard>
           ) : (

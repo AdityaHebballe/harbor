@@ -6,9 +6,9 @@ import type { MangaSummary } from "@/lib/manga/types";
 import { CollapsibleSection } from "./collapsible-section";
 
 export function BecauseYouWatched({ onOpen }: { onOpen: (item: MangaSummary) => void }) {
-  const recs = useBecauseYouWatched();
+  const { recs, loading } = useBecauseYouWatched();
   const t = useT();
-  if (recs.length === 0) return null;
+  if (recs.length === 0 && !loading) return null;
 
   return (
     <CollapsibleSection
@@ -20,6 +20,16 @@ export function BecauseYouWatched({ onOpen }: { onOpen: (item: MangaSummary) => 
       <p className="text-[13px] text-ink-subtle">
         {t("Keep going in the manga behind the anime you've been watching")}
       </p>
+      {recs.length === 0 ? (
+        <div className="-mx-1 flex gap-3 px-1 py-3" aria-hidden>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="w-36 shrink-0 animate-pulse motion-reduce:animate-none">
+              <div className="aspect-[2/3] w-full rounded-xl bg-elevated/60" />
+              <div className="mt-2 h-3.5 w-4/5 rounded bg-elevated/50" />
+            </div>
+          ))}
+        </div>
+      ) : (
       <ArrowedScrollRow className="-mx-1">
         {recs.map(({ animeName, manga }) => (
           <button
@@ -46,6 +56,7 @@ export function BecauseYouWatched({ onOpen }: { onOpen: (item: MangaSummary) => 
           </button>
         ))}
       </ArrowedScrollRow>
+      )}
     </CollapsibleSection>
   );
 }

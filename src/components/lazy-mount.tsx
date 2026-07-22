@@ -1,6 +1,12 @@
 import { startTransition, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
-const CULL_MARGIN = "2000px";
+const CULL_STYLE: CSSProperties = {
+  contentVisibility: "auto",
+  paddingLeft: "48px",
+  paddingRight: "48px",
+  marginLeft: "-48px",
+  marginRight: "-48px",
+};
 
 export function LazyMount({
   children,
@@ -15,9 +21,6 @@ export function LazyMount({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
-  const [far, setFar] = useState(false);
-  const shownRef = useRef(false);
-  shownRef.current = shown;
 
   useEffect(() => {
     if (shown) return;
@@ -63,33 +66,17 @@ export function LazyMount({
     };
   }, [shown, rootMargin]);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        const near = entries[0]?.isIntersecting ?? true;
-        if (shownRef.current) startTransition(() => setFar(!near));
-      },
-      { rootMargin: CULL_MARGIN },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
-
-  if (shown) {
-    const cull: CSSProperties | undefined = far
-      ? { contentVisibility: "auto", containIntrinsicSize: `auto ${minHeight}px` }
-      : undefined;
-    return (
-      <div ref={ref} style={cull}>
-        {children}
-      </div>
-    );
-  }
   return (
-    <div ref={ref} style={{ minHeight }} aria-hidden>
-      {fallback}
+    <div
+      ref={ref}
+      style={{
+        ...CULL_STYLE,
+        containIntrinsicSize: `auto ${minHeight}px`,
+        ...(shown ? null : { minHeight }),
+      }}
+      aria-hidden={shown ? undefined : true}
+    >
+      {shown ? children : fallback}
     </div>
   );
 }

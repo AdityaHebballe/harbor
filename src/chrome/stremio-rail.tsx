@@ -72,7 +72,7 @@ export function StremioRail() {
             );
           })}
         </nav>
-        <div className="shrink-0 px-1 pb-3 pt-1">
+        <div className="flex shrink-0 flex-col items-center px-1 pb-3 pt-1">
           {locked ? (
             <div className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl text-white/35">
               <Lock size={16} />

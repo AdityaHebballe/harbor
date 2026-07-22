@@ -120,6 +120,7 @@ export type Settings = {
   experimentalLiquidGlassEnabled: boolean;
   experimentalLiquidGlassOpacity: number;
   posterDockMagnification: boolean;
+  posterDockTransitionMs: number;
   top10Ribbon: boolean;
   top10RibbonSide: "left" | "right";
   awardTabs: boolean;
@@ -130,6 +131,10 @@ export type Settings = {
   uiScale: number;
   serveWebUi: boolean;
   remoteControlEnabled: boolean;
+  controllerSupportEnabled: boolean;
+  controllerDeadzone: number;
+  controllerRepeatMs: number;
+  controllerInitialDelayMs: number;
   trailerQuality: "auto" | "360p" | "720p" | "1080p" | "best";
   detailTrailerAutoplay: boolean;
   heroBackdropCarousel: boolean;
@@ -211,6 +216,7 @@ export type Settings = {
   keepSourceNextEpisode: boolean;
   playerHdrToSdr: boolean;
   playerRtxHdr: boolean;
+  playerRtxVsr: boolean;
   playerMacEdr: boolean;
   playerDisplayPanel: "auto" | "oled" | "lcd";
   playerMotionInterp: boolean;
@@ -240,6 +246,7 @@ export type Settings = {
   playerAnime4kTier: string;
   playerAnime4kFolder: string;
   playerAnime4kOverride: string;
+  playerShaders: Record<string, { enabled: boolean; variant?: string; dir?: string }>;
   preferredSubLangs: string[];
   preferredAudioLangs: string[];
   subFontSize: number;
@@ -249,6 +256,7 @@ export type Settings = {
   subMarginY: number;
   subAlignX: "left" | "center" | "right";
   subAssOverride: "no" | "yes" | "force" | "scale" | "strip";
+  subAssNormalizeSize: boolean;
   subStyle: "shadow" | "outline" | "box";
   subFontFamily: string;
   subBold: boolean;
@@ -257,7 +265,7 @@ export type Settings = {
   subBoxColor: string;
   subOpacity: number;
   subLineSpacing: number;
-  subProvidersEnabled: { wyzie: boolean; opensubtitles: boolean; jimaku: boolean; addons: boolean };
+  subProvidersEnabled: { wyzie: boolean; opensubtitles: boolean; jimaku: boolean; addons: boolean; subdl?: boolean; subsource?: boolean };
   subShowInPip: boolean;
   subtitleAutoSync: boolean;
   autoSyncApplyStructural: boolean;
@@ -328,6 +336,8 @@ export type Settings = {
   playerHdrStage: "auto" | "off" | "always";
   opensubtitlesApiKey: string;
   jimakuToken: string;
+  subdlApiKey: string;
+  subsourceApiKey: string;
   audioNormalize: boolean;
   audioProfile: "off" | "bass" | "voice" | "bass-reduce" | "night";
   audioDevice: string;

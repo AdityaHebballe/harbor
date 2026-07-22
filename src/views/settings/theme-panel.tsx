@@ -1,12 +1,15 @@
 import { AppWindow, Move, PanelTop, Sparkles } from "lucide-react";
 import { useSettings } from "@/lib/settings";
-import { type ThemeSettings } from "@/lib/theme";
+import { FEATURED_CUSTOM_THEMES, THEME_PRESETS, type ThemeSettings } from "@/lib/theme";
 import { useT } from "@/lib/i18n";
 import { Section } from "./shared";
 import { NewBadge } from "./new-badge";
 import { BackgroundPicker } from "./theme-panel/background-picker";
 import { ColorThemeBody } from "./theme-panel/color-theme-body";
 import { CustomThemesSection } from "./theme-panel/custom-themes-section";
+import { requestThemeLibrary, useThemeLibraryOpen } from "./theme-panel/library-open-store";
+import { MarketCta } from "./theme-panel/custom-themes-section/community-store/market/market-cta";
+import type { IconThumb } from "./theme-panel/custom-themes-section/community-store/market/icon-fan";
 import { DisplaySection } from "./theme-panel/display-section";
 import { FontGrid } from "./theme-panel/font-grid";
 import { LogoPicker } from "./theme-panel/logo-picker";
@@ -22,8 +25,14 @@ export function ThemePanel() {
     update({ theme: { ...theme, ...patch } });
   };
 
+  const libraryOpen = useThemeLibraryOpen();
+
   return (
     <>
+      {!libraryOpen && (
+        <>
+      <ThemeCommunityCta />
+
       <Section
         title={t("Theme")}
         subtitle={t("Pick a look. Every color and surface updates instantly.")}
@@ -42,14 +51,19 @@ export function ThemePanel() {
           }
         />
       </Section>
+        </>
+      )}
 
       <Section
         title={t("Your themes")}
         subtitle={t("Make your own in the Theme Studio, or import one a friend shared.")}
+        bare={libraryOpen}
       >
         <CustomThemesSection />
       </Section>
 
+      {!libraryOpen && (
+        <>
       <Section
         title={t("Typography")}
         subtitle={t("Pick a display and body pairing, or upload your own font to use across Harbor.")}
@@ -103,7 +117,26 @@ export function ThemePanel() {
       >
         <LogoPicker />
       </Section>
+        </>
+      )}
     </>
+  );
+}
+
+const COMMUNITY_PREVIEW: IconThumb[] = [...FEATURED_CUSTOM_THEMES, ...Object.values(THEME_PRESETS)]
+  .filter((tp) => tp.previewImage)
+  .slice(0, 5)
+  .map((tp) => ({ src: tp.previewImage, alt: tp.name }));
+
+function ThemeCommunityCta() {
+  return (
+    <MarketCta
+      variant="browse"
+      label="Browse community themes"
+      sublabel="Fresh looks shared by the Harbor community"
+      preview={COMMUNITY_PREVIEW}
+      onClick={() => requestThemeLibrary({ tab: "community" })}
+    />
   );
 }
 

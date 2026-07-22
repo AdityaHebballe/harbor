@@ -68,12 +68,14 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { listMangaProgress } from "@/lib/manga-progress";
 import { ProfilesProvider, useProfiles } from "@/lib/profiles";
 import { syncProfileStats } from "@/lib/social/stats-sync";
-import { authToken, currentAuthor } from "@/lib/theme-auth";
+import { useFeaturedListsSync } from "@/lib/social/use-featured-sync";
+import { authToken, currentAuthor, refreshToken } from "@/lib/theme-auth";
 import { useAutoDownloadRunner } from "@/lib/auto-download/runner";
 import { RemindersRunner } from "@/lib/reminders-runner";
 import { MangaTrackingRunner } from "@/lib/manga-tracking";
 import { RemoteHostMount } from "@/lib/remote/host-mount";
 import { RemoteOpenBridge } from "@/lib/remote/remote-open-bridge";
+import { GamepadRunner } from "@/components/gamepad-runner";
 import { ProfileIdentitySync } from "@/lib/profile-identity-sync";
 import { HarborAvatarSync } from "@/components/harbor-avatar-sync";
 import { HarborNameSync } from "@/components/harbor-name-sync";
@@ -132,6 +134,7 @@ const importAnimeAward = () => import("@/views/anime-award");
 const importFilter = () => import("@/views/filter");
 const importGrid = () => import("@/views/grid");
 const importPerson = () => import("@/views/person");
+const importPeople = () => import("@/views/people");
 const importCollection = () => import("@/views/collection");
 const importEpisodeDetail = () => import("@/views/episode-detail");
 const importPlayPicker = () => import("@/views/play-picker");
@@ -161,7 +164,9 @@ const AnimeAwardView = lazy(() => importAnimeAward().then((m) => ({ default: m.A
 const FilterView = lazy(() => importFilter().then((m) => ({ default: m.FilterView })));
 const GridView = lazy(() => importGrid().then((m) => ({ default: m.GridView })));
 const PersonView = lazy(() => importPerson().then((m) => ({ default: m.PersonView })));
+const PeopleView = lazy(() => importPeople().then((m) => ({ default: m.PeopleView })));
 const ProfileView = lazy(() => import("@/views/profile/profile").then((m) => ({ default: m.ProfileView })));
+const SharedListView = lazy(() => import("@/views/shared-list").then((m) => ({ default: m.SharedListView })));
 const CollectionView = lazy(() => importCollection().then((m) => ({ default: m.CollectionView })));
 const AddonCollectionView = lazy(() => import("@/views/addon-collection").then((m) => ({ default: m.AddonCollectionView })));
 const EpisodeDetailView = lazy(() => importEpisodeDetail().then((m) => ({ default: m.EpisodeDetailView })));
@@ -207,6 +212,7 @@ function useViewPreloader(tmdbKey: string) {
       void importAddons();
       void importDiscover();
       void importPerson();
+      void importPeople();
       void importFilter();
       void importCalendar();
       void importMovies();
@@ -344,12 +350,15 @@ export function App({ onReady }: { onReady?: () => void }) {
                       <TogetherLeaveForLiveModal />
                       <TogetherLocationPublisher />
                       <IdleAwayRunner />
+                      <SessionRefreshRunner />
                       <StatsSyncRunner />
+                      <FeaturedListsSyncRunner />
                       <AutoDownloadRunner />
                       <RemindersRunner />
                       <MangaTrackingRunner />
                       <RemoteHostMount />
                       <RemoteOpenBridge />
+                      <GamepadRunner />
                       <DiscordPresence />
                       <ContextMenu />
                       <AnnouncementGlobal />
@@ -409,6 +418,21 @@ function TogetherFloater() {
 
 function AutoDownloadRunner() {
   useAutoDownloadRunner();
+  return null;
+}
+
+function FeaturedListsSyncRunner() {
+  useFeaturedListsSync();
+  return null;
+}
+
+function SessionRefreshRunner() {
+  useEffect(() => {
+    void refreshToken();
+    const onProfile = () => void refreshToken();
+    window.addEventListener("harbor:active-profile-changed", onProfile);
+    return () => window.removeEventListener("harbor:active-profile-changed", onProfile);
+  }, []);
   return null;
 }
 
@@ -533,7 +557,7 @@ function RevealOnMount({ onReady }: { onReady?: () => void }) {
 }
 
 function Shell({ onReady }: { onReady?: () => void }) {
-  const { topKind, service, meta, metaLiveContext, metaEpisodeHint, episodeDetail, personId, profileHandle, collectionId, addonCollectionMeta, filter, grid, awardType, animeAwardSource, picker, player, setView, canGoBack, goBack, canGoForward, goForward, openMeta, openManga, openPlayer, stackKinds, chromeHidden } = useView();
+  const { topKind, service, meta, metaLiveContext, metaEpisodeHint, episodeDetail, personId, profileHandle, listHandle, listId, openList, collectionId, addonCollectionMeta, filter, grid, awardType, animeAwardSource, picker, player, setView, canGoBack, goBack, canGoForward, goForward, openMeta, openManga, peopleInit, openPlayer, stackKinds, chromeHidden } = useView();
   const { settings, update } = useSettings();
   const { setOpen: setSearchOpen } = useSearch();
   const uiScaleRef = useRef(settings.uiScale);
@@ -861,7 +885,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
 
   useEffect(() => {
     let dispose: (() => void) | null = null;
-    void import("@/lib/deep-link").then(({ startDeepLinkBridge, onDeepLinkInstall, onDeepLinkOpen, onOpenLocalFile, onOpenProfileEdit, isProfileEditUrl }) => {
+    void import("@/lib/deep-link").then(({ startDeepLinkBridge, onDeepLinkInstall, onDeepLinkOpen, onDeepLinkOpenList, onOpenLocalFile, onOpenProfileEdit, isProfileEditUrl }) => {
       void startDeepLinkBridge().then((stopBridge) => {
         const stopListener = onDeepLinkInstall((rawUrl) => {
           if (window.__harborInstallerOpen) return;
@@ -871,6 +895,9 @@ function Shell({ onReady }: { onReady?: () => void }) {
         const stopOpen = onDeepLinkOpen(({ type, id, videoId }) => {
           const hint = parseDeepLinkEpisode(videoId);
           openMeta({ id, type: type as MetaType, name: "" }, hint ? { episodeHint: hint } : undefined);
+        });
+        const stopOpenList = onDeepLinkOpenList(({ handle, listId }) => {
+          openList(handle, listId);
         });
         const stopEdit = onOpenProfileEdit(() => {
           const handle = currentAuthor()?.handle;
@@ -884,6 +911,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
           stopBridge();
           stopListener();
           stopOpen();
+          stopOpenList();
           stopEdit();
           stopFile();
         };
@@ -892,7 +920,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
     return () => {
       dispose?.();
     };
-  }, [setView, openMeta, openPlayer]);
+  }, [setView, openMeta, openPlayer, openList]);
 
   useEffect(() => {
     if (topKind === "anime" && settings.hideContent.anime) setView("home");
@@ -926,6 +954,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
   const pickerTop = topKind === "picker";
   const personTop = topKind === "person";
   const profileTop = topKind === "profile";
+  const listTop = topKind === "list";
   const collectionTop = topKind === "collection";
   const addonCollectionTop = topKind === "addon-collection";
   const episodeDetailTop = topKind === "episode-detail";
@@ -958,6 +987,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
   const vodTop = topKind === "vod";
   const downloadsTop = topKind === "downloads";
   const mangaTop = topKind === "manga";
+  const peopleTop = topKind === "people";
   const matchDetailTop = topKind === "match-detail";
 
   const [immersive, setImmersive] = useState(false);
@@ -1001,6 +1031,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
   const detailAlive = useKeepAlive(detailTop, !!meta);
   const personAlive = useKeepAlive(personTop, personId !== null);
   const profileAlive = useKeepAlive(profileTop, profileHandle !== null);
+  const listAlive = useKeepAlive(listTop, listHandle !== null);
   const addonCollectionAlive = useKeepAlive(
     addonCollectionTop,
     !!addonCollectionMeta,
@@ -1031,6 +1062,7 @@ function Shell({ onReady }: { onReady?: () => void }) {
   const vodAlive = useIdleEvict(vodTop);
   const downloadsAlive = useIdleEvict(downloadsTop);
   const mangaAlive = useIdleEvict(mangaTop);
+  const peopleAlive = useIdleEvict(peopleTop);
 
   return (
     <div data-kids={kidsTop || kid ? "on" : undefined} className="relative flex h-full">
@@ -1165,6 +1197,13 @@ function Shell({ onReady }: { onReady?: () => void }) {
             </Suspense>
           </div>
         )}
+        {peopleAlive && (
+          <div className={layer(peopleTop)}>
+            <Suspense fallback={null}>
+              <PeopleView init={peopleInit} />
+            </Suspense>
+          </div>
+        )}
         {queueAlive && (
           <div className={layer(queueTop)}>
             <Suspense fallback={null}>
@@ -1203,6 +1242,28 @@ function Shell({ onReady }: { onReady?: () => void }) {
               <ProfileView
                 key={`profile-${profileHandle}`}
                 handle={profileHandle}
+                onOpenProfile={requestOpenProfile}
+                onOpenMeta={(id, kind, hint) => {
+                  if (kind === "manga") {
+                    openManga(id);
+                    return;
+                  }
+                  const animeIsh = /^(kitsu|mal|anilist|anidb):/i.test(id);
+                  const t: MetaType =
+                    kind === "series" || kind === "tv" || kind === "anime" || animeIsh ? "series" : "movie";
+                  openMeta({ id, type: t, name: hint?.name ?? "", poster: hint?.poster });
+                }}
+              />
+            </Suspense>
+          </div>
+        )}
+        {listAlive && listHandle !== null && listId !== null && (
+          <div className={layer(listTop)}>
+            <Suspense fallback={null}>
+              <SharedListView
+                key={`list-${listHandle}-${listId}`}
+                handle={listHandle}
+                listId={listId}
                 onOpenProfile={requestOpenProfile}
                 onOpenMeta={(id, kind, hint) => {
                   if (kind === "manga") {

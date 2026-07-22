@@ -5,6 +5,9 @@ import detail from "./pt/detail";
 import player from "./pt/player";
 import live from "./pt/live";
 import settings from "./pt/settings";
+import settingsFill from "./pt/settings-fill";
+import profileFill from "./pt/profile-fill";
+import appFill from "./pt/app-fill";
 import library from "./pt/library";
 import sync from "./pt/sync";
 import lists from "./pt/lists";
@@ -19,6 +22,7 @@ import awards from "./pt/awards";
 import addons from "./pt/addons";
 import extra from "./pt/extra";
 import manga from "./pt/manga";
+import controllers from "./pt/controllers";
 const pt: Record<string, string> = {
   ...chrome,
   ...common,
@@ -27,6 +31,9 @@ const pt: Record<string, string> = {
   ...player,
   ...live,
   ...settings,
+  ...settingsFill,
+  ...profileFill,
+  ...appFill,
   ...library,
   ...sync,
   ...lists,
@@ -41,6 +48,7 @@ const pt: Record<string, string> = {
   ...addons,
   ...extra,
   ...manga,
+  ...controllers,
 };
 
 export default pt;

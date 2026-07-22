@@ -4,8 +4,10 @@ import { ShareModal } from "./share-modal";
 import { countryFlagSrc } from "@/components/flag";
 import { acceptFriend, removeFriend, sendFriendRequest } from "@/lib/social/friends";
 import { PRESENCE_META, useMyPresence } from "@/lib/social/presence";
+import { useT } from "@/lib/i18n";
 import { countryName } from "./flags";
 import { saveSlogan } from "./profile-api";
+import { orderShownBadges } from "./badge-catalog";
 import { Avatar, compactNumber, FeaturedBadge, StatPill, VerifiedCheck } from "./profile-bits";
 import { StatusBubble } from "./status-bubble";
 import type { ProfileSummary } from "./profile-types";
@@ -20,6 +22,7 @@ export function ProfileHero({
   watchedOverride,
   badges,
   userFont,
+  hideBanner,
   onEdit,
   onPatch,
 }: {
@@ -30,45 +33,51 @@ export function ProfileHero({
   watchedOverride?: number;
   badges?: HeroBadge[];
   userFont?: string;
+  hideBanner?: boolean;
   onEdit?: () => void;
   onPatch?: (next: ProfileSummary) => void;
 }) {
+  const t = useT();
   const nameFont = userFont ? { fontFamily: `"${userFont}", var(--font-display)` } : undefined;
-  const nameBadges = (badges ?? []).filter((b) => b.iconUrl && b.name.toLowerCase() !== "verified").slice(0, 6);
+  const nameBadges = orderShownBadges(badges ?? [], p.shownBadges).filter((b) => b.iconUrl).slice(0, 6);
   const [sharing, setSharing] = useState(false);
+  const shareUrl = `https://harbor.site/u/${p.customUrl || p.handle}`;
   const myStatus = useMyPresence();
   const meta = PRESENCE_META[myStatus];
   const dotClass = p.isOwner ? meta.dot : p.online ? "bg-success" : "bg-ink-subtle";
   const presenceLabel = p.isOwner
     ? myStatus === "online"
-      ? "Online now"
+      ? t("Online now")
       : meta.label
     : p.online
-      ? "Online now"
-      : "Offline";
+      ? t("Online now")
+      : t("Offline");
   const presenceText = p.isOwner ? meta.text : p.online ? "text-success" : "";
   return (
     <header className="relative w-full overflow-hidden">
       <div className="relative h-48 w-full sm:h-60">
-        {p.bannerUrl ? (
-          <img src={p.bannerUrl} alt="" className="h-full w-full object-cover" draggable={false} />
-        ) : (
+        {!hideBanner &&
+          (p.bannerUrl ? (
+            <img src={p.bannerUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+          ) : (
+            <div
+              className="h-full w-full"
+              style={{ background: "linear-gradient(135deg, var(--color-elevated), var(--color-surface) 55%, var(--color-canvas))" }}
+            />
+          ))}
+        {!hideBanner && (
           <div
-            className="h-full w-full"
-            style={{ background: "linear-gradient(135deg, var(--color-elevated), var(--color-surface) 55%, var(--color-canvas))" }}
+            aria-hidden
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(to bottom, transparent 28%, var(--color-canvas))" }}
           />
         )}
-        <div
-          aria-hidden
-          className="absolute inset-0"
-          style={{ background: "linear-gradient(to bottom, transparent 28%, var(--color-canvas))" }}
-        />
-        {p.isOwner && !p.bannerUrl && onEdit && (
+        {p.isOwner && !p.bannerUrl && !hideBanner && onEdit && (
           <button
             onClick={onEdit}
             className="absolute end-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-elevated/70 px-3 py-1.5 text-[12px] font-medium text-ink ring-1 ring-edge-soft backdrop-blur transition-colors hover:bg-elevated"
           >
-            <ImagePlus size={14} /> Add background
+            <ImagePlus size={14} /> {t("Add background")}
           </button>
         )}
       </div>
@@ -136,8 +145,8 @@ export function ProfileHero({
                 <span className="truncate text-[12.5px] text-ink-muted">
                   {p.watching.kind === "party" ? (
                     <>
-                      In a watch party
-                      {p.watching.partySize ? ` · ${p.watching.partySize} aboard` : ""}
+                      {t("In a watch party")}
+                      {p.watching.partySize ? ` · ${t("{count} aboard", { count: p.watching.partySize })}` : ""}
                       {p.watching.title ? (
                         <>
                           {" · "}
@@ -147,8 +156,8 @@ export function ProfileHero({
                     </>
                   ) : (
                     <>
-                      {p.watching.paused ? "Paused on " : "Watching "}
-                      <span className="text-ink">{p.watching.title ?? "something"}</span>
+                      {p.watching.paused ? t("Paused on ") : t("Watching ")}
+                      <span className="text-ink">{p.watching.title ?? t("something")}</span>
                       {p.watching.sub ? ` · ${p.watching.sub}` : ""}
                     </>
                   )}
@@ -163,13 +172,13 @@ export function ProfileHero({
                   onClick={() => setSharing(true)}
                   className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-surface px-4 text-[14px] font-medium text-ink ring-1 ring-edge transition-colors hover:bg-raised"
                 >
-                  <Share2 size={18} /> Share
+                  <Share2 size={18} /> {t("Share")}
                 </button>
                 <button
                   onClick={onEdit}
                   className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-surface px-4 text-[14px] font-medium text-ink ring-1 ring-edge transition-colors hover:bg-raised"
                 >
-                  <Settings2 size={18} /> Edit profile
+                  <Settings2 size={18} /> {t("Edit profile")}
                 </button>
               </>
             ) : (
@@ -183,13 +192,25 @@ export function ProfileHero({
             )}
           </div>
         </div>
-        {sharing && <ShareModal summary={p} onClose={() => setSharing(false)} />}
+        {sharing && (
+          <ShareModal
+            target={{
+              heading: t("Share profile"),
+              linkLabel: t("Profile link"),
+              url: shareUrl,
+              cardUrl: `${shareUrl}/card.png`,
+              text: t("{name} on Harbor", { name: p.alias }),
+              name: p.alias,
+            }}
+            onClose={() => setSharing(false)}
+          />
+        )}
 
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatPill value={compactNumber(watchedOverride ?? p.counts.watched)} label="Watched" />
-          <StatPill value={compactNumber(mangaReadOverride ?? (p.counts as { mangaRead?: number }).mangaRead ?? 0)} label="Read" />
-          <StatPill value={compactNumber(p.counts.friends)} label="Friends" />
-          <StatPill value={compactNumber(p.counts.badges)} label="Badges" />
+          <StatPill value={compactNumber(watchedOverride ?? p.counts.watched)} label={t("Watched")} />
+          <StatPill value={compactNumber(mangaReadOverride ?? (p.counts as { mangaRead?: number }).mangaRead ?? 0)} label={t("Read")} />
+          <StatPill value={compactNumber(p.counts.friends)} label={t("Friends")} />
+          <StatPill value={compactNumber(p.counts.badges)} label={t("Badges")} />
         </div>
       </div>
     </header>
@@ -221,6 +242,7 @@ function FriendButton({
   initial: FriendRel;
   edgeId?: string;
 }) {
+  const t = useT();
   const [rel, setRel] = useState<FriendRel>(initial);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(false);
@@ -259,7 +281,7 @@ function FriendButton({
         ) : (
           <Check size={18} strokeWidth={2.6} />
         )}
-        {busy ? "Removing..." : hover ? "Remove friend" : "Friends"}
+        {busy ? t("Removing...") : hover ? t("Remove friend") : t("Friends")}
       </button>
     );
   }
@@ -272,7 +294,7 @@ function FriendButton({
         className={`${FRIEND_BTN} bg-ink text-canvas hover:opacity-90`}
       >
         {busy ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} strokeWidth={2.6} />}
-        {busy ? "Accepting..." : "Accept request"}
+        {busy ? t("Accepting...") : t("Accept request")}
       </button>
     );
   }
@@ -293,7 +315,7 @@ function FriendButton({
         ) : (
           <Check size={18} strokeWidth={2.6} />
         )}
-        {busy ? "Canceling..." : hover ? "Cancel request" : "Requested"}
+        {busy ? t("Canceling...") : hover ? t("Cancel request") : t("Requested")}
       </button>
     );
   }
@@ -305,7 +327,7 @@ function FriendButton({
       className={`${FRIEND_BTN} ${error ? "bg-surface text-ink ring-1 ring-edge" : "bg-ink text-canvas hover:opacity-90"}`}
     >
       {busy ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />}
-      {busy ? "Sending..." : error ? "Try again" : "Add friend"}
+      {busy ? t("Sending...") : error ? t("Try again") : t("Add friend")}
     </button>
   );
 }

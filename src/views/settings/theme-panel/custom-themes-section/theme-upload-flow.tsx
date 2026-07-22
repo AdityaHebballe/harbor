@@ -6,6 +6,7 @@ import { currentAuthor, subscribeAuthor, type Author } from "@/lib/theme-auth";
 import { recordUpload, uploadTheme } from "@/lib/theme-store";
 import { CheatSheet } from "../theme-studio/cheat-sheet";
 import { AuthorAccountPanel } from "./author-account-panel";
+import { AuthorIdentity } from "./author-identity";
 import { CoverCropper } from "./theme-upload/cover-cropper";
 import { ListingPreview } from "./theme-upload/listing-preview";
 import { scaleToBlob } from "./theme-upload/upload-utils";
@@ -160,7 +161,7 @@ export function ThemeUploadFlow({ onClose }: { onClose: () => void }) {
                 {step === 1 && <CoverCropper onChange={setCoverBlob} />}
                 {step === 2 && <ShotsStep shots={shots} onAdd={addShots} onRemove={removeShot} />}
                 {step === 3 && (
-                  <DetailsStep name={name} author={author} blurb={blurb} onName={setName} onAuthor={setAuthor} onBlurb={setBlurb} />
+                  <DetailsStep name={name} account={account} blurb={blurb} onName={setName} onBlurb={setBlurb} />
                 )}
               </div>
               <div className="hidden lg:block">
@@ -309,29 +310,25 @@ function ShotsStep({ shots, onAdd, onRemove }: { shots: { url: string }[]; onAdd
 
 function DetailsStep({
   name,
-  author,
+  account,
   blurb,
   onName,
-  onAuthor,
   onBlurb,
 }: {
   name: string;
-  author: string;
+  account: Author;
   blurb: string;
   onName: (v: string) => void;
-  onAuthor: (v: string) => void;
   onBlurb: (v: string) => void;
 }) {
   return (
     <div className="flex max-w-[460px] flex-col gap-5">
       <Field label="Theme name">
-        <input value={name} onChange={(e) => onName(e.target.value)} maxLength={60} className="h-11 rounded-xl border border-edge-soft bg-elevated/40 px-3.5 text-[14px] text-ink focus:border-edge focus:outline-none" />
+        <input value={name} onChange={(e) => onName(e.target.value)} maxLength={60} className="h-11 rounded-xl bg-elevated/40 px-3.5 text-[14px] text-ink ring-1 ring-edge-soft focus:outline-none focus:ring-edge" />
       </Field>
-      <Field label="Your name" hint="Shown as the author. Remembered for next time.">
-        <input value={author} onChange={(e) => onAuthor(e.target.value)} maxLength={60} placeholder="Anonymous" className="h-11 rounded-xl border border-edge-soft bg-elevated/40 px-3.5 text-[14px] text-ink placeholder:text-ink-subtle focus:border-edge focus:outline-none" />
-      </Field>
+      <AuthorIdentity account={account} />
       <Field label="Tagline" hint="One line shown under the name.">
-        <textarea value={blurb} onChange={(e) => onBlurb(e.target.value)} maxLength={160} rows={2} className="resize-none rounded-xl border border-edge-soft bg-elevated/40 px-3.5 py-2.5 text-[14px] text-ink placeholder:text-ink-subtle focus:border-edge focus:outline-none" placeholder="A short, punchy description" />
+        <textarea value={blurb} onChange={(e) => onBlurb(e.target.value)} maxLength={160} rows={2} className="resize-none rounded-xl bg-elevated/40 px-3.5 py-2.5 text-[14px] text-ink ring-1 ring-edge-soft placeholder:text-ink-subtle focus:outline-none focus:ring-edge" placeholder="A short, punchy description" />
       </Field>
     </div>
   );

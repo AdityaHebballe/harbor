@@ -30,6 +30,7 @@ export type AutoSyncHandle = {
   revert: () => void;
   retry: () => void;
   run: () => void;
+  stop: () => void;
   feedback: (good: boolean) => void;
 };
 
@@ -44,6 +45,10 @@ const RATIO_EPS = 0.003;
 const DRIFT_TICK_MS = 4000;
 const SWAP_AUTO_APPLY = false;
 
+function isSyncedTrack(t: { title?: string } | null | undefined): boolean {
+  return /^Synced \((?:SRT|VTT)\)/.test(t?.title ?? "");
+}
+
 export function useAutoSync(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
   src: PlayerSrc;
@@ -56,6 +61,7 @@ export function useAutoSync(params: {
   const [offer, setOffer] = useState<PipelineOutcome | null>(null);
 
   const doneKeyRef = useRef<string | null>(null);
+  const firedRef = useRef<{ url: string; langs: Set<string> }>({ url: "", langs: new Set() });
   const appliedRef = useRef<AppliedState>({ transform: null, originalTrackId: null, subDelayBefore: 0 });
   const driftRef = useRef<DriftMonitor | null>(null);
   const driftTimerRef = useRef<number | null>(null);
@@ -75,12 +81,14 @@ export function useAutoSync(params: {
   flagsRef.current = settings as AutoSyncFlags;
 
   const selected = snap.subtitleTracks.find((t) => t.selected) ?? null;
+  const selectedSynced = isSyncedTrack(selected);
   const ready =
     engine === "mpv" &&
     settings.subtitleAutoSync === true &&
     snap.durationSec >= MIN_DURATION_SEC &&
-    selected?.external === true;
-  const runKey = ready && selected ? `${src.url}|${selected.id}` : null;
+    selected?.external === true &&
+    !selectedSynced;
+  const runKey = selectedSynced ? doneKeyRef.current : ready && selected ? `${src.url}|${selected.id}` : null;
 
   const stopDrift = useCallback(() => {
     if (driftTimerRef.current !== null) {
@@ -127,6 +135,9 @@ export function useAutoSync(params: {
     (o: PipelineOutcome, cues: SubCue[], fmt: SubFmt, cancelled: { current: boolean }) => {
       if (cancelled.current) return;
       const dec = o.decision.decision;
+      dwarn(
+        `[auto-sync] decision=${dec} reason="${o.decision.reason}" tiers=[${o.tiersRun.join(",")}] bestEffort=${o.bestEffort ?? false}`,
+      );
       if (dec === "refuse") {
         if (!appliedRef.current.transform) setStatus("declined");
         return;
@@ -158,16 +169,10 @@ export function useAutoSync(params: {
       const activeSnap = liveSnapRef.current;
       const activeSelected = activeSnap.subtitleTracks.find((t) => t.selected) ?? null;
       if (engine !== "mpv" || activeSnap.durationSec < MIN_DURATION_SEC) return null;
-      if (!activeSelected || activeSelected.external !== true) return null;
+      if (!activeSelected || activeSelected.external !== true || isSyncedTrack(activeSelected)) return null;
 
       const key = `${active.url}|${activeSelected.id}`;
-      if (doneKeyRef.current === key) {
-        if (!force) return null;
-        if (retryRef.current) {
-          retryRef.current();
-          return null;
-        }
-      }
+      if (!force && doneKeyRef.current === key) return null;
 
       const cls = classifyTorrentSource(active.url, {
         infoHash: active.streamRef?.infoHash ?? null,
@@ -234,7 +239,7 @@ export function useAutoSync(params: {
               applyAndCapture(outcome);
             };
             retryRef.current = () => void runDirect(true);
-            await runDirect(false);
+            await runDirect(force);
           }
         } catch (e) {
           dwarn("[auto-sync] failed", e);
@@ -256,9 +261,21 @@ export function useAutoSync(params: {
     [engine, bridgeRef, handleOutcome, stopDrift],
   );
 
-  const selKey = selected ? `${src.url}|${selected.id}` : null;
+  const selKey = selectedSynced ? doneKeyRef.current : selected ? `${src.url}|${selected.id}` : null;
   useEffect(() => {
-    if (runKey) return beginRun(false) ?? undefined;
+    if (!runKey) return () => activeDisposeRef.current?.();
+    const snapSel = liveSnapRef.current.subtitleTracks.find((t) => t.selected) ?? null;
+    const url = srcRef.current.url;
+    const lang = snapSel?.lang ?? "";
+    const fired = firedRef.current;
+    if (fired.url !== url) {
+      fired.url = url;
+      fired.langs = new Set();
+    }
+    if (!fired.langs.has(lang)) {
+      fired.langs.add(lang);
+      return beginRun(false) ?? undefined;
+    }
     return () => activeDisposeRef.current?.();
   }, [selKey, runKey, beginRun]);
 
@@ -285,6 +302,11 @@ export function useAutoSync(params: {
   const run = useCallback(() => {
     beginRun(true);
   }, [beginRun]);
+
+  const stop = useCallback(() => {
+    activeDisposeRef.current?.();
+    revert();
+  }, [revert]);
 
   const feedback = useCallback((good: boolean) => {
     const s = settingsRef.current;
@@ -317,7 +339,7 @@ export function useAutoSync(params: {
     });
   }, [offer, bridgeRef, applyTransform, startDrift]);
 
-  return { status, offer, applyOffer, revert, retry, run, feedback };
+  return { status, offer, applyOffer, revert, retry, run, stop, feedback };
 }
 
 async function writeSyncedTrack(b: PlayerBridge, text: string, fmt: SubFmt): Promise<void> {

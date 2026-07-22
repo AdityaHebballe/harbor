@@ -38,27 +38,33 @@ function buildRails(groups: AnilistListGroup[]): MangaListRail[] {
   return out;
 }
 
-export function useAnilistMangaRails(): MangaListRail[] {
+export function useAnilistMangaRails(): { rails: MangaListRail[]; loading: boolean } {
   const { isConnected, session } = useAnilist();
   const [rails, setRails] = useState<MangaListRail[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isConnected || !session) {
       setRails([]);
+      setLoading(false);
       return;
     }
     let cancelled = false;
     const userId = session.userId;
     const seed = readCachedMangaCollection(userId);
     if (seed) setRails(buildRails(seed));
+    setLoading(!seed);
     (async () => {
       const groups = await fetchMangaListCollection(userId);
-      if (!cancelled) setRails(buildRails(groups));
+      if (!cancelled) {
+        setRails(buildRails(groups));
+        setLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
     };
   }, [isConnected, session?.userId]);
 
-  return rails;
+  return { rails, loading };
 }

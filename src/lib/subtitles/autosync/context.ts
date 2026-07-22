@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Settings } from "@/lib/settings/types";
+import { dinfo, dwarn } from "@/lib/debug";
 import { estimateSubtitleOffset } from "@/lib/subtitles/auto-sync";
 
 import type {
@@ -25,6 +26,20 @@ const PIECE_OFFSETS = [-2, 0, 2];
 const NEUTRAL_QUALITY: AlignmentQuality = { ncc: 0.5, coverage: 0.5, z: 0 };
 const TORRENT_BASELINE: AlignmentQuality = { ncc: 0.85, coverage: 0.8, z: 6 };
 const CANDIDATE_COVERAGE = 0.8;
+
+const SCORE_TIMEOUT_MS = 4000;
+const VAD_TIMEOUT_MS = 12000;
+const TORRENT_SCORE_TIMEOUT_MS = 6000;
+const TORRENT_VAD_TIMEOUT_MS = 15000;
+const HASH_TIMEOUT_MS = 4000;
+const CROWD_TIMEOUT_MS = 3000;
+
+function bounded<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p.catch(() => fallback),
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ]);
+}
 
 export type AutoSyncExtraPorts = {
   measureQuality?: TierPorts["measureQuality"];
@@ -107,14 +122,19 @@ async function directVad(ctx: PipelineContext): Promise<VadResult | null> {
       durationSec: ctx.durationSec,
       infoHash: null,
     });
-    if (!out) return null;
+    if (!out) {
+      dinfo("[autosync/vad] audio analyzed, no confident offset");
+      return null;
+    }
+    dinfo(`[autosync/vad] offset=${out.offsetSec.toFixed(2)}s ratio=${out.ratio.toFixed(4)} conf=${out.confidence.toFixed(2)}`);
     const quality: AlignmentQuality = {
       ncc: out.confidence,
       coverage: CANDIDATE_COVERAGE,
       z: out.confidence >= 0.55 ? 8 : 0,
     };
     return { transform: { kind: "affine", offsetSec: out.offsetSec, ratio: out.ratio }, rawScore: out.confidence, quality };
-  } catch {
+  } catch (e) {
+    dwarn("[autosync/vad] audio engine unavailable", String(e));
     return null;
   }
 }
@@ -229,8 +249,19 @@ function flattenAsr(out: AsrWindowRaw[] | null): AsrPhrase[] {
   return segs;
 }
 
+async function ensureAsrModel(): Promise<string | null> {
+  try {
+    return await invoke<string | null>("asr_ensure_model");
+  } catch (e) {
+    dwarn("[autosync/asr] model unavailable", String(e));
+    return null;
+  }
+}
+
 function makeAsrTranscribePort(): NonNullable<TierPorts["asrTranscribe"]> {
   return async (ctx, windows) => {
+    const modelPath = await ensureAsrModel();
+    if (!modelPath) return [];
     const spans: AsrWindowSpec[] = Array.isArray(windows)
       ? windows.filter((w) => w != null && Number.isFinite(w.lenSec))
       : [];
@@ -244,7 +275,7 @@ function makeAsrTranscribePort(): NonNullable<TierPorts["asrTranscribe"]> {
         subLang: ctx.languages[0] || null,
         probeCount,
         windowSec,
-        modelPath: null,
+        modelPath,
         mapSpec: null,
       });
       return flattenAsr(out);
@@ -285,29 +316,43 @@ export function buildTierPorts(
   const getPositionSec = opts.torrent?.getPositionSec;
   const positionOf = (): number | null => getPositionSec?.() ?? null;
 
+  const scoreTimeout = routeTorrent ? TORRENT_SCORE_TIMEOUT_MS : SCORE_TIMEOUT_MS;
+  const scoreFallback = routeTorrent ? TORRENT_BASELINE : NEUTRAL_QUALITY;
   const measureQuality: TierPorts["measureQuality"] = (mctx, transform) =>
-    routeTorrent
-      ? torrentScore(mctx, transform, infoHash, fileIdx, positionOf())
-      : directScore(mctx, transform);
+    bounded(
+      routeTorrent
+        ? torrentScore(mctx, transform, infoHash, fileIdx, positionOf())
+        : directScore(mctx, transform),
+      scoreTimeout,
+      scoreFallback,
+    );
 
   const vadAffine: NonNullable<TierPorts["vadAffine"]> = (mctx, win) =>
-    routeTorrent
-      ? torrentVad(mctx, win.lateWindow, infoHash, fileIdx, positionOf())
-      : directVad(mctx);
+    bounded(
+      routeTorrent
+        ? torrentVad(mctx, win.lateWindow, infoHash, fileIdx, positionOf())
+        : directVad(mctx),
+      routeTorrent ? TORRENT_VAD_TIMEOUT_MS : VAD_TIMEOUT_MS,
+      null,
+    );
 
-  const effectiveMeasure = extra.measureQuality ?? measureQuality;
+  const rawMeasure = extra.measureQuality;
+  const effectiveMeasure: TierPorts["measureQuality"] = rawMeasure
+    ? (mctx, transform) => bounded(rawMeasure(mctx, transform), scoreTimeout, scoreFallback)
+    : measureQuality;
   const ports: TierPorts = {
     measureQuality: effectiveMeasure,
     vadAffine,
   };
   if (os) {
-    ports.hashExact = hashExactPort(os);
+    const rawHash = hashExactPort(os);
+    ports.hashExact = (hctx) => bounded(rawHash(hctx), HASH_TIMEOUT_MS, null);
     ports.resolveSwapCues = (_ctx, swap) => resolveSwapCues(swap, os);
   }
   if (flags.subtitleAutoSyncCrowd !== false) {
     const crowdCfg = crowdConfigFromSettings(settings);
     const crowdPort = extra.crowdDb ?? (crowdCfg ? createCrowdDbPort(crowdCfg) : undefined);
-    if (crowdPort) ports.crowdDb = crowdPort;
+    if (crowdPort) ports.crowdDb = (cctx) => bounded(crowdPort(cctx), CROWD_TIMEOUT_MS, null);
   }
   const piecewise = extra.vadPiecewise ?? (routeTorrent ? undefined : makePiecewisePort(effectiveMeasure));
   if (piecewise) ports.vadPiecewise = piecewise;

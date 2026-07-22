@@ -12,7 +12,7 @@ export function ActiveBanner({
 }) {
   if (!theme) {
     return (
-      <div className="flex items-center justify-between rounded-2xl border border-edge-soft bg-canvas/40 px-5 py-4">
+      <div className="flex items-center justify-between rounded-2xl bg-canvas/40 px-5 py-4 ring-1 ring-edge-soft">
         <div>
           <span className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-ink-subtle">
             Now using
@@ -47,7 +47,7 @@ export function ActiveBanner({
   const exportBg = isLight ? "#0a0a0c" : "#ffffff";
   const exportFg = isLight ? "#ffffff" : "#0a0a0c";
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-accent/40 shadow-[0_18px_40px_-22px_rgba(0,0,0,0.45)]">
+    <div className="relative overflow-hidden rounded-2xl shadow-[0_18px_40px_-22px_rgba(0,0,0,0.45)] ring-1 ring-accent/40">
       <div
         className="pointer-events-none absolute inset-0"
         aria-hidden

@@ -29,7 +29,8 @@ export function MangaContinue({
       <div className="relative">
         <div
           ref={scrollRef}
-          className="flex gap-3.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex gap-3.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [overflow-anchor:none] [overscroll-behavior-x:contain]"
+          style={{ contain: "layout style", transform: "translateZ(0)" }}
         >
           {items.map((entry) => (
             <ContinueCard

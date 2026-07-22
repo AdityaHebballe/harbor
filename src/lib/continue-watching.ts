@@ -3,6 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
 import { listLocalCw, subscribeLocalCw } from "@/lib/local-cw";
 import {
+  ANIME_CLOUD_ID,
   cwSortKey,
   episodeFromVideoId,
   isCwMember,
@@ -103,7 +104,7 @@ export function useContinueWatching(excludeId?: string, limit = 12): CwCard[] {
 
   return useMemo(() => {
     void localVersion;
-    const base = cwPerProfile ? [] : items;
+    const base = cwPerProfile ? [] : items.filter((i) => !ANIME_CLOUD_ID.test(i._id));
     const merged = [...base, ...listLocalCw().map(localToLibraryItem)]
       .filter((i) => (i.type as string) !== "other" && !i._id.startsWith("iptv:") && isCwMember(i))
       .map((i) => ({ i, k: cwSortKey(i) }))

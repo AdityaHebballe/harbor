@@ -13,7 +13,8 @@ import {
   Tv,
 } from "lucide-react";
 import { t, useT } from "@/lib/i18n";
-import { languageFlag, languageName, type MangaChapter } from "@/lib/manga/model";
+import { Flag, flagSrc } from "@/components/flag";
+import { languageName, type MangaChapter } from "@/lib/manga/model";
 import { useMangaProgressEntry, type MangaProgressEntry } from "@/lib/manga-progress";
 import {
   downloadAllChapters,
@@ -54,21 +55,15 @@ function chapterLabel(chapter: string | null): string {
   return chapter == null ? t("Oneshot") : t("Chapter {n}", { n: chapter });
 }
 
-function flagToCode(flag: string): string {
-  return Array.from(flag)
-    .map((ch) => ch.codePointAt(0) ?? 0)
-    .filter((cp) => cp >= 0x1f1e6 && cp <= 0x1f1ff)
-    .map((cp) => String.fromCharCode(cp - 0x1f1e6 + 65))
-    .join("");
+function flagLanguageName(code: string): string {
+  const name = languageName(code);
+  if (flagSrc(name)) return name;
+  const base = code.split(/[-_]/)[0];
+  return languageName(base);
 }
 
 function LangFlag({ code }: { code: string }) {
-  const cc = flagToCode(languageFlag(code)) || code.replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
-  return (
-    <span className="grid h-5 min-w-[26px] shrink-0 place-items-center rounded-[5px] bg-elevated px-1 text-[10px] font-bold tracking-wide text-ink-muted ring-1 ring-edge-soft">
-      {cc}
-    </span>
-  );
+  return <Flag language={flagLanguageName(code)} size="sm" showLabel={false} />;
 }
 
 function chapterNum(c: MangaChapter, index: number): number {

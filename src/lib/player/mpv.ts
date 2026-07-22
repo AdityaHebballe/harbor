@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { subtitleDownloadArgs } from "./subtitle-load";
 import { mpvFailureSnapshot } from "./mpv-failure";
-import { isMacDesktop, isWindowsDesktop } from "@/lib/platform";
+import { isLinuxDesktop, isMacDesktop, isWindowsDesktop } from "@/lib/platform";
 import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -68,6 +68,7 @@ export type MpvOptions = {
   anime4k: boolean;
   hdrToSdr: boolean;
   rtxHdr?: boolean;
+  rtxVsr?: boolean;
   embed?: boolean;
   anime4kShaders?: string[];
   d3d11Flip?: boolean;
@@ -120,7 +121,10 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
   let mpvStarted = false;
   let suppressEndFileUntil = 0;
   let svpFilterFailed = false;
-  const urlByExternalFilename = new Map<string, string>();
+  const urlByExternalFilename = new Map<
+    string,
+    { url: string; release?: string; provider?: string; matchScore?: number }
+  >();
 
   const handleSvpFilterFailure = () => {
     if (svpFilterFailed) return;
@@ -197,6 +201,8 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
           if (hearingImpaired) tags.push("SDH");
           if (external) tags.push("External");
           const label = tags.length > 0 ? `${baseLabel} · ${tags.join(" · ")}` : baseLabel;
+          const extMeta =
+            external && externalFilename ? urlByExternalFilename.get(externalFilename) : undefined;
           const info: TrackInfo = {
             id,
             label,
@@ -212,7 +218,10 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             forced,
             default: isDefault,
             hearingImpaired,
-            url: external && externalFilename ? (urlByExternalFilename.get(externalFilename) ?? undefined) : undefined,
+            url: external && externalFilename ? extMeta?.url : undefined,
+            release: extMeta?.release,
+            provider: extMeta?.provider,
+            matchScore: extMeta?.matchScore,
           };
           if (type === "audio") audio.push(info);
           else if (type === "sub") subs.push(info);
@@ -365,6 +374,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             anime4k: opts.anime4k,
             hdrToSdr,
             rtxHdr: opts.rtxHdr === true,
+            rtxVsr: opts.rtxVsr === true,
             embed: opts.embed === true,
             anime4kShaders: opts.anime4kShaders ?? [],
             d3d11Flip: opts.d3d11Flip === true,
@@ -378,8 +388,9 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         if (opts.embed) {
           await invoke("mpv_set_property", { name: "sub-visibility", value: false }).catch(() => {});
         }
-        if (opts.embed && opts.getEmbedRect && geomTimer == null) {
+        if (opts.embed && opts.getEmbedRect && geomKickHandler == null && !isLinuxDesktop()) {
           let lastRect: MpvRect | null = null;
+          let geomDebounce: number | null = null;
           const tick = async () => {
             try {
               const r = await opts.getEmbedRect!();
@@ -400,16 +411,9 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
             } catch {}
           };
           tick();
-          geomTimer = window.setInterval(() => {
-            void tick();
-          }, 250);
           geomKickHandler = () => {
-            void tick();
-            window.setTimeout(() => void tick(), 60);
-            window.setTimeout(() => void tick(), 200);
-            window.setTimeout(() => void tick(), 500);
-            window.setTimeout(() => void tick(), 1000);
-            window.setTimeout(() => void tick(), 1800);
+            if (geomDebounce != null) window.clearTimeout(geomDebounce);
+            geomDebounce = window.setTimeout(() => void tick(), 40);
           };
           geomForceHandler = () => {
             lastRect = null;
@@ -515,7 +519,17 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
     },
     setAnime4kShaders(shaders) {
       const sep = isWindowsDesktop() ? ";" : ":";
-      invoke("mpv_set_property", { name: "glsl-shaders", value: shaders.filter(Boolean).join(sep) }).catch(() => {});
+      const value = shaders.filter(Boolean).map((s) => s.replace(/\\/g, "/")).join(sep);
+      invoke("mpv_set_property", { name: "glsl-shaders", value }).catch((e) =>
+        console.warn("[shaders] glsl-shaders apply failed", e),
+      );
+    },
+    setShaderProps(props) {
+      for (const [name, value] of Object.entries(props)) {
+        invoke("mpv_set_property", { name, value }).catch((e) =>
+          console.warn("[shaders] companion prop failed", name, e),
+        );
+      }
     },
     async addSubtitle(url, lang, title, select, metadata): Promise<boolean> {
       let mpvUrl = url;
@@ -529,7 +543,12 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
           console.warn("[mpv] sub_download failed, falling back to URL", e);
         }
       }
-      urlByExternalFilename.set(mpvUrl, url);
+      urlByExternalFilename.set(mpvUrl, {
+        url,
+        release: metadata?.release,
+        provider: metadata?.provider,
+        matchScore: metadata?.matchScore,
+      });
       try {
         await invoke("mpv_sub_add", {
           url: mpvUrl,

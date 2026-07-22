@@ -353,7 +353,7 @@ export function ThemeStudio({ seed, onClose }: { seed?: ThemePreset; onClose: ()
             type="button"
             onClick={onExport}
             disabled={!canSave}
-            className="flex h-12 flex-1 items-center justify-center rounded-lg border border-edge-soft text-[15px] font-semibold text-ink-muted transition-colors hover:border-edge hover:bg-white/[0.03] hover:text-ink disabled:opacity-40"
+            className="flex h-12 flex-1 items-center justify-center rounded-lg text-[15px] font-semibold text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-elevated hover:text-ink hover:ring-edge disabled:opacity-40"
           >
             Export
           </button>
@@ -361,8 +361,7 @@ export function ThemeStudio({ seed, onClose }: { seed?: ThemePreset; onClose: ()
             type="button"
             onClick={onSave}
             disabled={!canSave}
-            className="flex h-12 flex-[1.6] items-center justify-center rounded-lg text-[15px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ background: "var(--color-accent)" }}
+            className="flex h-12 flex-[1.6] items-center justify-center rounded-lg bg-ink text-[15px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Save theme
           </button>
@@ -374,7 +373,7 @@ export function ThemeStudio({ seed, onClose }: { seed?: ThemePreset; onClose: ()
           type="button"
           onClick={() => setInspectorHidden(false)}
           style={STABLE_CHROME}
-          className="pointer-events-auto fixed bottom-6 end-6 z-[211] flex h-12 items-center gap-2 rounded-full border border-edge bg-elevated px-5 text-[13px] font-semibold text-ink shadow-[0_18px_40px_-16px_rgba(0,0,0,0.7)] transition-transform hover:-translate-y-0.5"
+          className="pointer-events-auto fixed bottom-6 end-6 z-[211] flex h-12 items-center gap-2 rounded-full ring-1 ring-edge bg-elevated px-5 text-[13px] font-semibold text-ink shadow-[0_18px_40px_-16px_rgba(0,0,0,0.7)] transition-transform hover:-translate-y-0.5"
         >
           <SlidersHorizontal size={15} strokeWidth={2.2} />
           Edit theme
@@ -406,7 +405,7 @@ export function ThemeStudio({ seed, onClose }: { seed?: ThemePreset; onClose: ()
           <div
             style={STABLE_CHROME}
             onClick={(e) => e.stopPropagation()}
-            className="animate-in zoom-in-95 fade-in w-[340px] max-w-full overflow-hidden rounded-2xl border border-edge bg-elevated shadow-[0_30px_80px_-24px_rgba(0,0,0,0.8)] duration-150"
+            className="animate-in zoom-in-95 fade-in w-[340px] max-w-full overflow-hidden rounded-2xl ring-1 ring-edge bg-elevated shadow-[0_30px_80px_-24px_rgba(0,0,0,0.8)] duration-150"
           >
             <div className="flex flex-col px-6 pb-6 pt-5">
               <h2 className="text-[17px] font-semibold tracking-tight text-ink">
@@ -430,8 +429,7 @@ export function ThemeStudio({ seed, onClose }: { seed?: ThemePreset; onClose: ()
                   type="button"
                   autoFocus
                   onClick={() => setConfirmClose(false)}
-                  className="h-10 rounded-lg px-5 text-[13.5px] font-semibold text-canvas transition-opacity hover:opacity-90"
-                  style={{ background: "var(--color-accent)" }}
+                  className="h-10 rounded-lg bg-ink px-5 text-[13.5px] font-semibold text-canvas transition-opacity hover:opacity-90"
                 >
                   Keep editing
                 </button>

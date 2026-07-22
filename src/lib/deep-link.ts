@@ -2,11 +2,14 @@ import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
 
 const EVENT = "harbor:deeplink-install";
 const OPEN_EVENT = "harbor:deeplink-open";
+const OPEN_LIST_EVENT = "harbor:deeplink-open-list";
 const PROFILE_EDIT_EVENT = "harbor:deeplink-profile-edit";
 
 type DeepLinkDetail = { rawUrl: string };
 type DeepLinkOpen = { type: string; id: string; videoId?: string };
 type DeepLinkOpenDetail = { open: DeepLinkOpen };
+export type DeepLinkList = { handle: string; listId: string };
+type DeepLinkListDetail = { list: DeepLinkList };
 
 let pendingUrl: string | null = null;
 
@@ -49,6 +52,19 @@ export function onDeepLinkOpen(handler: (open: DeepLinkOpen) => void): () => voi
   };
   window.addEventListener(OPEN_EVENT, listener);
   return () => window.removeEventListener(OPEN_EVENT, listener);
+}
+
+export function emitDeepLinkOpenList(list: DeepLinkList): void {
+  window.dispatchEvent(new CustomEvent<DeepLinkListDetail>(OPEN_LIST_EVENT, { detail: { list } }));
+}
+
+export function onDeepLinkOpenList(handler: (list: DeepLinkList) => void): () => void {
+  const listener = (e: Event) => {
+    const ev = e as CustomEvent<DeepLinkListDetail>;
+    if (ev.detail?.list) handler(ev.detail.list);
+  };
+  window.addEventListener(OPEN_LIST_EVENT, listener);
+  return () => window.removeEventListener(OPEN_LIST_EVENT, listener);
 }
 
 export function emitOpenProfileEdit(): void {
@@ -106,6 +122,16 @@ export function parseHarborOpen(url: string): DeepLinkOpen | null {
   return parseDetailPath(url.slice("harbor://".length));
 }
 
+export function parseHarborList(url: string): DeepLinkList | null {
+  if (!url.startsWith("harbor://")) return null;
+  const parts = url.slice("harbor://".length).split("/").filter((p) => p.length > 0);
+  if (parts[0] !== "list" || parts.length < 3) return null;
+  const handle = decodeURIComponent(parts[1]);
+  const listId = decodeURIComponent(parts[2]);
+  if (!handle || !listId) return null;
+  return { handle, listId };
+}
+
 function shouldForward(url: string): boolean {
   if (url.startsWith("harbor://")) return true;
   if (url.startsWith("stremio://")) {
@@ -129,6 +155,11 @@ export async function startDeepLinkBridge(): Promise<() => void> {
           emitDeepLinkOpen(open);
           continue;
         }
+        const list = parseHarborList(u);
+        if (list) {
+          emitDeepLinkOpenList(list);
+          continue;
+        }
         if (isProfileEditUrl(u)) {
           emitOpenProfileEdit();
           continue;
@@ -147,6 +178,11 @@ export async function startDeepLinkBridge(): Promise<() => void> {
           emitDeepLinkOpen(open);
           return;
         }
+        const list = parseHarborList(u);
+        if (list) {
+          emitDeepLinkOpenList(list);
+          return;
+        }
         if (isProfileEditUrl(u)) {
           emitOpenProfileEdit();
           return;
@@ -162,6 +198,11 @@ export async function startDeepLinkBridge(): Promise<() => void> {
       const open = parseStremioOpen(u) || parseHarborOpen(u);
       if (open) {
         emitDeepLinkOpen(open);
+        return;
+      }
+      const list = parseHarborList(u);
+      if (list) {
+        emitDeepLinkOpenList(list);
         return;
       }
       if (isProfileEditUrl(u)) {

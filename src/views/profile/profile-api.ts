@@ -1,5 +1,5 @@
 import { safeFetch } from "@/lib/safe-fetch";
-import { authToken } from "@/lib/theme-auth";
+import { authToken, refreshToken } from "@/lib/theme-auth";
 import type {
   ActivityItem,
   Badge,
@@ -19,7 +19,10 @@ function authHeaders(): Record<string, string> {
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await safeFetch(`${BASE}${path}`, { headers: authHeaders(), signal });
+  let res = await safeFetch(`${BASE}${path}`, { headers: authHeaders(), signal });
+  if (res.status === 401 && (await refreshToken())) {
+    res = await safeFetch(`${BASE}${path}`, { headers: authHeaders(), signal });
+  }
   if (res.status === 404) throw new ProfileNotFound();
   if (!res.ok) throw new ProfileApiError(res.status);
   return (await res.json()) as T;
@@ -73,6 +76,19 @@ export async function deleteComment(handle: string, id: string): Promise<void> {
     { method: "DELETE", headers: authHeaders() },
   );
   if (!res.ok) throw new ProfileApiError(res.status);
+}
+
+export async function setCommentLike(
+  handle: string,
+  id: string,
+  liked: boolean,
+): Promise<{ likeCount: number; liked: boolean }> {
+  const res = await safeFetch(
+    `${BASE}/u/${encodeURIComponent(handle)}/comments/${encodeURIComponent(id)}/like`,
+    { method: liked ? "POST" : "DELETE", headers: authHeaders() },
+  );
+  if (!res.ok) throw new ProfileApiError(res.status);
+  return (await res.json()) as { likeCount: number; liked: boolean };
 }
 
 export async function saveSettings(input: ProfileSettingsInput): Promise<ProfileSummary> {

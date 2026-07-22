@@ -99,6 +99,7 @@ async function getAnimeEpisodes(id: string): Promise<PlayEpisode[] | null> {
         ep.imdbSeason = m.seasonNumber;
       }
       if (ep.imdbEpisode == null && m.episodeNumber != null) ep.imdbEpisode = m.episodeNumber;
+      if (ep.absoluteNumber == null && m.absoluteEpisodeNumber) ep.absoluteNumber = m.absoluteEpisodeNumber;
       if (ep.tvdbEpisodeId == null && m.tvdbId) ep.tvdbEpisodeId = m.tvdbId;
       const air = m.airDateUtc ?? m.airDate;
       if (air && (!ep.airDate || bogusAirdates)) ep.airDate = air;

@@ -1,5 +1,5 @@
 import { AlertCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActiveBanner } from "./custom-themes-section/active-banner";
 import { ExportBlock } from "./custom-themes-section/export-block";
 import { HeroCards } from "./custom-themes-section/hero-cards";
@@ -15,6 +15,8 @@ import {
   type CustomTheme,
 } from "@/lib/custom-themes";
 import { downloadText } from "@/lib/download-text";
+import { consumeThemeLibraryRequest, setThemeLibraryOpen, subscribeThemeLibraryRequest } from "./library-open-store";
+import type { StoreTab } from "./custom-themes-section/community-store/store-tabs";
 import { importForeignTheme } from "@/lib/theme-import";
 import { isHarborStyleName, parseHarborStyle, serializeHarborStyle } from "@/lib/harborstyle";
 import { useSettings } from "@/lib/settings";
@@ -35,9 +37,41 @@ export function CustomThemesSection() {
   const [exportText, setExportText] = useState("");
   const [studioOpen, setStudioOpen] = useState(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [libraryTab, setLibraryTab] = useState<"library" | "community" | "mine">("library");
+  const [libraryStoreTab, setLibraryStoreTab] = useState<StoreTab | undefined>(undefined);
   const [importedNotice, setImportedNotice] = useState<string | null>(null);
 
   useEffect(() => subscribeCustomThemes(() => setThemes(getCustomThemes())), []);
+
+  useEffect(() => {
+    setThemeLibraryOpen(libraryOpen);
+  }, [libraryOpen]);
+  useEffect(() => () => setThemeLibraryOpen(false), []);
+
+  const openLibrary = useCallback((tab: "library" | "community" | "mine", storeTab?: StoreTab) => {
+    setLibraryTab(tab);
+    setLibraryStoreTab(storeTab);
+    setImportedNotice(null);
+    setLibraryOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ tab?: "library" | "community" | "mine"; storeTab?: StoreTab }>).detail;
+      openLibrary(detail?.tab ?? "library", detail?.storeTab);
+    };
+    window.addEventListener("harbor:open-theme-library", onOpen);
+    return () => window.removeEventListener("harbor:open-theme-library", onOpen);
+  }, [openLibrary]);
+
+  useEffect(() => {
+    const apply = () => {
+      const req = consumeThemeLibraryRequest();
+      if (req) openLibrary(req.tab, req.storeTab);
+    };
+    apply();
+    return subscribeThemeLibraryRequest(apply);
+  }, [openLibrary]);
 
   useEffect(() => {
     if (!libraryOpen || studioOpen) return;
@@ -148,6 +182,8 @@ export function CustomThemesSection() {
           onDownload={downloadThemeFile}
           onRemove={remove}
           onClose={() => setLibraryOpen(false)}
+          initialTab={libraryTab}
+          initialStoreTab={libraryStoreTab}
         />
         {exportText && <ExportBlock text={exportText} onClose={() => setExportText("")} />}
       </div>
@@ -167,11 +203,13 @@ export function CustomThemesSection() {
       <HeroCards
         onOpenLibrary={() => {
           setImportedNotice(null);
+          setLibraryTab("library");
           setLibraryOpen(true);
         }}
         onOpenStudio={() => setStudioOpen(true)}
         onImport={pickImportFile}
         libraryCount={entries.length}
+        previewThemes={entries.slice(0, 10).map((e) => e.theme)}
         importedNotice={importedNotice}
       />
 

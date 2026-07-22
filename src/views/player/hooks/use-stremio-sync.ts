@@ -38,14 +38,15 @@ export function useStremioSync(params: {
   const canonicalId = cloudWriteId(src.meta.id, resolvedImdbId, resolvedImdbVerified);
   const watcherProfileId = useProfiles().activeProfile?.id ?? null;
   useEffect(() => {
-    if (!resolutionSettled || !canonicalId) return;
-    recordWatchedBy(canonicalId, watcherProfileId);
-  }, [resolutionSettled, canonicalId, watcherProfileId]);
+    if (!resolutionSettled) return;
+    const watchedId = canonicalId ?? src.meta.id;
+    if (watchedId) recordWatchedBy(watchedId, watcherProfileId);
+  }, [resolutionSettled, canonicalId, src.meta.id, watcherProfileId]);
   useEffect(() => {
-    if (canonicalId && canonicalId.startsWith("tt") && ANIME_SCHEME.test(src.meta.id)) {
-      recordAnimeCwId(canonicalId, src.meta.id);
+    if (ANIME_SCHEME.test(src.meta.id) && resolvedImdbVerified && resolvedImdbId?.startsWith("tt")) {
+      recordAnimeCwId(resolvedImdbId, src.meta.id);
     }
-  }, [canonicalId, src.meta.id]);
+  }, [resolvedImdbId, resolvedImdbVerified, src.meta.id]);
   const sessionStartRef = useRef<number>(Date.now());
   const lastSyncedRef = useRef(0);
   const baseItemRef = useRef<LibraryItem | null>(null);
@@ -254,6 +255,7 @@ export function videoIdFor(s: PlayerSrc, cid: string | null): string | null {
   if (cid.startsWith("tt") && s.episode.imdbSeason != null && s.episode.imdbEpisode != null) {
     return `${cid}:${s.episode.imdbSeason}:${s.episode.imdbEpisode}`;
   }
+  if (cid.startsWith("tt") && threaded && ANIME_SCHEME.test(threaded)) return null;
   return `${cid}:${s.episode.season}:${s.episode.episode}`;
 }
 
@@ -328,7 +330,9 @@ async function writeLibraryItem(
   const durationMs = Math.max(0, Math.floor(snap.durationSec * 1000));
   const watchedRatio = positionSec / Math.max(1, snap.durationSec);
   const isSeries = src.meta.type === "series" || !!src.episode;
-  const videoId = vidOverride ?? videoIdFor(src, canonicalId) ?? canonicalId;
+  const derivedVid = vidOverride ?? videoIdFor(src, canonicalId);
+  if (isSeries && src.episode && !derivedVid) return null;
+  const videoId = derivedVid ?? canonicalId;
   const prevVideoId = typeof baseState.video_id === "string" ? baseState.video_id : null;
   const videoChanged = prevVideoId !== null && prevVideoId !== videoId;
   const prevTimesWatched = typeof baseState.timesWatched === "number" ? baseState.timesWatched : 0;
@@ -339,12 +343,14 @@ async function writeLibraryItem(
   const prevLastVidReleased =
     typeof baseState.lastVidReleased === "string" ? baseState.lastVidReleased : null;
   const prevFlagged = typeof baseState.flaggedWatched === "number" ? baseState.flaggedWatched : 0;
-  const effPrevFlagged = videoChanged ? 0 : prevFlagged;
   const priorDuration = typeof baseState.duration === "number" ? baseState.duration : 0;
   const durationShrunk =
     !src.episode && priorDuration > 0 && durationMs > 0 && durationMs < priorDuration * 0.7;
   const playedReal = snap.status !== "error" && !durationShrunk;
   const nowFlagged = durationMs > 0 && watchedRatio > CREDITS_RATIO && playedReal;
+  const meaningfulResume =
+    playedReal && durationMs > 0 && offsetMs >= 45000 && watchedRatio < CREDITS_RATIO;
+  const effPrevFlagged = videoChanged || meaningfulResume ? 0 : prevFlagged;
   let finaleDone = false;
   if (isTerminal && nowFlagged && isSeries && src.episode) {
     const vids = (src.meta.videos ?? []).filter(
@@ -415,8 +421,11 @@ async function writeLibraryItem(
         bestWatched = queued.watched;
         bestMtime = queued.mtime;
       }
-      if (!isTerminal) {
-        const fresh = await libraryGetOneStrict(authKey, canonicalId).catch(() => null);
+      {
+        const strictGet = libraryGetOneStrict(authKey, canonicalId).catch(() => null);
+        const fresh = isTerminal
+          ? await Promise.race([strictGet, new Promise<null>((r) => setTimeout(() => r(null), 400))])
+          : await strictGet;
         const fw = fresh?.state?.watched;
         if (typeof fw === "string" && fw.length > 0) {
           const fmRaw = (fresh as { _mtime?: unknown } | null)?._mtime;

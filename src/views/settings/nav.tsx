@@ -202,6 +202,16 @@ function IconVideoTune(p: IconProps) {
   );
 }
 
+function IconShaders(p: IconProps) {
+  return (
+    <IconBase {...p}>
+      <path d="M11 3.5L5.5 17H16.5Z" />
+      <path d="M2.5 10.5H8" />
+      <path d="M14 11.5L21.5 9M14 11.5L21.5 12.5M14 11.5L21.5 16" />
+    </IconBase>
+  );
+}
+
 function IconAnime(p: IconProps) {
   return (
     <IconBase {...p}>
@@ -239,6 +249,17 @@ function IconHotkeys(p: IconProps) {
     <IconBase {...p}>
       <rect x="2.5" y="6" width="19" height="12" rx="2" />
       <path d="M6 10h.01M9 10h.01M12 10h.01M15 10h.01M18 10h.01M6 14h12" strokeLinecap="round" />
+    </IconBase>
+  );
+}
+
+function IconController(p: IconProps) {
+  return (
+    <IconBase {...p}>
+      <path d="M8.5 8h7a5 5 0 0 1 4.9 4l1 5a2.2 2.2 0 0 1-4 1.6L15.6 15a2 2 0 0 0-1.6-.8h-4a2 2 0 0 0-1.6.8l-1.8 3.4a2.2 2.2 0 0 1-4-1.6l1-5A5 5 0 0 1 8.5 8z" />
+      <path d="M7.5 11.1v2.4M6.3 12.3h2.4" strokeLinecap="round" />
+      <circle cx="15.4" cy="11.6" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="17.2" cy="13" r="0.9" fill="currentColor" stroke="none" />
     </IconBase>
   );
 }
@@ -537,7 +558,13 @@ const NAV_GROUPS: Array<{ heading: string | null; items: NavItem[] }> = [
         id: "anime",
         label: "Anime tweaks",
         Icon: IconAnime,
-        keywords: ["anime", "anime4k", "anime 4k", "upscale", "upscaling", "shaders", "smooth motion", "motion smoothing", "interpolation", "svp", "smoothvideo", "frame interpolation", "60fps", "48fps", "fluid"],
+        keywords: ["anime", "smooth motion", "motion smoothing", "interpolation", "svp", "smoothvideo", "frame interpolation", "60fps", "48fps", "fluid", "judder"],
+      },
+      {
+        id: "shaders",
+        label: "Shaders",
+        Icon: IconShaders,
+        keywords: ["shader", "shaders", "glsl", "user shader", "mpv shader", "anime4k", "anime 4k", "hdr-toys", "hdr toys", "hdr tone mapping", "tone map", "tonemap", "fsrcnnx", "cas", "contrast adaptive sharpening", "fsr", "fidelityfx", "nis", "nvidia image scaling", "nnedi3", "ravu", "prescaler", "upscale", "upscaling", "sharpen", "download shader", "neural upscale"],
       },
       {
         id: "playerLayout",
@@ -550,6 +577,12 @@ const NAV_GROUPS: Array<{ heading: string | null; items: NavItem[] }> = [
         label: "Hotkeys",
         Icon: IconHotkeys,
         keywords: ["shortcuts", "keys", "keyboard", "bindings"],
+      },
+      {
+        id: "controllers",
+        label: "Controllers",
+        Icon: IconController,
+        keywords: ["controller", "gamepad", "joystick", "joypad", "xbox", "playstation", "ps4", "ps5", "dualshock", "dualsense", "deadzone", "bluetooth controller", "usb controller"],
       },
       {
         id: "language",
@@ -676,7 +709,7 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Storage overview", section: "storage", anchorTitle: "Storage overview", keywords: ["storage", "usage", "quota", "space used", "disk", "how much space", "storage full"] },
   { label: "Clear caches", section: "storage", anchorTitle: "Clear caches", keywords: ["clear cache", "delete cache", "free up space", "picker cache", "manga cache", "live tv cache", "epg", "dead streams", "cleanup", "purge"] },
   { label: "Remote streaming server", section: "p2p", anchorTitle: "Remote streaming server", keywords: ["remote server", "server url", "ip address", "test connection", "forget server", "use exclusively", "strict", "vpn", "home server", "stremio service"] },
-  { label: "Anime4K presets & modes", section: "player", anchorTitle: "Anime4K presets", keywords: ["anime4k", "setup", "download shaders", "install anime4k", "re-download", "quality", "performance", "mode a", "mode b", "mode c", "apply to anime only", "anime detection"] },
+  { label: "Anime4K presets & modes", section: "shaders", anchorTitle: "Anime4K presets", keywords: ["anime4k", "setup", "download shaders", "install anime4k", "re-download", "quality", "performance", "mode a", "mode b", "mode c", "apply to anime only", "anime detection"] },
   { label: "Internet speed / bandwidth", section: "player", anchorTitle: "Internet speed", keywords: ["internet speed", "bandwidth", "cap", "limit", "mbps", "gbps", "speed test", "fiber", "gigabit", "data"] },
   { label: "Remember last stream", section: "player", anchorTitle: "Remember last stream", keywords: ["remember last stream", "resume stream", "last source", "addon memory", "source memory"] },
   { label: "Custom CSS / JS / HTML code", section: "advanced", anchorTitle: "Custom code", keywords: ["custom code", "custom css", "custom js", "javascript", "custom html overlay", "inject", "mod", "power user", "retheme"] },
@@ -689,7 +722,12 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Downmix surround to stereo", section: "player", anchorTitle: "Audio", keywords: ["downmix", "stereo", "surround", "5.1", "7.1", "laptop speakers", "headphones", "quiet dialogue", "audio channels"] },
   { label: "Advanced mpv options (mpv.conf)", section: "mpv", anchorTitle: "Advanced (mpv.conf)", keywords: ["advanced mpv", "mpv.conf", "mpv options", "extra options", "tone-mapping", "inverse tone mapping", "custom mpv", "key=value", "power user", "raw config"] },
 
-  { label: "Anime4K upscaling", section: "anime", anchorTitle: "Anime4K upscaling", keywords: ["anime4k", "anime 4k", "upscale", "upscaling", "shaders", "sharper anime", "anime only", "anime4k indicator", "fps badge", "gpu upscale"] },
+  { label: "Anime4K upscaling", section: "shaders", anchorTitle: "Anime4K upscaling", keywords: ["anime4k", "anime 4k", "upscale", "upscaling", "shaders", "sharper anime", "anime only", "anime4k indicator", "fps badge", "gpu upscale"] },
+  { label: "FSRCNNX neural upscaler", section: "shaders", anchorTitle: "More picture shaders", keywords: ["fsrcnnx", "neural upscale", "luma upscaler", "sharpest upscale", "16-0-4-1", "line art", "download shader"] },
+  { label: "AMD FSR upscaler", section: "shaders", anchorTitle: "More picture shaders", keywords: ["fsr", "fidelityfx", "super resolution", "amd upscale", "spatial upscale", "live action upscale"] },
+  { label: "NVIDIA NIS upscaler", section: "shaders", anchorTitle: "More picture shaders", keywords: ["nis", "nvidia image scaling", "spatial upscale", "sharpen upscale"] },
+  { label: "Contrast Adaptive Sharpening (CAS)", section: "shaders", anchorTitle: "More picture shaders", keywords: ["cas", "contrast adaptive sharpening", "sharpen", "amd sharpen", "soft picture", "detail"] },
+  { label: "HDR tone-mapping (hdr-toys)", section: "shaders", anchorTitle: "More picture shaders", keywords: ["hdr-toys", "hdr toys", "hdr to sdr", "tone map", "tonemap", "washed out hdr", "hdr on sdr display", "shader tonemap"] },
   { label: "Smooth motion (interpolation) & SVP", section: "anime", anchorTitle: "Smooth motion", keywords: ["smooth motion", "motion smoothing", "interpolation", "frame interpolation", "svp", "smoothvideo", "60fps", "48fps", "fluid", "judder", "soap opera", "vapoursynth"] },
 
   { label: "Home layout", section: "library", anchorTitle: "Home layout", keywords: ["home layout", "rails", "rows", "addon rows", "duplicate rails", "watchlist saved only", "playlists tab", "m3u", "xtream", "keep anime in anime room", "continue watching advance", "advance next episode", "continue watching per profile", "private continue watching", "hide continue watching from profiles", "cw per profile", "profile only cw"] },
@@ -744,6 +782,7 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Letterboxd connection", section: "letterboxd", keywords: ["letterboxd", "stremboxd", "watchlist", "diary", "films", "ratings", "friends", "connect", "disconnect", "top 250", "popular"] },
   { label: "Webhooks (Discord / Telegram)", section: "webhooks", keywords: ["webhooks", "discord", "telegram", "notifications", "alerts", "calendar sources", "rules", "upcoming"] },
   { label: "Hotkeys / keyboard shortcuts", section: "hotkeys", keywords: ["hotkeys", "shortcuts", "keybindings", "keyboard", "rebind", "reset shortcuts"] },
+  { label: "Controllers / gamepad", section: "controllers", keywords: ["controller", "gamepad", "joystick", "joypad", "xbox", "playstation", "ps4", "ps5", "dualshock", "dualsense", "deadzone", "repeat speed", "bluetooth controller", "usb controller"] },
   { label: "Player layout / chrome", section: "playerLayout", keywords: ["player layout", "chrome", "controls", "buttons", "overlay", "arrange", "rearrange", "trickplay", "thumbnail", "hide buttons"] },
   { label: "Report a bug", section: "bug", keywords: ["bug report", "report", "feedback", "issue", "crash", "screenshot", "diagnostics"] },
 
@@ -1003,11 +1042,11 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Mix surround sound down to stereo", section: "player", anchorTitle: "Audio", keywords: ["downmix stereo", "5.1 to stereo", "7.1", "quiet dialogue", "hollow sound", "headphones fix"] },
   { label: "Advanced (mpv.conf)", section: "mpv", anchorTitle: "Advanced (mpv.conf)", keywords: ["mpv conf", "mpv options", "custom mpv flags", "key=value", "power user", "escape hatch", "extra options"] },
   { label: "See the mpv.conf your dials above generate", section: "mpv", anchorTitle: "Advanced (mpv.conf)", keywords: ["generated config", "compiled mpv conf", "preview options", "show config", "dials output"] },
-  { label: "Enable Anime4K", section: "anime", anchorTitle: "Anime4K upscaling", keywords: ["anime4k on", "upscale anime", "sharper lines", "cleaner gradients", "real time upscale"] },
-  { label: "Show Anime4K indicator", section: "anime", anchorTitle: "Anime4K upscaling", keywords: ["anime4k badge", "fps indicator", "overlay badge", "status chip", "live fps"] },
-  { label: "Anime4K presets", section: "anime", keywords: ["mode a", "mode b", "mode c", "mode a+a", "mode b+b", "mode c+a", "quality performance tier", "shader modes", "restore denoise"] },
-  { label: "Set up Anime4K", section: "anime", keywords: ["download shaders", "install anime4k", "shader pack", "one time setup", "get shaders"] },
-  { label: "Re-download", section: "anime", keywords: ["redownload shaders", "update anime4k", "refresh shader pack", "reinstall shaders"] },
+  { label: "Enable Anime4K", section: "shaders", anchorTitle: "Anime4K upscaling", keywords: ["anime4k on", "upscale anime", "sharper lines", "cleaner gradients", "real time upscale"] },
+  { label: "Show Anime4K indicator", section: "shaders", anchorTitle: "Anime4K upscaling", keywords: ["anime4k badge", "fps indicator", "overlay badge", "status chip", "live fps"] },
+  { label: "Anime4K presets", section: "shaders", keywords: ["mode a", "mode b", "mode c", "mode a+a", "mode b+b", "mode c+a", "quality performance tier", "shader modes", "restore denoise"] },
+  { label: "Set up Anime4K", section: "shaders", keywords: ["download shaders", "install anime4k", "shader pack", "one time setup", "get shaders"] },
+  { label: "Re-download", section: "shaders", keywords: ["redownload shaders", "update anime4k", "refresh shader pack", "reinstall shaders"] },
   { label: "Smooth motion", section: "anime", anchorTitle: "Smooth motion", keywords: ["frame interpolation", "judder", "smooth panning", "motion smoothing", "fps boost", "drawn on twos"] },
   { label: "Motion smoothing", section: "anime", anchorTitle: "Smooth motion", keywords: ["built in interpolation", "smooth motion", "60fps feel", "soap opera effect", "panning judder", "lighter than svp"] },
   { label: "SVP frame interpolation", section: "anime", anchorTitle: "SVP frame interpolation", keywords: ["svp", "smooth video project", "60fps anime", "vapoursynth", "svpflow", "interpolation engine"] },
@@ -1057,6 +1096,7 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
   { label: "Anime4K on", section: "hotkeys", anchorTitle: "Player", keywords: ["anime4k enable key", "ctrl 1", "upscaling on", "force anime4k"] },
   { label: "Anime4K off", section: "hotkeys", anchorTitle: "Player", keywords: ["anime4k disable key", "ctrl 0", "upscaling off", "stop shaders"] },
   { label: "Toggle RTX Video HDR", section: "hotkeys", anchorTitle: "Player", keywords: ["rtx hdr hotkey", "ctrl h", "nvidia video hdr", "hdr enhancement toggle"] },
+  { label: "Toggle RTX Super Resolution", section: "hotkeys", anchorTitle: "Player", keywords: ["rtx vsr hotkey", "ctrl u", "nvidia super resolution", "video upscaling toggle"] },
   { label: "Seek back", section: "hotkeys", anchorTitle: "Player", keywords: ["rewind", "arrow left", "jump back", "skip backward"] },
   { label: "Seek forward", section: "hotkeys", anchorTitle: "Player", keywords: ["fast forward", "arrow right", "jump ahead", "skip forward"] },
   { label: "Seek back 30s", section: "hotkeys", anchorTitle: "Player", keywords: ["back thirty seconds", "comma key", "big rewind", "30 second jump"] },
@@ -1279,8 +1319,13 @@ export function SettingsNav({
     autoSync: settings.subtitleAutoSync ? "on" : null,
     player: settings.playerEngine === "auto" ? null : settings.playerEngine,
     mpv: (settings.mpvQuality ?? "balanced") === "balanced" ? null : settings.mpvQuality === "performance" ? "lite" : "max",
-    anime: settings.playerAnime4k ? "on" : null,
+    anime: settings.playerMotionInterp || settings.playerSvp ? "on" : null,
+    shaders:
+      settings.playerAnime4k || Object.values(settings.playerShaders ?? {}).some((s) => s?.enabled)
+        ? "on"
+        : null,
     playerLayout: null,
+    controllers: settings.controllerSupportEnabled ? "on" : null,
     theme: settings.theme.preset === "cool-grey" && settings.theme.fontPair === "sentient-switzer" ? null : "•",
     badges: null,
     awardIcons: null,

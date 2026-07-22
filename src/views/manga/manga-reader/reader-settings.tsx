@@ -129,6 +129,11 @@ export function ReaderSettings({
                 on={prefs.autoNextChapter}
                 onToggle={() => onChange({ autoNextChapter: !prefs.autoNextChapter })}
               />
+              <ToggleRow
+                label={t("Chapter-finished hint")}
+                on={!prefs.hideChapterEndHint}
+                onToggle={() => onChange({ hideChapterEndHint: !prefs.hideChapterEndHint })}
+              />
             </div>
           )}
           {cat === "fit" && (

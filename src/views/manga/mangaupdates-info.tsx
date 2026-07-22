@@ -81,12 +81,17 @@ export function useMangaUpdates(title?: string): MangaUpdatesInfo | null {
   return info;
 }
 
-export function MangaUpdatesRank({ rank }: { rank: number }) {
+export function MangaUpdatesRank({ rank, onClick }: { rank: number; onClick: () => void }) {
   const [iconOk, setIconOk] = useState(true);
   const t = useT();
   return (
     <Tooltip label={t("Rank on MangaUpdates")} side="top">
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-elevated/60 px-3 py-1 text-[13px] text-ink-muted ring-1 ring-edge-soft backdrop-blur-sm">
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={t("Rank on MangaUpdates")}
+        className="relative inline-flex items-center gap-1.5 rounded-full bg-elevated/60 px-3 py-1 text-[13px] text-ink-muted ring-1 ring-edge-soft backdrop-blur-sm transition-colors hover:bg-elevated hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-full before:-translate-x-1/2 before:-translate-y-1/2 before:content-['']"
+      >
         {iconOk && (
           <img
             src="https://www.mangaupdates.com/favicon.ico"
@@ -96,7 +101,7 @@ export function MangaUpdatesRank({ rank }: { rank: number }) {
           />
         )}
         #{rank.toLocaleString()}
-      </span>
+      </button>
     </Tooltip>
   );
 }

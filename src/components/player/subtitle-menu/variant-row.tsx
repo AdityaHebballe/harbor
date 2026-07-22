@@ -1,4 +1,4 @@
-import { Check, Sparkles } from "lucide-react";
+import { Check, Crosshair, Sparkles } from "lucide-react";
 import type { TrackInfo } from "@/lib/player/bridge";
 import { useContextMenu } from "@/lib/context-menu";
 import { isImageSubTrack } from "@/lib/player/sub-format";
@@ -36,9 +36,17 @@ export function VariantRow({
   if (isImageSubTrack(track)) tags.push({ label: tr("Position and size only"), tone: "warn" });
   const sourceLabel = isImported ? tr("Imported") : track.external ? tr("External") : tr("Embedded");
   const codec = track.codec?.toUpperCase();
-  const release = pickReleaseHint(track);
   const titleText = subtitleTrackTitle(track);
   const langName = subtitleTrackLanguageLabel(track);
+  const realRelease = track.release?.trim();
+  const releaseHint = pickReleaseHint(track);
+  const release =
+    realRelease && realRelease !== titleText
+      ? realRelease
+      : releaseHint && releaseHint !== titleText
+        ? releaseHint
+        : null;
+  const isBestMatch = (track.matchScore ?? 0) >= 120;
 
   return (
     <button
@@ -81,6 +89,12 @@ export function VariantRow({
             <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-[0.12em] text-accent ring-1 ring-accent/30">
               <Sparkles size={9} strokeWidth={2.6} />
               {tr("Yours")}
+            </span>
+          )}
+          {!isImported && isBestMatch && (
+            <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-1.5 py-px text-[9px] font-bold uppercase tracking-[0.12em] text-accent ring-1 ring-accent/30">
+              <Crosshair size={9} strokeWidth={2.6} />
+              {tr("Best match")}
             </span>
           )}
         </div>

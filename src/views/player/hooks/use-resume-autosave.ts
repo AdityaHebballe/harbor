@@ -15,7 +15,7 @@ import type { PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition, subscribePlaybackClock } from "@/lib/player/playback-clock";
 import { useSettings } from "@/lib/settings";
 import type { PlayerSrc } from "@/lib/view";
-import { CLOUD_OK } from "@/lib/stremio";
+import { ANIME_CLOUD_ID, CLOUD_OK } from "@/lib/stremio";
 import { syncSeriesWatchedToStremio } from "@/lib/stremio-episode-watched";
 
 const TICK_MS = 4000;
@@ -103,19 +103,24 @@ export function useResumeAutosave(params: {
       void syncSeriesWatchedToStremio(s.meta, rv ? rid : null);
     }
     if (s.meta.type === "movie" && finished) setMovieWatchedLocal(id, true);
+    const animeLocal = ANIME_CLOUD_ID.test(id);
+    const ttAnimeUnmapped =
+      id.startsWith("tt") &&
+      !!s.episode?.kitsuStreamId &&
+      (s.episode.imdbSeason == null || s.episode.imdbEpisode == null);
     if (
-      (s.meta.type === "series" || s.meta.type === "movie") &&
-      (!CLOUD_OK.test(id) || isLocalUrl(s.url))
+      (s.meta.type === "series" || s.meta.type === "movie" || animeLocal) &&
+      (!CLOUD_OK.test(id) || isLocalUrl(s.url) || animeLocal || ttAnimeUnmapped)
     ) {
       saveLocalCw({
         id,
-        type: s.meta.type,
+        type: s.meta.type === "movie" ? "movie" : "series",
         name: s.meta.name,
         poster: s.meta.poster,
         background: s.meta.background,
         season: se,
         episode: ep,
-        videoId: s.episode?.videoId,
+        videoId: s.episode?.videoId ?? s.episode?.kitsuStreamId,
         positionMs: Math.floor(pos * 1000),
         durationMs: Math.max(0, Math.floor(sn.durationSec * 1000)),
         t: Date.now(),

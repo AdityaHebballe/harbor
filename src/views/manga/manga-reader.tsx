@@ -58,6 +58,8 @@ export function MangaReader({
   const [chromeOpen, setChromeOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  useEffect(() => setHintDismissed(false), [index]);
   const [pickBookmark, setPickBookmark] = useState(false);
   const [autoLong, setAutoLong] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -73,8 +75,16 @@ export function MangaReader({
 
   const total = pages.length;
   const pageUrls = useMemo(() => pages.map((p) => p.url), [pages]);
-  const atFirstChapter = index === 0;
-  const atLastChapter = index === chapters.length - 1;
+  const readingOrder = useMemo(() => {
+    const num = (c: MangaChapter) => parseFloat(c.chapter ?? "") || 0;
+    return chapters.map((_, i) => i).sort((a, b) => num(chapters[a]) - num(chapters[b]) || a - b);
+  }, [chapters]);
+  const orderPos = readingOrder.indexOf(index);
+  const prevIndex = orderPos > 0 ? readingOrder[orderPos - 1] : null;
+  const nextIndex =
+    orderPos >= 0 && orderPos < readingOrder.length - 1 ? readingOrder[orderPos + 1] : null;
+  const atFirstChapter = orderPos <= 0;
+  const atLastChapter = orderPos === -1 || orderPos === readingOrder.length - 1;
   const effMode = autoLong ? "long" : prefs.mode;
   const effModeRef = useRef(effMode);
   effModeRef.current = effMode;
@@ -270,9 +280,8 @@ export function MangaReader({
     currentPage,
     step,
     lastStart,
-    index,
-    atFirstChapter,
-    atLastChapter,
+    nextIndex,
+    prevIndex,
     autoNext,
     setCurrentPage,
     onChangeIndex,
@@ -282,8 +291,8 @@ export function MangaReader({
 
   const atChapterEnd = !loading && !failed && !complete && bookAtEnd;
   const advanceFromBookEnd = () => {
-    if (atLastChapter) return;
-    if (autoNext) onChangeIndex(index + 1);
+    if (nextIndex == null) return;
+    if (autoNext) onChangeIndex(nextIndex);
     else setCurrentPage(total);
   };
 
@@ -531,7 +540,7 @@ export function MangaReader({
     <ReaderComplete
       atLastChapter={atLastChapter}
       label={chapterLabel(chapter)}
-      onNext={() => onChangeIndex(index + 1)}
+      onNext={() => nextIndex != null && onChangeIndex(nextIndex)}
       onExit={onExit}
     />
   );
@@ -647,10 +656,11 @@ export function MangaReader({
 
       {!loading && !failed && (
         <EndOfChapterHint
-          visible={atChapterEnd}
+          visible={atChapterEnd && !prefs.hideChapterEndHint && !hintDismissed}
           atLastChapter={atLastChapter}
-          nextLabel={!atLastChapter && chapters[index + 1] ? chapterLabel(chapters[index + 1]) : undefined}
-          onNext={() => onChangeIndex(index + 1)}
+          nextLabel={nextIndex != null ? chapterLabel(chapters[nextIndex]) : undefined}
+          onNext={() => nextIndex != null && onChangeIndex(nextIndex)}
+          onDismiss={() => setHintDismissed(true)}
         />
       )}
 
@@ -723,8 +733,8 @@ export function MangaReader({
             onNextPage={nextPage}
             atFirstChapter={atFirstChapter}
             atLastChapter={atLastChapter}
-            onPrevChapter={() => onChangeIndex(index - 1)}
-            onNextChapter={() => onChangeIndex(index + 1)}
+            onPrevChapter={() => prevIndex != null && onChangeIndex(prevIndex)}
+            onNextChapter={() => nextIndex != null && onChangeIndex(nextIndex)}
             zoom={prefs.zoom}
             onZoom={(z) => patchPrefs({ zoom: z })}
           />

@@ -121,6 +121,9 @@ export function createHtml5Bridge(): PlayerBridge {
       selected: t.id === activeSubId,
       external: t.external,
       url: t.url,
+      release: t.metadata?.release,
+      provider: t.metadata?.provider,
+      matchScore: t.metadata?.matchScore,
     }));
   };
 

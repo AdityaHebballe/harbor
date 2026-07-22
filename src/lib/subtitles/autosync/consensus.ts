@@ -164,7 +164,7 @@ function sharedDeltas(a: Map<string, number>, b: Map<string, number>): number[] 
   return out;
 }
 
-function corroboratedReference(peers: Candidate[]): Candidate | null {
+function corroboratedReference(peers: Candidate[], requireCrossSource: boolean): Candidate | null {
   const ranked = [...peers].sort((x, y) => trustScore(y) - trustScore(x));
   const times = new Map<Candidate, Map<string, number>>();
   const timesOf = (c: Candidate) => {
@@ -178,7 +178,9 @@ function corroboratedReference(peers: Candidate[]): Candidate | null {
   for (const ref of ranked) {
     const refTimes = timesOf(ref);
     for (const other of ranked) {
-      if (other === ref || other.source === ref.source) continue;
+      if (other === ref) continue;
+      if (requireCrossSource && other.source === ref.source) continue;
+      if (!requireCrossSource && other.url === ref.url) continue;
       const deltas = sharedDeltas(refTimes, timesOf(other));
       if (deltas.length >= MIN_ANCHORS && medianAbsDev(deltas).mad <= ANCHOR_MAD_TOL) return ref;
     }
@@ -310,6 +312,20 @@ export async function runConsensus(
 
   const answeringSources = new Set(externals.map((c) => c.source));
   if (answeringSources.size < 2) {
+    if (externals.length >= 2) {
+      const soloClusters = clusterCandidates([user, ...externals]);
+      const soloMajority = pickMajority(soloClusters);
+      const soloPeers = soloMajority ? soloMajority.members.filter((m) => !m.isUser) : [];
+      if (soloMajority && soloMajority.members.includes(user) && soloPeers.length >= 2) {
+        const ref = corroboratedReference(soloPeers, false);
+        const textAnchors = ref ? buildAnchors(user, ref) : null;
+        const agreement = soloPeers.length / externals.length;
+        dinfo(
+          `[consensus] single-source fallback agreement=${agreement.toFixed(2)} peers=${soloPeers.length} anchors=${textAnchors?.length ?? 0}`,
+        );
+        return { verdict: "right", bestCandidate: null, agreement, textAnchors };
+      }
+    }
     dinfo(`[consensus] only ${answeringSources.size} source(s) answered, unknown`);
     return unknown();
   }
@@ -336,7 +352,7 @@ export async function runConsensus(
     };
   }
 
-  const ref = corroboratedReference(peers);
+  const ref = corroboratedReference(peers, true);
   const textAnchors = ref ? buildAnchors(user, ref) : null;
   dinfo(
     `[consensus] verdict=right agreement=${agreement.toFixed(2)} sources=${majority.sources.size} anchors=${textAnchors?.length ?? 0}`,

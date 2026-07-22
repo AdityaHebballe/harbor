@@ -1,4 +1,4 @@
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Star } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, SlidersHorizontal, Star } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   applyCalendarFilter,
@@ -8,7 +8,8 @@ import {
   type CalendarItem,
 } from "@/lib/calendar";
 import { CalendarSkeleton } from "./calendar/calendar-skeleton";
-import { CustomCalendarBar } from "./calendar/custom-bar";
+import { CalendarConfigRail } from "./calendar/config/config-rail";
+import { buildActiveCount } from "./calendar/config/rail-sources";
 import { useCalendarData } from "./calendar/use-calendar-data";
 import { useAuth } from "@/lib/auth";
 import { library, type LibraryItem } from "@/lib/stremio";
@@ -49,6 +50,36 @@ export function CalendarView() {
   useScrollMemory("calendar", scrollRef);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [dayModal, setDayModal] = useState<string | null>(null);
+  const [configOpen, setConfigOpen] = useState(() => {
+    try {
+      return localStorage.getItem("harbor.calendar.filtersOpen") !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [railOverlay, setRailOverlay] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 1600,
+  );
+  const railHostRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("harbor.calendar.filtersOpen", configOpen ? "1" : "0");
+    } catch {
+      /* noop */
+    }
+  }, [configOpen]);
+
+  useEffect(() => {
+    const el = railHostRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setRailOverlay(w < 1360);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     clearUnseenReminders();
@@ -139,6 +170,7 @@ export function CalendarView() {
 
   const showAllControls = source === "all";
   const showPremiereFilters = source === "simkl-anticipated";
+  const filtersActiveCount = buildActiveCount(settings.customCalendar);
   const filters = settings.hideContent.anime ? FILTERS.filter((f) => f.id !== "anime") : FILTERS;
 
   let body: React.ReactNode;
@@ -227,13 +259,29 @@ export function CalendarView() {
           >
             {t("Start week on Monday")}
           </button>
-          {source === "custom" && (
-            <CustomCalendarBar
-              tmdbKey={settings.tmdbKey}
-              traktConnected={traktConnected}
-              value={settings.customCalendar}
-              onChange={(next) => update({ customCalendar: next })}
-            />
+          {source === "custom" && railOverlay && (
+            <button
+              type="button"
+              onClick={() => setConfigOpen((o) => !o)}
+              aria-pressed={configOpen}
+              className={`flex items-center gap-2 rounded-full px-4 py-1.5 text-[12.5px] font-semibold transition-colors ${
+                configOpen
+                  ? "bg-ink text-canvas"
+                  : "border border-edge-soft text-ink-muted hover:border-edge hover:text-ink"
+              }`}
+            >
+              <SlidersHorizontal size={14} strokeWidth={2.2} />
+              {t("Filters")}
+              {filtersActiveCount > 0 && (
+                <span
+                  className={`grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-bold tabular-nums ${
+                    configOpen ? "bg-canvas/20 text-canvas" : "bg-accent-soft text-accent"
+                  }`}
+                >
+                  {filtersActiveCount}
+                </span>
+              )}
+            </button>
           )}
           {showAllControls && (
             <>
@@ -321,7 +369,24 @@ export function CalendarView() {
         </nav>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-12 py-8">{body}</div>
+      <div ref={railHostRef} className="relative flex min-h-0 flex-1">
+        <div ref={scrollRef} className="min-w-0 flex-1 overflow-y-auto px-12 py-8">
+          {body}
+        </div>
+        {source === "custom" && (
+          <CalendarConfigRail
+            open={configOpen}
+            onOpenChange={setConfigOpen}
+            tmdbKey={settings.tmdbKey}
+            traktConnected={traktConnected}
+            value={settings.customCalendar}
+            onChange={(next) => update({ customCalendar: next })}
+            resultCount={filtered.length}
+            onConnectTrakt={() => openSettings("trakt")}
+            overlay={railOverlay}
+          />
+        )}
+      </div>
 
       {dayModal && dayModalItems.length > 0 && (
         <DayModal

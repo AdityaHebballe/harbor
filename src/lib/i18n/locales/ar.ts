@@ -15,9 +15,13 @@ import misc from "./ar/misc";
 import player from "./ar/player";
 import rails from "./ar/rails";
 import settings from "./ar/settings";
+import settingsFill from "./ar/settings-fill";
+import profileFill from "./ar/profile-fill";
+import appFill from "./ar/app-fill";
 import spotlights from "./ar/spotlights";
 import sync from "./ar/sync";
 import together from "./ar/together";
+import controllers from "./ar/controllers";
 
 const ar: Record<string, string> = {
   ...chrome,
@@ -27,6 +31,9 @@ const ar: Record<string, string> = {
   ...player,
   ...live,
   ...settings,
+  ...settingsFill,
+  ...profileFill,
+  ...appFill,
   ...library,
   ...manga,
   ...sync,
@@ -40,6 +47,7 @@ const ar: Record<string, string> = {
   ...misc,
   ...awards,
   ...addons,
+  ...controllers,
 };
 
 export default ar;

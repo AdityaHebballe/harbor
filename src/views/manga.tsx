@@ -15,7 +15,8 @@ import {
   subscribeMangaSources,
 } from "@/lib/manga/sources";
 import { resumeChapters, popularManga, searchManga, type MangaChapter, type MangaSummary } from "@/lib/manga/api";
-import type { MangaProgressEntry } from "@/lib/manga-progress";
+import { listMangaProgress, type MangaProgressEntry } from "@/lib/manga-progress";
+import { useProfiles } from "@/lib/profiles";
 import { takeMangaReadIntent } from "@/lib/manga/read-intent";
 import { MangaHero } from "./manga/manga-hero";
 import { MangaBootstrap, MangaBootstrapError } from "./manga/manga-boot";
@@ -54,6 +55,7 @@ type Mode =
 export function MangaView() {
   const t = useT();
   const { settings, update } = useSettings();
+  const { activeId } = useProfiles();
   const { mangaId, setChromeHidden, topKind } = useView();
   const [mode, setMode] = useState<Mode>(
     mangaId ? { screen: "detail", mangaId } : { screen: "browse" },
@@ -75,9 +77,28 @@ export function MangaView() {
   };
 
   const openMangaByTitle = (item: MangaSummary) => {
-    void searchManga(item.title, 0)
-      .then((hits) => hits[0] && setMode({ screen: "detail", mangaId: hits[0].id }))
-      .catch(() => {});
+    const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+    const key = norm(item.title);
+    const openId = (id: string) => setMode({ screen: "detail", mangaId: id });
+    const pick = (hits: MangaSummary[]) =>
+      hits.find((h) => norm(h.title) === key || (h.altTitle != null && norm(h.altTitle) === key)) ??
+      hits[0] ??
+      null;
+    void (async () => {
+      try {
+        const hit = pick(await searchManga(item.title, 0));
+        if (hit) return openId(hit.id);
+        const alt = item.title.replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        if (alt && alt !== item.title) {
+          const hit2 = pick(await searchManga(alt, 0));
+          if (hit2) return openId(hit2.id);
+        }
+      } catch {
+        /* fall through to reading progress */
+      }
+      const entry = listMangaProgress(activeId ?? "default").find((e) => norm(e.title) === key);
+      if (entry) openId(entry.id);
+    })();
   };
 
   useEffect(() => {
@@ -296,12 +317,10 @@ export function MangaView() {
 
   return (
     <main ref={browseScrollRef} className="flex-1 overflow-y-auto overflow-x-hidden px-12 pb-16 pt-28">
-      {featured.length > 0 && (
-        <MangaHero
-          featured={featured}
-          onOpen={(id) => setMode({ screen: "detail", mangaId: id })}
-        />
-      )}
+      <MangaHero
+        featured={featured}
+        onOpen={(id) => setMode({ screen: "detail", mangaId: id })}
+      />
       <div className="mt-8">
         <MangaContinue onResume={resume} />
       </div>

@@ -1,4 +1,5 @@
 import { MessageSquare } from "lucide-react";
+import { useT } from "@/lib/i18n";
 import { CommentCompose } from "./comment-compose";
 import { CommentItem } from "./comment-item";
 import { useComments } from "./use-comments";
@@ -14,11 +15,12 @@ export function CommentsSection({
   signedIn: boolean;
   onOpenAuthor?: (h: string) => void;
 }) {
-  const { state, comments, hasMore, loadMore, submit, remove, sending } = useComments(handle);
+  const t = useT();
+  const { state, comments, hasMore, loadMore, submit, remove, toggleLike, sending } = useComments(handle);
   return (
-    <section aria-label="Comments" className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
+    <section aria-label={t("Comments")} className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
       <div className="mb-4 flex items-center gap-2 text-[12px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
-        <MessageSquare size={20} /> Comments
+        <MessageSquare size={20} /> {t("Comments")}
         {comments.length > 0 && <span className="tabular-nums text-ink-subtle">({comments.length})</span>}
       </div>
 
@@ -41,12 +43,12 @@ export function CommentsSection({
       )}
 
       {state === "error" && (
-        <p className="py-6 text-center text-[13px] text-ink-subtle">Could not load comments</p>
+        <p className="py-6 text-center text-[13px] text-ink-subtle">{t("Could not load comments")}</p>
       )}
 
       {state === "empty" && (
         <p className="py-6 text-center text-[13px] text-ink-subtle">
-          No comments yet. Be the first to say hello.
+          {t("No comments yet. Be the first to say hello.")}
         </p>
       )}
 
@@ -57,7 +59,9 @@ export function CommentsSection({
               key={c.id}
               c={c}
               canDelete={isOwner}
+              signedIn={signedIn}
               onDelete={remove}
+              onToggleLike={toggleLike}
               onOpenAuthor={onOpenAuthor}
             />
           ))}
@@ -66,7 +70,7 @@ export function CommentsSection({
               onClick={loadMore}
               className="mx-auto mt-2 inline-flex min-h-11 items-center rounded-[10px] bg-elevated px-5 text-[13px] font-medium text-ink-muted ring-1 ring-edge-soft transition-colors hover:bg-raised"
             >
-              Load more
+              {t("Load more")}
             </button>
           )}
         </div>

@@ -50,6 +50,7 @@ export function ProfileView({
   const watchedCount = useWatchedCount();
   const { state, summary, friends, badges, activity, reload, patchSummary } = useProfile(handle);
   const isOwner = summary?.isOwner ?? false;
+  const viewerSignedIn = !!currentAuthor();
   const libWatched = useLibraryWatchedCount(authKey, isOwner);
   const custom = summary ? resolveCustomization(summary) : null;
   useFontLink(custom?.fontHref ?? "");
@@ -80,7 +81,7 @@ export function ProfileView({
   const watchedOverride = summary.isOwner ? Math.max(watchedCount, libWatched, summary.counts.watched) : undefined;
 
   if (editing && summary.isOwner) {
-    return <ProfileSettings summary={summary} onClose={() => setEditing(false)} onSaved={patchSummary} />;
+    return <ProfileSettings summary={summary} badges={badges} onClose={() => setEditing(false)} onSaved={patchSummary} />;
   }
 
   const c = resolveCustomization(summary);
@@ -99,6 +100,7 @@ export function ProfileView({
         watchedOverride={watchedOverride}
         badges={badges}
         userFont={c.font}
+        hideBanner={c.hideTopBanner}
         onEdit={() => setEditing(true)}
         onPatch={patchSummary}
       />
@@ -132,6 +134,7 @@ export function ProfileView({
               <MyListsShowcase
                 lists={summary.featuredLists ?? []}
                 isOwner={summary.isOwner}
+                signedIn={viewerSignedIn}
                 onOpenMeta={onOpenMeta}
                 onViewAll={() => setExpanded("lists")}
                 onManage={() => setPickingLists(true)}
@@ -165,6 +168,9 @@ export function ProfileView({
             lists={summary.featuredLists ?? []}
             badges={badges}
             activity={activity}
+            signedIn={viewerSignedIn}
+            isOwner={summary.isOwner}
+            handle={handle}
             onOpenMeta={onOpenMeta}
             onClose={() => setExpanded(null)}
           />

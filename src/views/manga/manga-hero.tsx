@@ -57,13 +57,14 @@ export function MangaHero({
 
   const current = featured[shown];
   const fav = useIsMangaFavorite(current?.id);
-  if (!current) return null;
 
-  const meta = [
-    current.year != null ? String(current.year) : null,
-    statusLabel(current.status),
-    current.lastChapter ? `${current.lastChapter} chapters` : null,
-  ].filter(Boolean);
+  const meta = current
+    ? [
+        current.year != null ? String(current.year) : null,
+        statusLabel(current.status),
+        current.lastChapter ? `${current.lastChapter} chapters` : null,
+      ].filter(Boolean)
+    : [];
 
   const fade = {
     transition: "opacity 420ms cubic-bezier(0.22,1,0.36,1), transform 420ms cubic-bezier(0.22,1,0.36,1)",
@@ -97,6 +98,8 @@ export function MangaHero({
       </div>
 
       <div className="relative z-10 flex min-h-[440px] items-center gap-10 px-20 pt-28 pb-14">
+        {current && (
+          <>
         <div className="flex max-w-[540px] flex-1 flex-col gap-5" style={fade}>
           <span className="inline-flex items-center gap-2 self-start text-[12px] font-semibold uppercase tracking-[0.18em] text-accent">
             <BookOpen size={15} strokeWidth={2.4} />
@@ -164,6 +167,8 @@ export function MangaHero({
             <CollectionBadges title={current.title} size={72} />
           </span>
         </button>
+          </>
+        )}
       </div>
 
       {featured.length > 1 && (

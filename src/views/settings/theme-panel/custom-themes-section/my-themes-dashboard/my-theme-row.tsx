@@ -6,8 +6,8 @@ import { deleteUpload, setVisibility, themeVersions, type StoreTheme } from "@/l
 type Version = { v: number; changelog: string; createdAt: string };
 
 const STATUS: Record<StoreTheme["status"], { label: string; className: string }> = {
-  pending: { label: "In review", className: "bg-amber-400/15 text-amber-300" },
-  approved: { label: "Approved", className: "bg-emerald-400/15 text-emerald-300" },
+  pending: { label: "In review", className: "bg-accent-soft text-accent" },
+  approved: { label: "Approved", className: "bg-success/15 text-success" },
   rejected: { label: "Rejected", className: "bg-danger/15 text-danger" },
 };
 
@@ -76,9 +76,9 @@ export function MyThemeRow({
   };
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-edge-soft bg-surface p-4">
+    <div className="flex flex-col gap-3 rounded-2xl ring-1 ring-edge-soft bg-surface p-4">
       <div className="flex gap-4">
-        <div className="relative h-[68px] w-28 shrink-0 overflow-hidden rounded-xl border border-edge-soft bg-elevated">
+        <div className="relative h-[68px] w-28 shrink-0 overflow-hidden rounded-xl ring-1 ring-edge-soft bg-elevated">
           {t.cover ? (
             <img src={t.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
           ) : (
@@ -94,7 +94,7 @@ export function MyThemeRow({
             <span className="truncate text-[15px] font-semibold text-ink">{t.name}</span>
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${badge.className}`}>{badge.label}</span>
             {t.hasPendingUpdate && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-semibold text-accent">
                 <RefreshCw size={10} strokeWidth={2.4} /> Update in review
               </span>
             )}
@@ -102,7 +102,7 @@ export function MyThemeRow({
           <span className="flex items-center gap-1 text-[12px] text-ink-subtle">
             {t.downloads} downloads
             <span className="text-ink-subtle/60">·</span>
-            <Star size={11} className="fill-amber-300 text-amber-300" />
+            <Star size={11} className="fill-accent text-accent" />
             {t.ratingAvg || "-"}
             <span className="text-ink-subtle/60">({t.ratingCount})</span>
           </span>
@@ -120,7 +120,7 @@ export function MyThemeRow({
         <button
           onClick={toggleVisibility}
           disabled={busy === "vis"}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-edge-soft px-3 text-[12.5px] font-medium text-ink-muted transition-colors hover:border-edge hover:text-ink disabled:opacity-50"
+          className="flex h-9 items-center gap-1.5 rounded-lg ring-1 ring-edge-soft px-3 text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink hover:ring-edge disabled:opacity-50"
         >
           {busy === "vis" ? (
             <Loader2 size={14} className="animate-spin" />
@@ -133,7 +133,7 @@ export function MyThemeRow({
         </button>
         <button
           onClick={openVersions}
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-edge-soft px-3 text-[12.5px] font-medium text-ink-muted transition-colors hover:border-edge hover:text-ink"
+          className="flex h-9 items-center gap-1.5 rounded-lg ring-1 ring-edge-soft px-3 text-[12.5px] font-medium text-ink-muted transition-colors hover:text-ink hover:ring-edge"
         >
           <History size={14} /> Versions{versionsCount > 0 ? ` (${versionsCount})` : ""}
           <ChevronDown size={13} className={`transition-transform ${versionsOpen ? "rotate-180" : ""}`} />
@@ -159,7 +159,7 @@ export function MyThemeRow({
             <button
               onClick={() => setConfirmDel(true)}
               aria-label="Delete theme"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-edge-soft text-ink-muted transition-colors hover:border-danger/40 hover:text-danger"
+              className="flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-edge-soft text-ink-muted transition-colors hover:text-danger hover:ring-danger/40"
             >
               <Trash2 size={14} />
             </button>

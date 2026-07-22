@@ -4,6 +4,7 @@ import { probeMpv } from "@/lib/player/mpv";
 import { mergeMpvOptions } from "@/lib/player/mpv-tuning";
 import { metaIsAnime } from "@/lib/player/anime-src";
 import { anime4kShadersFor, type Anime4kChoice } from "./use-anime4k";
+import { generalShaderChain, generalShaderKey, shaderCompanionOptions } from "@/lib/player/shader-chain";
 import type { PlayerSrc } from "@/lib/view";
 import type { Settings } from "@/lib/settings";
 import { setPlaybackClock } from "@/lib/player/playback-clock";
@@ -63,7 +64,7 @@ export function usePlayerBridge(params: {
     (!!src.meta.type && !["movie", "series", "anime"].includes(String(src.meta.type).toLowerCase()));
   const chosenEngine =
     isLiveLike && !src.notWebReady ? "html5" : autoFallbackTried ? "mpv" : settings.playerEngine;
-  const bridgeKey = `${chosenEngine}|${anime4kOn}|${embedActive}|${anime4kOn ? settings.playerAnime4kShaders.join(",") : ""}|${svpOn}|${svpOn ? settings.svpVpyPath : ""}`;
+  const bridgeKey = `${chosenEngine}|${anime4kOn}|${embedActive}|${anime4kOn ? settings.playerAnime4kShaders.join(",") : ""}|${generalShaderKey(settings)}|${svpOn}|${svpOn ? settings.svpVpyPath : ""}`;
   const [bridgeReady, setBridgeReady] = useState(false);
   useEffect(() => {
     const host = videoMountRef.current;
@@ -91,15 +92,17 @@ export function usePlayerBridge(params: {
         anime4k: anime4kOn,
         hdrToSdr: settings.playerHdrToSdr,
         rtxHdr: settings.playerRtxHdr && !settings.playerHdrToSdr && !svpOn,
+        rtxVsr: settings.playerRtxVsr && !svpOn,
         embed: embedActive,
         d3d11Flip: settings.playerD3d11Flip,
-        anime4kShaders: anime4kShadersFor(
-          settings,
-          src,
-          (settings.playerAnime4kOverride as Anime4kChoice) || "auto",
-        ),
+        anime4kShaders: [
+          ...anime4kShadersFor(settings, src, (settings.playerAnime4kOverride as Anime4kChoice) || "auto"),
+          ...generalShaderChain(settings),
+        ],
         macEdr: false,
-        extraOptions: mergeMpvOptions(settings, svpOn),
+        extraOptions: [mergeMpvOptions(settings, svpOn), shaderCompanionOptions(settings)]
+          .filter(Boolean)
+          .join("\n"),
         getEmbedRect,
       });
       if (cancelled) return;

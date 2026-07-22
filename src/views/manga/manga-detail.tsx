@@ -37,6 +37,7 @@ import { coverageOf } from "./anime-coverage";
 import { badgeArtFor, CollectionBadges } from "./collection-badge";
 import { MangaAdaptationCard, MangaRecommendedRail } from "./manga-extras";
 import { enrichManga, MangaUpdatesRank, MangaUpdatesSection, useMangaUpdates } from "./mangaupdates-info";
+import { TopMangaModal } from "./top-manga-modal";
 
 const GRADIENT_SIDE =
   "bg-gradient-to-r from-[var(--color-canvas)] from-0% via-[color-mix(in_oklch,var(--color-canvas),transparent_45%)] via-55% to-[color-mix(in_oklch,var(--color-canvas),transparent_88%)] to-100%";
@@ -181,6 +182,7 @@ export function MangaDetail({
   const [selectedLang, setSelectedLang] = useState("en");
   const [backdrop, setBackdrop] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [topMangaOpen, setTopMangaOpen] = useState(false);
 
   const favorites = useMangaFavorites();
   const isFavorite = useIsMangaFavorite(mangaId);
@@ -339,7 +341,9 @@ export function MangaDetail({
                     {p}
                   </span>
                 ))}
-                {muInfo?.rankYear != null && <MangaUpdatesRank rank={muInfo.rankYear} />}
+                {muInfo?.rankYear != null && (
+                  <MangaUpdatesRank rank={muInfo.rankYear} onClick={() => setTopMangaOpen(true)} />
+                )}
               </div>
 
               {chipCollections.length > 0 && (
@@ -480,6 +484,15 @@ export function MangaDetail({
       />
 
       {detail?.title && <MangaRecommendedRail title={detail.title} onOpen={onOpenManga} />}
+
+      <TopMangaModal
+        open={topMangaOpen}
+        onClose={() => setTopMangaOpen(false)}
+        onOpenManga={(id) => {
+          setTopMangaOpen(false);
+          onOpenManga(id);
+        }}
+      />
     </div>
   );
 }

@@ -326,7 +326,7 @@ export function StreamSwitcher({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex h-full max-h-[82vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[8px] border border-edge bg-elevated shadow-[0_28px_72px_-20px_rgba(0,0,0,0.85)] animate-in fade-in slide-in-from-bottom-2 duration-150 backdrop-blur-xl">
+      <div className="flex h-full max-h-[82vh] w-full max-w-[880px] flex-col overflow-hidden rounded-[20px] bg-elevated shadow-[0_28px_72px_-20px_rgba(0,0,0,0.85)] ring-1 ring-edge animate-in fade-in slide-in-from-bottom-2 duration-150 backdrop-blur-xl">
         <header className="flex items-center justify-between gap-4 border-b border-edge-soft px-6 py-4">
           <div className="flex items-center gap-2.5">
             <Tooltip label={t("Refresh sources")} side="bottom">
@@ -384,13 +384,12 @@ export function StreamSwitcher({
                 addonLogo={addonLogos.get(s.addonId) ?? null}
                 onPick={() => onPick(s)}
                 resolving={resolvingKey === streamKey(s)}
-                divider={i > 0}
                 isCurrent={matchCurrent(s)}
                 match={matchBadge(matchScores?.get(s))}
               />
             ))}
             {list.length > showCount && (
-              <li className="border-t border-edge-soft/60 px-4 py-3">
+              <li className="px-4 pb-3 pt-1.5">
                 <button
                   onClick={() => setShowCount((n) => n + 80)}
                   className="flex w-full items-center justify-center gap-2 rounded-md bg-raised px-4 py-2.5 text-[12.5px] font-semibold text-ink-muted transition-colors hover:bg-elevated hover:text-ink"

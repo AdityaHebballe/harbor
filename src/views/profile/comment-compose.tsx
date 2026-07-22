@@ -1,5 +1,6 @@
 import { Send } from "lucide-react";
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 import { COMMENT_MAX, type ComposeIssue } from "./text-safety";
 
 const ISSUE_TEXT: Record<Exclude<ComposeIssue, null>, string> = {
@@ -19,6 +20,7 @@ export function CommentCompose({
   sending: boolean;
   disabled?: boolean;
 }) {
+  const t = useT();
   const [text, setText] = useState("");
   const [issue, setIssue] = useState<ComposeIssue>(null);
   const remaining = COMMENT_MAX - text.length;
@@ -33,7 +35,7 @@ export function CommentCompose({
   if (disabled) {
     return (
       <div className="rounded-[10px] border border-dashed border-edge px-4 py-3 text-center text-[13px] text-ink-subtle">
-        Sign in to leave a comment
+        {t("Sign in to leave a comment")}
       </div>
     );
   }
@@ -51,19 +53,19 @@ export function CommentCompose({
         }}
         rows={2}
         maxLength={COMMENT_MAX + 40}
-        placeholder="Leave a comment. No links."
+        placeholder={t("Leave a comment. No links.")}
         className="w-full resize-none bg-transparent px-2 py-1.5 text-[14px] text-ink outline-none placeholder:text-ink-subtle"
       />
       <div className="flex items-center justify-between gap-3 px-2 pb-1">
         <span className="text-[12px] text-ink-subtle">
-          {issue ? <span className="text-danger">{ISSUE_TEXT[issue]}</span> : `${remaining} left`}
+          {issue ? <span className="text-danger">{t(ISSUE_TEXT[issue])}</span> : t("{count} left", { count: remaining })}
         </span>
         <button
           onClick={() => void send()}
           disabled={sending || !text.trim()}
           className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-4 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          <Send size={20} /> {sending ? "Posting" : "Post"}
+          <Send size={20} /> {sending ? t("Posting") : t("Post")}
         </button>
       </div>
     </div>

@@ -1,55 +1,12 @@
-import { Check, ListVideo, Loader2, Plus } from "lucide-react";
-import { useState } from "react";
+import { ListVideo, Plus } from "lucide-react";
 import { Poster } from "@/components/poster";
 import { Row } from "@/components/row";
-import { addToList, createList, MAX_ITEMS } from "@/lib/custom-lists";
+import { useT } from "@/lib/i18n";
 import { SectionHeader } from "./section-header";
+import { ListHeart } from "./list-heart";
+import { ListShareButton } from "./list-share-button";
+import { SaveListButton } from "./save-list-button";
 import type { FeaturedItem, FeaturedList } from "@/lib/social/featured-lists";
-
-function saveFeaturedList(list: FeaturedList): boolean {
-  const id = createList(list.name || "Saved list");
-  if (!id) return false;
-  for (const it of list.items.slice(0, MAX_ITEMS)) {
-    addToList(id, { id: it.id, type: it.type, name: it.name, poster: it.poster });
-  }
-  return true;
-}
-
-function SaveListButton({ list }: { list: FeaturedList }) {
-  const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const onSave = () => {
-    if (state === "saving" || state === "saved") return;
-    setState("saving");
-    try {
-      setState(saveFeaturedList(list) ? "saved" : "error");
-    } catch {
-      setState("error");
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={onSave}
-      disabled={state === "saving" || state === "saved"}
-      className={`inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold ring-1 transition-colors ${
-        state === "saved"
-          ? "bg-success/12 text-success ring-success/30"
-          : state === "error"
-            ? "bg-danger/12 text-danger ring-danger/30"
-            : "bg-elevated text-ink-muted ring-edge-soft hover:bg-raised hover:text-ink"
-      }`}
-    >
-      {state === "saving" ? (
-        <Loader2 size={13} className="animate-spin" />
-      ) : state === "saved" ? (
-        <Check size={14} strokeWidth={2.6} />
-      ) : (
-        <Plus size={14} strokeWidth={2.4} />
-      )}
-      {state === "saved" ? "Saved" : state === "error" ? "List full" : "Save to my lists"}
-    </button>
-  );
-}
 
 function ListPoster({ item, onOpenMeta }: { item: FeaturedItem; onOpenMeta?: (id: string, kind?: string, hint?: { name?: string; poster?: string }) => void }) {
   return (
@@ -73,6 +30,7 @@ function ListPoster({ item, onOpenMeta }: { item: FeaturedItem; onOpenMeta?: (id
 export function MyListsShowcase({
   lists,
   isOwner,
+  signedIn,
   onOpenMeta,
   onViewAll,
   onManage,
@@ -80,40 +38,54 @@ export function MyListsShowcase({
 }: {
   lists: FeaturedList[];
   isOwner?: boolean;
+  signedIn?: boolean;
   onOpenMeta?: (id: string, kind?: string, hint?: { name?: string; poster?: string }) => void;
   onViewAll?: () => void;
   onManage?: () => void;
   handle?: string;
 }) {
+  const t = useT();
   const shown = lists.filter((l) => l.items.length > 0);
   if (shown.length === 0 && !isOwner) {
     return (
-      <section aria-label="My lists" className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
-        <SectionHeader icon={<ListVideo size={20} />} label="My lists" />
+      <section aria-label={t("My lists")} className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
+        <SectionHeader icon={<ListVideo size={20} />} label={t("My lists")} />
         <p className="py-6 text-center text-[13px] text-ink-subtle">
-          This user hasn't featured any lists
+          {t("This user hasn't featured any lists")}
         </p>
       </section>
     );
   }
   return (
-    <section aria-label="My lists" className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
+    <section aria-label={t("My lists")} className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
       <SectionHeader
         icon={<ListVideo size={20} />}
-        label="My lists"
+        label={t("My lists")}
         onViewAll={shown.length > 0 ? onViewAll : undefined}
       />
       {shown.length > 0 ? (
         <div className="space-y-5">
           {shown.map((list, i) => (
             <Row
-              key={`${list.name}:${i}`}
-              title={list.name || "Untitled list"}
+              key={list.id || `${list.name}:${i}`}
+              title={list.name || t("Untitled list")}
               titleExtra={<span className="text-[12px] tabular-nums text-ink-subtle">{list.items.length}</span>}
-              headerRight={!isOwner ? <SaveListButton list={list} /> : undefined}
+              headerRight={
+                <div className="flex items-center gap-2.5">
+                  <ListHeart
+                    handle={handle ?? ""}
+                    listId={list.id}
+                    count={list.likeCount ?? 0}
+                    liked={!!list.liked}
+                    interactive={!!signedIn && !isOwner}
+                  />
+                  <ListShareButton handle={handle ?? ""} listId={list.id} name={list.name} />
+                  {signedIn && !isOwner && <SaveListButton handle={handle ?? ""} listId={list.id} />}
+                </div>
+              }
               min={96}
               shape="portrait"
-              scrollKey={handle ? `profile:${handle}:list:${i}` : undefined}
+              scrollKey={handle ? `profile:${handle}:list:${list.id || i}` : undefined}
             >
               {list.items.map((item) => (
                 <ListPoster key={item.id} item={item} onOpenMeta={onOpenMeta} />
@@ -125,20 +97,20 @@ export function MyListsShowcase({
               onClick={onManage}
               className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-[10px] border border-edge-soft text-[13px] font-medium text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
             >
-              <ListVideo size={18} /> Choose lists
+              <ListVideo size={18} /> {t("Choose lists")}
             </button>
           )}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center rounded-[10px] border border-dashed border-edge py-10 text-center">
-          <p className="text-[14px] text-ink-muted">No lists featured yet</p>
-          <p className="mt-1 text-[12px] text-ink-subtle">Pick lists from your library to show them here</p>
+          <p className="text-[14px] text-ink-muted">{t("No lists featured yet")}</p>
+          <p className="mt-1 text-[12px] text-ink-subtle">{t("Pick lists from your library to show them here")}</p>
           {onManage && (
             <button
               onClick={onManage}
               className="mt-4 inline-flex min-h-[44px] items-center gap-2 rounded-[10px] bg-ink px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90"
             >
-              <Plus size={18} /> Choose lists
+              <Plus size={18} /> {t("Choose lists")}
             </button>
           )}
         </div>

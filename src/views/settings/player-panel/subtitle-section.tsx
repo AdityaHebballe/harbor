@@ -24,9 +24,9 @@ export function SubtitleStylePanel() {
   ];
 
   const assModes: Array<{ id: "no" | "scale" | "force"; label: string; sub: string }> = [
-    { id: "no", label: t("Keep original"), sub: t("Styled (ASS) subs keep their own fonts, colors, and effects. Truest to the release.") },
-    { id: "scale", label: t("Resize only"), sub: t("Keep the original look but apply your size and position.") },
-    { id: "force", label: t("Use my style"), sub: t("Force your font, size, and color onto styled subs. Use this for Arabic or any subs showing boxes. Can affect karaoke and signs.") },
+    { id: "no", label: t("Keep original"), sub: t("Styled (ASS) subs keep their own font, color, and size. Truest to the release, but the size can vary a lot between files.") },
+    { id: "scale", label: t("Resize only"), sub: t("Keep the original look, scaled by your size. It multiplies the built-in size, so different releases can still differ.") },
+    { id: "force", label: t("Use my style"), sub: t("Force your size, font, and color onto styled subs so every file looks consistent. Best fix if embedded sizes keep changing, or for Arabic and subs showing boxes. Can affect karaoke and signs.") },
   ];
 
   const isDefault =
@@ -107,9 +107,18 @@ export function SubtitleStylePanel() {
           })}
         </div>
         <p className="text-[11.5px] leading-snug text-ink-muted">
-          {t("Seeing empty boxes instead of letters? Choose Arabic under Font and switch to Use my style.")}
+          {t("Embedded subtitles changing size between titles, or showing empty boxes? Switch to Use my style for a consistent size. For boxes, also choose Arabic under Font.")}
         </p>
       </div>
+
+      {(settings.subAssOverride === "no" || settings.subAssOverride === "scale") && (
+        <ToggleRow
+          label={t("Normalize embedded subtitle size")}
+          sub={t("Auto-adjusts styled (ASS) subtitles so dialogue stays the same size across files, while keeping their colors, fonts, and sign placement.")}
+          value={settings.subAssNormalizeSize}
+          onChange={(v) => update({ subAssNormalizeSize: v })}
+        />
+      )}
 
       {settings.subStyle === "box" && (
         <SubField label={t("Background opacity")} value={`${Math.round(settings.subBoxOpacity * 100)}%`}>

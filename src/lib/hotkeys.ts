@@ -28,6 +28,7 @@ export type HotkeyId =
   | "playerAnime4kOn"
   | "playerAnime4kOff"
   | "playerRtxHdrToggle"
+  | "playerRtxVsrToggle"
   | "playerCrop"
   | "playerPanscanUp"
   | "playerPanscanDown"
@@ -78,6 +79,7 @@ export const HOTKEYS: HotkeyDef[] = [
   { id: "playerAnime4kOn", scope: "Player", group: "Playback", label: "Anime4K on", description: "Turn Anime4K upscaling on. Only active when shaders are available.", defaultBinding: "ctrl+1" },
   { id: "playerAnime4kOff", scope: "Player", group: "Playback", label: "Anime4K off", description: "Turn Anime4K upscaling off.", defaultBinding: "ctrl+0" },
   { id: "playerRtxHdrToggle", scope: "Player", group: "Playback", label: "Toggle RTX Video HDR", description: "Toggle RTX Video HDR during mpv playback. Unavailable while HDR-to-SDR tonemapping or SVP is active.", defaultBinding: "ctrl+h" },
+  { id: "playerRtxVsrToggle", scope: "Player", group: "Playback", label: "Toggle RTX Super Resolution", description: "Toggle RTX Video Super Resolution during mpv playback. Unavailable while SVP is active.", defaultBinding: "ctrl+u" },
 
   { id: "playerSeekBack10", scope: "Player", group: "Seeking", label: "Seek back", description: "Jump back by the Back seek step set under Behavior.", defaultBinding: "ArrowLeft" },
   { id: "playerSeekForward10", scope: "Player", group: "Seeking", label: "Seek forward", description: "Jump forward by the Forward seek step set under Behavior.", defaultBinding: "ArrowRight" },

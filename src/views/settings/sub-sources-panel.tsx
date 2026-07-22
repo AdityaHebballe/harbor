@@ -1,14 +1,15 @@
 import { useEffect, useState } from "react";
-import opensubtitlesLogo from "@/assets/opensubtitles.png";
 import wyzieLogo from "@/assets/wyzie.png";
 import { useAuth } from "@/lib/auth";
 import type { Addon } from "@/lib/addons";
 import { gatherSubtitleAddons } from "@/lib/subtitles/addon-source";
 import { useSettings } from "@/lib/settings";
+import { openUrl } from "@/lib/window";
 import { useT } from "@/lib/i18n";
 import { Section, ToggleRow, useSettingsActiveContext } from "./shared";
+import { OpenSubsMark, SubdlMark, SubsourceMark } from "./sub-source-marks";
 
-type ProvKey = "opensubtitles" | "wyzie" | "addons";
+type ProvKey = "opensubtitles" | "wyzie" | "addons" | "subdl" | "subsource";
 
 function Favicon({ src }: { src: string }) {
   return (
@@ -69,6 +70,48 @@ function EmptyAddonIcon() {
   );
 }
 
+function KeyedSourceRow({
+  label,
+  sub,
+  leading,
+  on,
+  onToggle,
+  keyValue,
+  onKey,
+  placeholder,
+  help,
+}: {
+  label: string;
+  sub: string;
+  leading: React.ReactNode;
+  on: boolean;
+  onToggle: (v: boolean) => void;
+  keyValue: string;
+  onKey: (v: string) => void;
+  placeholder: string;
+  help: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <ToggleRow label={label} sub={sub} value={on} onChange={onToggle} leading={leading} />
+      {on && (
+        <div className="ms-1 flex flex-col gap-1.5 rounded-xl border border-edge-soft bg-canvas/40 p-3">
+          <input
+            type="password"
+            value={keyValue}
+            onChange={(e) => onKey(e.target.value)}
+            placeholder={placeholder}
+            spellCheck={false}
+            autoComplete="off"
+            className="h-10 w-full rounded-lg border border-edge-soft bg-elevated/40 px-3.5 text-[13px] text-ink placeholder:text-ink-subtle focus:border-edge focus:outline-none"
+          />
+          <span className="text-[11.5px] leading-snug text-ink-subtle">{help}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function SubSourcesPanel() {
   const t = useT();
   const { settings, update } = useSettings();
@@ -80,6 +123,8 @@ export function SubSourcesPanel() {
   const osOn = enabled.opensubtitles ?? true;
   const wyzieOn = enabled.wyzie ?? false;
   const addonsOn = enabled.addons ?? true;
+  const subdlOn = enabled.subdl === true;
+  const subsourceOn = enabled.subsource === true;
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +163,7 @@ export function SubSourcesPanel() {
             sub={t("Harbor's built-in OpenSubtitles search, on by default. If you install an OpenSubtitles addon, this steps aside automatically so your results are never duplicated.")}
             value={osOn}
             onChange={(v) => setProv("opensubtitles", v)}
-            leading={<Favicon src={opensubtitlesLogo} />}
+            leading={<OpenSubsMark />}
           />
           <ToggleRow
             label={t("Wyzie")}
@@ -133,6 +178,44 @@ export function SubSourcesPanel() {
             value={addonsOn}
             onChange={(v) => setProv("addons", v)}
             leading={addons && addons.length > 0 ? <AddonStack addons={addons} /> : <EmptyAddonIcon />}
+          />
+          <KeyedSourceRow
+            label={t("SUBDL")}
+            sub={t("A large multi-language subtitle database. Off until you add your free SUBDL API key.")}
+            leading={<SubdlMark />}
+            on={subdlOn}
+            onToggle={(v) => setProv("subdl", v)}
+            keyValue={settings.subdlApiKey ?? ""}
+            onKey={(v) => update({ subdlApiKey: v })}
+            placeholder={t("Paste your SUBDL API key")}
+            help={
+              <button
+                type="button"
+                onClick={() => openUrl("https://subdl.com/panel/api")}
+                className="text-accent underline-offset-2 transition-colors hover:underline"
+              >
+                {t("Get a free key at subdl.com")}
+              </button>
+            }
+          />
+          <KeyedSourceRow
+            label={t("Subsource")}
+            sub={t("A community subtitle source. Off until you add your Subsource API key.")}
+            leading={<SubsourceMark />}
+            on={subsourceOn}
+            onToggle={(v) => setProv("subsource", v)}
+            keyValue={settings.subsourceApiKey ?? ""}
+            onKey={(v) => update({ subsourceApiKey: v })}
+            placeholder={t("Paste your Subsource API key")}
+            help={
+              <button
+                type="button"
+                onClick={() => openUrl("https://subsource.net")}
+                className="text-accent underline-offset-2 transition-colors hover:underline"
+              >
+                {t("Get your key at subsource.net")}
+              </button>
+            }
           />
         </div>
         <button

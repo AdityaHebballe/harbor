@@ -4,7 +4,7 @@ export type Mood = "dark" | "light" | "warm" | "cool" | "vibrant" | "muted";
 
 type Hsl = { h: number; s: number; l: number };
 
-function hexToHsl(hex: string): Hsl | null {
+export function hexToHsl(hex: string): Hsl | null {
   const m = hex.replace(/^#/, "");
   if (m.length !== 3 && m.length !== 6) return null;
   const full = m.length === 3 ? m.split("").map((c) => c + c).join("") : m;

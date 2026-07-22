@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { addGroupMember, type GroupDetail } from "@/lib/social/groups";
 import { searchUsers, type UserHit } from "@/lib/social/user-search";
 import { currentAuthor } from "@/lib/theme-auth";
+import { useT } from "@/lib/i18n";
 import { Avatar, VerifiedCheck } from "./profile-bits";
 
 type RowState = "idle" | "sending" | "added" | "member" | "self";
@@ -19,6 +20,7 @@ export function InviteMemberModal({
   onClose: () => void;
   onChanged: (detail: GroupDetail) => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<UserHit[]>([]);
   const [phase, setPhase] = useState<"idle" | "searching" | "done">("idle");
@@ -87,7 +89,7 @@ export function InviteMemberModal({
         setStates((s) => ({ ...s, [key]: "member" }));
       } else {
         setStates((s) => ({ ...s, [key]: "idle" }));
-        setError(msg || "Could not add member.");
+        setError(msg || t("Could not add member."));
       }
     }
   };
@@ -102,17 +104,17 @@ export function InviteMemberModal({
         className="animate-modal-in flex w-[min(94vw,460px)] flex-col rounded-2xl border border-edge-soft bg-elevated shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]"
       >
         <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="font-display text-[19px] font-medium text-ink">Invite member</h2>
+          <h2 className="font-display text-[19px] font-medium text-ink">{t("Invite member")}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="grid h-9 w-9 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
           >
             <X size={18} />
           </button>
         </div>
         <p className="px-5 pt-1 text-[12.5px] text-ink-muted">
-          Search by handle or name to add people to this group.
+          {t("Search by handle or name to add people to this group.")}
         </p>
 
         <div className="px-5 pt-4">
@@ -125,7 +127,7 @@ export function InviteMemberModal({
                 setQuery(e.target.value);
                 setError(null);
               }}
-              placeholder="@handle or name"
+              placeholder={t("@handle or name")}
               spellCheck={false}
               className="h-11 w-full rounded-xl border border-edge bg-canvas ps-10 pe-10 text-[14px] text-ink outline-none transition-colors placeholder:text-ink-subtle focus:border-ink"
             />
@@ -140,9 +142,9 @@ export function InviteMemberModal({
         )}
 
         <div className="mt-3 max-h-[46vh] overflow-y-auto px-2.5 pb-3">
-          {phase === "idle" && <Empty text="Start typing to find people." />}
+          {phase === "idle" && <Empty text={t("Start typing to find people.")} />}
           {phase !== "idle" && results.length === 0 && (
-            <Empty text={phase === "searching" ? "Searching..." : "No one found by that name."} />
+            <Empty text={phase === "searching" ? t("Searching...") : t("No one found by that name.")} />
           )}
           {results.map((hit) => (
             <ResultRow key={hit.handle} hit={hit} state={stateFor(hit)} onAdd={() => add(hit)} />
@@ -171,9 +173,10 @@ function ResultRow({ hit, state, onAdd }: { hit: UserHit; state: RowState; onAdd
 }
 
 function AddButton({ state, onAdd }: { state: RowState; onAdd: () => void }) {
-  if (state === "self") return <Tag label="You" />;
-  if (state === "member") return <Tag label="Member" tone="success" icon={<Check size={14} />} />;
-  if (state === "added") return <Tag label="Added" tone="success" icon={<Check size={14} />} />;
+  const t = useT();
+  if (state === "self") return <Tag label={t("You")} />;
+  if (state === "member") return <Tag label={t("Member")} tone="success" icon={<Check size={14} />} />;
+  if (state === "added") return <Tag label={t("Added")} tone="success" icon={<Check size={14} />} />;
   return (
     <button
       onClick={onAdd}
@@ -181,7 +184,7 @@ function AddButton({ state, onAdd }: { state: RowState; onAdd: () => void }) {
       className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-ink px-3.5 text-[13px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-60"
     >
       {state === "sending" ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-      Add
+      {t("Add")}
     </button>
   );
 }

@@ -9,6 +9,7 @@ import { listLocalCw, subscribeLocalCw, type LocalCwEntry } from "@/lib/local-cw
 import { readSnapshot, useSnapshotVersion } from "@/lib/snapshots";
 import { useSettings } from "@/lib/settings";
 import {
+  ANIME_CLOUD_ID,
   cwSortKey,
   episodeFromVideoId,
   isAnimeCwItem,
@@ -72,7 +73,7 @@ export function useMobileCw(limit = 14): LibraryItem[] {
   return useMemo(() => {
     void localVersion;
     void dismissVersion;
-    const base = cwPerProfile ? [] : items;
+    const base = cwPerProfile ? [] : items.filter((i) => !ANIME_CLOUD_ID.test(i._id));
     const merged = [...base, ...listLocalCw().map(localToLibraryItem)]
       .filter(
         (i) =>

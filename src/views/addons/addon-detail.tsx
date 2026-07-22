@@ -8,6 +8,7 @@ import { categorizeAddon, isAdultAddon, type ResolvedAddon } from "@/lib/addons-
 import { addonSiteUrl, rateOnSiteUrl, risingEntryFor, useRising } from "@/lib/providers/stremio-addons";
 import { useCommunity } from "@/lib/providers/stremio-addons-index";
 import { openInstallerViewport } from "@/components/installer-viewport";
+import { ScrollTopButton } from "@/components/scroll-top-button";
 import { pushActivityHint } from "@/lib/discord/activity-hint";
 import { isWeb } from "@/lib/platform";
 import { openUrl } from "@/lib/window";
@@ -454,6 +455,8 @@ export function AddonDetail({
           onInstall={onInstallAddon}
         />
       </div>
+
+      <ScrollTopButton label={t("Back to top")} />
     </main>
   );
 }

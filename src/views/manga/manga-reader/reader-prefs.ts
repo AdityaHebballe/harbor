@@ -14,6 +14,7 @@ export const DEFAULT_PREFS: ReaderPrefs = {
   doubleGap: 8,
   flipSound: true,
   focusMode: false,
+  hideChapterEndHint: false,
 };
 
 export function loadPrefs(): ReaderPrefs {

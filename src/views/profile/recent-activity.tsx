@@ -1,6 +1,7 @@
 import { Clapperboard, Heart, Star, Trophy } from "lucide-react";
 import { Poster } from "@/components/poster";
 import { Row } from "@/components/row";
+import { useT } from "@/lib/i18n";
 import { SectionHeader } from "./section-header";
 import { timeAgo } from "./profile-bits";
 import type { ActivityItem, ActivityKind } from "./profile-types";
@@ -26,6 +27,7 @@ export function ActivityGlyph({ kind, size = 16 }: { kind: ActivityKind; size?: 
 }
 
 function ActivityCard({ a, onOpen }: { a: ActivityItem; onOpen?: (metaId: string, kind?: string, hint?: { name?: string; poster?: string }) => void }) {
+  const t = useT();
   return (
     <button
       onClick={() => a.metaId && onOpen?.(a.metaId, undefined, { name: a.title, poster: a.posterUrl })}
@@ -41,7 +43,7 @@ function ActivityCard({ a, onOpen }: { a: ActivityItem; onOpen?: (metaId: string
       />
       <div className="mt-2 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-ink-subtle">
         <ActivityGlyph kind={a.kind} size={13} />
-        {ACTIVITY_VERB[a.kind]}
+        {t(ACTIVITY_VERB[a.kind])}
         {a.kind === "rated" && a.rating !== undefined && <span className="text-accent">{a.rating}/10</span>}
       </div>
       <div className="mt-0.5 truncate text-[13px] font-medium text-ink">{a.title}</div>
@@ -63,17 +65,18 @@ export function RecentActivity({
   handle?: string;
   visibilityPrivate?: boolean;
 }) {
+  const t = useT();
   return (
-    <section aria-label="Recent activity" className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
+    <section aria-label={t("Recent activity")} className="rounded-[14px] bg-surface p-5 ring-1 ring-edge-soft">
       <SectionHeader
         icon={<Clapperboard size={20} />}
-        label="Recent activity"
+        label={t("Recent activity")}
         onViewAll={!visibilityPrivate && items.length > 0 ? onViewAll : undefined}
       />
       {visibilityPrivate ? (
-        <p className="py-6 text-center text-[13px] text-ink-subtle">This user has chosen to keep activity private</p>
+        <p className="py-6 text-center text-[13px] text-ink-subtle">{t("This user has chosen to keep activity private")}</p>
       ) : items.length === 0 ? (
-        <p className="py-6 text-center text-[13px] text-ink-subtle">No recent activity yet</p>
+        <p className="py-6 text-center text-[13px] text-ink-subtle">{t("No recent activity yet")}</p>
       ) : (
         <Row min={150} shape="portrait" scrollKey={handle ? `profile:${handle}:activity` : undefined}>
           {items.map((a) => (

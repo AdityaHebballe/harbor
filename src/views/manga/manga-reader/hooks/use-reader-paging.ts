@@ -9,9 +9,8 @@ type Args = {
   currentPage: number;
   step: number;
   lastStart: number;
-  index: number;
-  atFirstChapter: boolean;
-  atLastChapter: boolean;
+  nextIndex: number | null;
+  prevIndex: number | null;
   autoNext: boolean;
   setCurrentPage: Dispatch<SetStateAction<number>>;
   onChangeIndex: (i: number) => void;
@@ -20,7 +19,7 @@ type Args = {
 };
 
 export function useReaderPaging(a: Args) {
-  const { paged, double, horizontal = false, rtl = false, total, currentPage, step, lastStart, index, atFirstChapter, atLastChapter, autoNext, setCurrentPage, onChangeIndex, pageEls, scrollRef } = a;
+  const { paged, double, horizontal = false, rtl = false, total, currentPage, step, lastStart, nextIndex, prevIndex, autoNext, setCurrentPage, onChangeIndex, pageEls, scrollRef } = a;
 
   const goToPage = (p: number) => {
     if (paged) {
@@ -40,9 +39,9 @@ export function useReaderPaging(a: Args) {
   const nextPage = () => {
     if (paged) {
       if (currentPage >= total) {
-        if (!atLastChapter) onChangeIndex(index + 1);
+        if (nextIndex != null) onChangeIndex(nextIndex);
       } else if (currentPage >= lastStart) {
-        if (autoNext && !atLastChapter) onChangeIndex(index + 1);
+        if (autoNext && nextIndex != null) onChangeIndex(nextIndex);
         else setCurrentPage(total);
       } else {
         setCurrentPage((p) => p + step);
@@ -60,7 +59,7 @@ export function useReaderPaging(a: Args) {
   const prevPage = () => {
     if (paged) {
       if (currentPage <= 0) {
-        if (!atFirstChapter) onChangeIndex(index - 1);
+        if (prevIndex != null) onChangeIndex(prevIndex);
       } else if (currentPage >= total) {
         setCurrentPage(lastStart);
       } else {

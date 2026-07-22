@@ -19,27 +19,26 @@ export function useIdleScreensaver(
       return;
     }
     lastRef.current = performance.now();
-    const focused = () => document.hasFocus() && document.visibilityState === "visible";
+    const visible = () => document.visibilityState === "visible";
     const onActivity = () => {
       lastRef.current = performance.now();
       if (activeRef.current) setActive(false);
     };
     for (const ev of ACTIVITY) window.addEventListener(ev, onActivity, { passive: true });
     const bump = () => {
-      lastRef.current = performance.now();
+      if (visible()) lastRef.current = performance.now();
     };
     window.addEventListener("focus", bump);
+    document.addEventListener("visibilitychange", bump);
     const id = window.setInterval(() => {
       if (activeRef.current) return;
-      if (!focused()) {
-        lastRef.current = performance.now();
-        return;
-      }
+      if (!visible()) return;
       if (performance.now() - lastRef.current >= delayMs) setActive(true);
     }, TICK_MS);
     return () => {
       for (const ev of ACTIVITY) window.removeEventListener(ev, onActivity);
       window.removeEventListener("focus", bump);
+      document.removeEventListener("visibilitychange", bump);
       window.clearInterval(id);
     };
   }, [enabled, delayMs, suppressed]);

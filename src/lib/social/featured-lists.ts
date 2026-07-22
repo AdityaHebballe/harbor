@@ -1,6 +1,10 @@
 import { safeFetch } from "@/lib/safe-fetch";
-import { authToken } from "@/lib/theme-auth";
+import { authToken, currentAuthor } from "@/lib/theme-auth";
 import { readLists, type CustomList } from "@/lib/custom-lists";
+import { bakeDefaultPosters } from "./featured-posters";
+
+export { likeList, unlikeList } from "./list-likes";
+export type { ListLike } from "./list-likes";
 
 const BASE = "https://harbor.site/themes/api/social";
 
@@ -15,8 +19,11 @@ export type FeaturedItem = {
 };
 
 export type FeaturedList = {
+  id: string;
   name: string;
   items: FeaturedItem[];
+  likeCount?: number;
+  liked?: boolean;
 };
 
 export type PickableList = {
@@ -43,7 +50,20 @@ export function readLocalLists(): PickableList[] {
 }
 
 export function toFeaturedList(list: PickableList): FeaturedList {
-  return { name: list.name, items: list.items };
+  return { id: "", name: list.name, items: list.items };
+}
+
+export function normalizeListName(name: string): string {
+  return name.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40);
+}
+
+export function buildFeaturedPayload(selected: PickableList[], served: FeaturedList[]): FeaturedList[] {
+  const idByName = new Map<string, string>();
+  for (const f of served) {
+    const key = normalizeListName(f.name);
+    if (f.id && !idByName.has(key)) idByName.set(key, f.id);
+  }
+  return selected.map((l) => ({ id: idByName.get(normalizeListName(l.name)) ?? "", name: l.name, items: l.items }));
 }
 
 function authHeaders(): Record<string, string> {
@@ -62,13 +82,38 @@ export async function fetchFeaturedLists(handle: string, signal?: AbortSignal): 
   return readFeatured(await res.json());
 }
 
-export async function saveFeaturedLists(lists: FeaturedList[]): Promise<FeaturedList[]> {
+export async function fetchSharedList(handle: string, listId: string, signal?: AbortSignal): Promise<FeaturedList | null> {
+  const lists = await fetchFeaturedLists(handle, signal);
+  return lists.find((l) => l.id === listId) ?? null;
+}
+
+export async function saveFeaturedLists(lists: FeaturedList[], clear = false): Promise<FeaturedList[]> {
+  const baked = lists.length > 0 ? await bakeDefaultPosters(lists) : lists;
+  const body: Record<string, unknown> = { featuredLists: baked };
+  if (clear) body.clearFeaturedLists = true;
   const res = await safeFetch(`${BASE}/me/profile`, {
     method: "PATCH",
     headers: { ...authHeaders(), "content-type": "application/json" },
-    body: JSON.stringify({ featuredLists: lists }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`save featured lists ${res.status}`);
   const echoed = readFeatured(await res.json());
   return echoed.length || lists.length === 0 ? echoed : lists;
+}
+
+export async function unfeatureListByName(name: string): Promise<void> {
+  const handle = currentAuthor()?.handle;
+  const target = normalizeListName(name);
+  if (!handle || !target) return;
+  const served = await fetchFeaturedLists(handle);
+  const kept = served.filter((l) => normalizeListName(l.name) !== target);
+  if (kept.length !== served.length) await saveFeaturedLists(kept, true);
+}
+
+export function listShareUrl(handle: string, listId: string): string {
+  return `https://harbor.site/list/${encodeURIComponent(handle)}/${encodeURIComponent(listId)}`;
+}
+
+export function listDeepLink(handle: string, listId: string): string {
+  return `harbor://list/${encodeURIComponent(handle)}/${encodeURIComponent(listId)}`;
 }

@@ -40,7 +40,7 @@ export function CustomChromeBuilder({
   };
 
   return (
-    <div className="flex flex-col gap-4 px-5 pb-5 pt-4">
+    <div className="flex flex-col gap-4 pb-6">
       <div className="flex flex-col gap-0.5">
         <span className="text-[15px] font-semibold text-ink">Your navigation</span>
         <span className="text-[13px] leading-snug text-ink-subtle">
@@ -121,7 +121,7 @@ export function CustomChromeBuilder({
       <button
         type="button"
         onClick={onOpenCode}
-        className="flex h-12 items-center justify-center gap-2 rounded-lg border border-edge-soft text-[15px] font-semibold text-ink-muted transition-colors hover:border-edge hover:bg-white/[0.03] hover:text-ink"
+        className="flex h-12 items-center justify-center gap-2 rounded-lg border border-edge-soft text-[15px] font-semibold text-ink-muted transition-colors hover:border-edge hover:bg-elevated/40 hover:text-ink"
       >
         <Code2 size={16} strokeWidth={2.2} />
         Edit the HTML and CSS by hand

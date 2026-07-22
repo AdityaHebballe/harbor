@@ -367,8 +367,9 @@ export function Row({
       gap: GAP,
       scrollPosition: rtl ? -track.scrollLeft : track.scrollLeft,
       rtl,
+      transitionMs: settings.posterDockTransitionMs,
     });
-  }, [cellWidth, dockEnabled, effMin, resetPosterDock]);
+  }, [cellWidth, dockEnabled, effMin, resetPosterDock, settings.posterDockTransitionMs]);
   const schedulePosterDock = useCallback(
     (clientX: number) => {
       dockPointerXRef.current = clientX;
@@ -512,7 +513,7 @@ export function Row({
     }
   };
 
-  const trackPad = dockEnabled ? "px-5 pb-5 pt-8 -mx-5 -mb-5 -mt-8" : "p-5 -m-5";
+  const trackPad = dockEnabled ? "px-5 pb-8 pt-14 -mx-5 -mb-8 -mt-14" : "p-5 -m-5";
 
   return (
     <div className={`flex min-w-0 flex-col gap-5 ps-[9px] ${className}`}>

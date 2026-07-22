@@ -12,6 +12,7 @@ import {
   SocialIcon,
   type SocialKey,
 } from "@/lib/social/socials";
+import { useT } from "@/lib/i18n";
 import { saveSocials } from "./profile-api";
 import type { ProfileSummary, SocialEntry } from "./profile-types";
 
@@ -52,6 +53,7 @@ function ServiceTile({
 }
 
 function AddedRow({ entry, onRemove }: { entry: SocialEntry; onRemove: () => void }) {
+  const t = useT();
   const svc = getService(entry.service);
   const color = iconColor(entry.service);
   if (!svc) return null;
@@ -70,7 +72,7 @@ function AddedRow({ entry, onRemove }: { entry: SocialEntry; onRemove: () => voi
       <button
         type="button"
         onClick={onRemove}
-        aria-label={`Remove ${svc.label}`}
+        aria-label={t("Remove {label}", { label: svc.label })}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
       >
         <X size={16} />
@@ -88,6 +90,7 @@ export function SocialsEditor({
   onClose: () => void;
   onSaved: (summary: ProfileSummary) => void;
 }) {
+  const t = useT();
   const [list, setList] = useState<SocialEntry[]>(() => initial.slice(0, MAX_SOCIALS));
   const [active, setActive] = useState<SocialKey>(SERVICES[0].key);
   const [value, setValue] = useState("");
@@ -132,7 +135,7 @@ export function SocialsEditor({
       onSaved(summary);
       onClose();
     } catch (e) {
-      setError((e as Error).message || "Could not save your links.");
+      setError((e as Error).message || t("Could not save your links."));
       setBusy(false);
     }
   };
@@ -147,17 +150,17 @@ export function SocialsEditor({
         className="animate-modal-in flex w-[min(94vw,480px)] flex-col rounded-2xl border border-edge-soft bg-elevated shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)]"
       >
         <div className="flex items-center justify-between px-5 pt-5">
-          <h2 className="font-display text-[19px] font-medium text-ink">Social links</h2>
+          <h2 className="font-display text-[19px] font-medium text-ink">{t("Social links")}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="grid h-9 w-9 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-raised hover:text-ink"
           >
             <X size={18} />
           </button>
         </div>
         <p className="px-5 pt-1 text-[12.5px] text-ink-muted">
-          Add up to {MAX_SOCIALS} profiles. Enter your handle only, not the full link.
+          {t("Add up to {max} profiles. Enter your handle only, not the full link.", { max: MAX_SOCIALS })}
         </p>
 
         <div className="flex flex-col gap-3 px-5 pb-2 pt-4">
@@ -202,11 +205,11 @@ export function SocialsEditor({
               disabled={!canAdd}
               className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-[10px] bg-ink px-4 text-[13px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
             >
-              <Plus size={15} /> {existing ? "Update" : "Add"}
+              <Plus size={15} /> {existing ? t("Update") : t("Add")}
             </button>
           </div>
           <div className="flex items-center justify-between px-1 text-[11px] text-ink-subtle">
-            <span>{atCap ? `You have reached the ${MAX_SOCIALS} link limit` : `${activeSvc?.label} handle`}</span>
+            <span>{atCap ? t("You have reached the {max} link limit", { max: MAX_SOCIALS }) : t("{label} handle", { label: activeSvc?.label ?? "" })}</span>
             <span className="tabular-nums">
               {value.length}/{HANDLE_MAX}
             </span>
@@ -215,14 +218,14 @@ export function SocialsEditor({
           {error && <p className="rounded-lg bg-danger/15 px-3 py-2 text-[12.5px] text-danger">{error}</p>}
 
           <div className="mt-1 flex items-center justify-between">
-            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">Your links</span>
+            <span className="text-[12px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">{t("Your links")}</span>
             <span className="text-[12px] tabular-nums text-ink-subtle">
               {list.length}/{MAX_SOCIALS}
             </span>
           </div>
           <div className="flex max-h-[34vh] flex-col gap-1.5 overflow-y-auto">
             {list.length === 0 ? (
-              <p className="py-6 text-center text-[13px] text-ink-subtle">No links added yet.</p>
+              <p className="py-6 text-center text-[13px] text-ink-subtle">{t("No links added yet.")}</p>
             ) : (
               list.map((entry) => (
                 <AddedRow key={entry.service} entry={entry} onRemove={() => remove(entry.service)} />
@@ -236,7 +239,7 @@ export function SocialsEditor({
             onClick={onClose}
             className="inline-flex min-h-11 items-center rounded-[10px] px-4 text-[14px] font-medium text-ink-muted transition-colors hover:bg-surface"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             onClick={() => void save()}
@@ -244,7 +247,7 @@ export function SocialsEditor({
             className="inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-accent px-5 text-[14px] font-semibold text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {busy && <Loader2 size={16} className="animate-spin" />}
-            {busy ? "Saving" : "Save"}
+            {busy ? t("Saving") : t("Save")}
           </button>
         </div>
       </div>

@@ -3,13 +3,12 @@ import { readActiveStremioAuthKey } from "@/lib/auth";
 import { cloudWriteId } from "@/lib/stremio";
 import { setEpisodesWatchedStremio } from "@/lib/stremio-watched-sync";
 import { manualEpisodeKeys } from "@/lib/manual-watched";
-import { isDetectedAnime } from "@/lib/anime-detect";
 
 const ANIME_ID = /^(kitsu|mal|anilist|anidb):/;
 
 export async function syncSeriesWatchedToStremio(meta: Meta, imdbId?: string | null): Promise<void> {
   const id = meta.id;
-  if (ANIME_ID.test(id) || meta.type === "anime" || isDetectedAnime(id)) return;
+  if (ANIME_ID.test(id) || meta.type === "anime") return;
   const authKey = readActiveStremioAuthKey();
   if (!authKey) return;
   const imdb = imdbId?.startsWith("tt") ? imdbId : id.startsWith("tt") ? id : null;

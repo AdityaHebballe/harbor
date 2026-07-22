@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { getSeekHovering, subscribeSeekHovering } from "@/lib/player/playback-clock";
 import { CHROME_HIDE_MS_PAUSED, CHROME_HIDE_MS_PLAYING, CHROME_HIDE_MS_RESUME } from "../player-utils";
 
@@ -156,11 +156,15 @@ export function useChromeVisibility(params: {
     }
   }, [anyMenuOpen]);
 
-  const cursorStyle: CSSProperties = drawMode
-    ? { cursor: "none" }
-    : !chromeVisible && playing
-      ? { cursor: "none" }
-      : { cursor: "default" };
+  const cursorStyle: CSSProperties = useMemo(
+    () =>
+      drawMode
+        ? { cursor: "none" }
+        : !chromeVisible && playing
+          ? { cursor: "none" }
+          : { cursor: "default" },
+    [drawMode, chromeVisible, playing],
+  );
 
   return {
     chromeVisible,

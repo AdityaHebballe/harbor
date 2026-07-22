@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Anime4kIndicator } from "@/components/player/anime4k-indicator";
 import { SvpIndicator } from "@/components/player/svp-indicator";
 import { StatsOverlay } from "@/components/player/stats-overlay";
@@ -14,7 +15,7 @@ import type { ParentalCategory } from "@/lib/providers/harbor-imdb";
 import { ContentAdvisoryToast } from "@/components/player/content-advisory-toast";
 import { useT } from "@/lib/i18n";
 
-export function StageOverlays({
+export const StageOverlays = memo(function StageOverlays({
   snap,
   engine,
   pipMode,
@@ -98,4 +99,4 @@ export function StageOverlays({
       )}
     </>
   );
-}
+});

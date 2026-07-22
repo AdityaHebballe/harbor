@@ -22,6 +22,7 @@ import { useResumeAutosave } from "./use-resume-autosave";
 import { useStremioSync } from "./use-stremio-sync";
 import { useSubDrop } from "./use-sub-drop";
 import { useSubStyleApply } from "./use-sub-style-apply";
+import { useAssNormalize } from "./use-ass-normalize";
 import { useTrackAutoload } from "./use-track-autoload";
 import { useAutoSync } from "./use-auto-sync";
 import { publishAutoSync } from "@/components/player/autosync/autosync-store";
@@ -118,11 +119,11 @@ export function usePlayerMedia(params: {
   });
 
   const autoSync = useAutoSync({ bridgeRef, src, snap, engine, settings });
-  const { status: asStatus, offer: asOffer, applyOffer: asApply, revert: asRevert, retry: asRetry, run: asRun, feedback: asFeedback } = autoSync;
+  const { status: asStatus, offer: asOffer, applyOffer: asApply, revert: asRevert, retry: asRetry, run: asRun, stop: asStop, feedback: asFeedback } = autoSync;
   useEffect(() => {
-    publishAutoSync({ status: asStatus, offer: asOffer, applyOffer: asApply, revert: asRevert, retry: asRetry, run: asRun, feedback: asFeedback });
+    publishAutoSync({ status: asStatus, offer: asOffer, applyOffer: asApply, revert: asRevert, retry: asRetry, run: asRun, stop: asStop, feedback: asFeedback });
     return () => publishAutoSync(null);
-  }, [asStatus, asOffer, asApply, asRevert, asRetry, asRun, asFeedback]);
+  }, [asStatus, asOffer, asApply, asRevert, asRetry, asRun, asStop, asFeedback]);
 
   const subEmbed = engine === "mpv" && settings.playerMpvEmbed;
   const hdrNativeSurface =
@@ -141,6 +142,14 @@ export function usePlayerMedia(params: {
     hdrNativeSurface || subAssNative || (subEmbed && selectedImageSub);
   const assNativeActive = selectedAssSub && (subNativeRender || !subEmbed);
   const imageNativeActive = selectedImageSub && (subNativeRender || !subEmbed);
+  const assNormalizeScale = useAssNormalize({
+    enabled: engine === "mpv" && settings.subAssNormalizeSize && assNativeActive && !subAssOverridden,
+    sourceUrl: src.url ?? null,
+    headers: src.headers,
+    track: selectedSubTrack,
+    tracks: snap.subtitleTracks,
+    targetFontSize: settings.subFontSize,
+  });
   const mpvMediaReadyForStyle =
     snap.status !== "idle" &&
     snap.status !== "loading" &&
@@ -159,6 +168,8 @@ export function usePlayerMedia(params: {
     sourceGamma: snap.hdrGamma,
     bridgeKey,
     svpActive,
+    assScale: assNormalizeScale,
+    subTrackId: selectedSubTrack?.id,
   });
   useEffect(() => {
     if (!subEmbed && !hdrNativeSurface) return;
@@ -205,9 +216,11 @@ export function usePlayerMedia(params: {
       canDownload: !!src.url,
       downloadSubtitle: doDownloadSubtitle,
       canDownloadSubtitle: canDownloadSub,
+      streamUrl: src.url ?? null,
+      infoHash: src.streamRef?.infoHash ?? null,
     });
     return () => setPlayerActions(null);
-  }, [download.start, toggleFullscreen, src.url, doDownloadSubtitle, canDownloadSub]);
+  }, [download.start, toggleFullscreen, src.url, src.streamRef?.infoHash, doDownloadSubtitle, canDownloadSub]);
 
   useResumeAutosave({ src, snap, season, episode, resolvedImdbId, resolvedImdbVerified });
   useStremioSync({ src, snap, authKey, resolvedImdbId, resolvedImdbVerified, resolutionSettled, castActiveRef });

@@ -4,6 +4,7 @@ const en: Record<string, string> = {
   "nav.catalogs": "Catalogs",
   "nav.movies": "Movies",
   "nav.shows": "Shows",
+  "nav.people": "Top People",
   "nav.kids": "Watch",
   "nav.anime": "Anime",
   "nav.manga": "Manga",

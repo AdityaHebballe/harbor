@@ -25,15 +25,11 @@ function isFinishedSeries(i: LibraryItem): boolean {
 }
 
 function currentEpisode(i: LibraryItem): { season: number; episode: number } | null {
+  if (ANIME_ID.test(i._id)) return null;
   const season = i.state?.season;
   const episode = i.state?.episode;
   if (season && episode) return { season, episode };
-  const vid = i.state?.video_id ?? "";
-  if (/^(kitsu|mal|anilist|anidb):/.test(i._id) && vid.split(":").length === 3) {
-    const ep = Number(vid.split(":")[2]);
-    return Number.isFinite(ep) && ep > 0 ? { season: 1, episode: ep } : null;
-  }
-  return episodeFromVideoId(vid);
+  return episodeFromVideoId(i.state?.video_id ?? "");
 }
 
 function nextEpAired(list: PlayEpisode[], nextEp: PlayEpisode, isAnime: boolean): boolean {
@@ -131,21 +127,7 @@ export function useCwAdvance(
       return;
     }
     let cancelled = false;
-    // Process every WATCHED-current item (all types, as before) PLUS every anime item
-    // regardless of watched state. Anime franchise numbering can persist a Continue
-    // Watching entry at an episode that does not exist in the entry's own list (e.g. a
-    // separate-entry sequel counted as an absolute episode 13 under a 12-episode Season 1
-    // id). Those phantom entries are never watched-current, so the old target filter
-    // skipped them and the card rendered a nonexistent episode forever (#760).
-    const candidates = items.filter((i) => {
-      const cur = currentEpisode(i);
-      if (cur == null) return false;
-      if (isAnimeCwItem(i) || ANIME_ID.test(i._id)) return true;
-      return watchedPredicate(i, cur, traktWatched, simklWatched, anilistWatched, simklStatus)(
-        cur.season,
-        cur.episode,
-      );
-    });
+    const candidates = items.filter((i) => currentEpisode(i) != null && isFinishedSeries(i));
     void (async () => {
       const next = new Map<string, LibraryItem>();
       const remove = new Set<string>();
@@ -178,29 +160,34 @@ export function useCwAdvance(
         // it holds for both season-relative and absolute numbering. Only fires on a clean
         // fetch with a non-empty list, so a transient/partial fetch never clears a good item.
         const orderKey = (s: number, e: number) => s * 100000 + e;
+        let effCur = cur;
         if (fetchOk && list.length > 0) {
           const maxKey = list.reduce((m, e) => Math.max(m, orderKey(e.season, e.episode)), 0);
           if (
-            orderKey(cur.season, cur.episode) > maxKey &&
-            list.some((e) => e.season === cur.season)
+            orderKey(effCur.season, effCur.episode) > maxKey &&
+            list.some((e) => e.season === effCur.season)
           ) {
-            remove.add(i._id);
-            continue;
+            const abs = list.find((e) => e.absoluteNumber === effCur.episode);
+            if (!abs) {
+              remove.add(i._id);
+              continue;
+            }
+            effCur = { season: abs.season, episode: abs.episode };
           }
         }
         const watchedCur = watchedPredicate(
           i,
-          cur,
+          effCur,
           traktWatched,
           simklWatched,
           anilistWatched,
           simklStatus,
-        )(cur.season, cur.episode);
+        )(effCur.season, effCur.episode);
         if (!watchedCur) continue;
         const nextEp = nextUnwatchedAfter(
           list,
-          cur,
-          watchedPredicate(i, cur, traktWatched, simklWatched, anilistWatched, simklStatus),
+          effCur,
+          watchedPredicate(i, effCur, traktWatched, simklWatched, anilistWatched, simklStatus),
           episodeHiding ? (s, e) => isEpisodeHidden(i._id, s, e) : undefined,
         );
         if (nextEp && nextEpAired(list, nextEp, isAnime)) {
@@ -225,7 +212,7 @@ export function useCwAdvance(
             animeMode === "only" &&
             midEpisode &&
             finaleEp != null &&
-            cur.episode < finaleEp.episode;
+            effCur.episode < finaleEp.episode;
           if (!freshMidResume && !midEpisode) remove.add(i._id);
         }
       }

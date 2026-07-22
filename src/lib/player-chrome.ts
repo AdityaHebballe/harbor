@@ -28,8 +28,10 @@ export type PlayerControlId =
   | "speed-menu"
   | "aspect-menu"
   | "anime4k-menu"
+  | "shader-menu"
   | "hdr-toggle"
   | "rtx-hdr-toggle"
+  | "rtx-vsr-toggle"
   | "draw-toggle"
   | "screenshot"
   | "song-id"
@@ -188,6 +190,8 @@ export const DEFAULT_DEFAULT_CONFIG: PlayerChromeConfig = {
     { id: "anime4k-menu", slot: "bottom-right", order: 27 },
     { id: "hdr-toggle", slot: "bottom-right", order: 28, hidden: true },
     { id: "rtx-hdr-toggle", slot: "bottom-right", order: 29, hidden: true },
+    { id: "rtx-vsr-toggle", slot: "bottom-right", order: 29, hidden: true },
+    { id: "shader-menu", slot: "bottom-right", order: 30, hidden: true },
     { id: "speed-menu", slot: "bottom-right", order: 30 },
     { id: "draw-toggle", slot: "bottom-right", order: 40 },
     { id: "screenshot", slot: "bottom-right", order: 45, hidden: true },
@@ -224,6 +228,8 @@ export const DEFAULT_STREMIO_CONFIG: PlayerChromeConfig = {
     { id: "anime4k-menu", slot: "bottom-right", order: 27 },
     { id: "hdr-toggle", slot: "bottom-right", order: 28, hidden: true },
     { id: "rtx-hdr-toggle", slot: "bottom-right", order: 29, hidden: true },
+    { id: "rtx-vsr-toggle", slot: "bottom-right", order: 29, hidden: true },
+    { id: "shader-menu", slot: "bottom-right", order: 30, hidden: true },
     { id: "draw-toggle", slot: "bottom-right", order: 30 },
     { id: "screenshot", slot: "bottom-right", order: 35, hidden: true },
     { id: "song-id", slot: "bottom-right", order: 36 },
@@ -259,8 +265,10 @@ export const CONTROL_META: Record<
   "speed-menu": { label: "Playback speed", group: "menus", defaultSlot: "bottom-right" },
   "aspect-menu": { label: "Picture (adjustments & aspect)", group: "menus", defaultSlot: "bottom-right" },
   "anime4k-menu": { label: "Anime4K", group: "menus", defaultSlot: "bottom-right" },
+  "shader-menu": { label: "Shaders (Anime4K + installed)", group: "menus", defaultSlot: "bottom-right" },
   "hdr-toggle": { label: "HDR to SDR toggle", group: "menus", defaultSlot: "bottom-right" },
   "rtx-hdr-toggle": { label: "RTX Video HDR toggle", group: "menus", defaultSlot: "bottom-right" },
+  "rtx-vsr-toggle": { label: "RTX Super Resolution toggle", group: "menus", defaultSlot: "bottom-right" },
   "draw-toggle": { label: "Draw on video", group: "actions", defaultSlot: "bottom-right" },
   screenshot: { label: "Screenshot", group: "actions", defaultSlot: "bottom-right" },
   "song-id": { label: "Identify song", group: "actions", defaultSlot: "bottom-right" },

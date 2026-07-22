@@ -149,7 +149,7 @@ function UsernameStatus({ state, name }: { state: Availability; name: string }) 
   }
   if (state === "available") {
     return (
-      <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-emerald-400">
+      <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-success">
         <Check size={12} strokeWidth={2.6} /> {name} is available
       </span>
     );

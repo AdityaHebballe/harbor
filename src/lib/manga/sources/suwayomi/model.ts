@@ -145,7 +145,7 @@ export function decodeMangaId(id: string): { sourceId: string; mangaId: string }
   if (at < 0) return null;
   const sourceId = id.slice(0, at);
   const mangaId = id.slice(at + 1);
-  if (!sourceId || !mangaId) return null;
+  if (!mangaId) return null;
   return { sourceId, mangaId };
 }
 
@@ -160,7 +160,7 @@ export function decodeChapterId(
   if (parts.length < 3) return null;
   const [sourceId, mangaId, ...rest] = parts;
   const key = rest.join(DELIM);
-  if (!sourceId || !mangaId || !key) return null;
+  if (!mangaId || !key) return null;
   return { sourceId, mangaId, key };
 }
 

@@ -9,8 +9,13 @@ const MAX_RECS = 12;
 
 export type WatchedMangaRec = { animeName: string; manga: MangaSummary };
 
-export function useBecauseYouWatched(): WatchedMangaRec[] {
+function hasAnimeHistory(): boolean {
+  return playbackEntries().some((e) => ANIME_ID.test(e.metaId));
+}
+
+export function useBecauseYouWatched(): { recs: WatchedMangaRec[]; loading: boolean } {
   const [recs, setRecs] = useState<WatchedMangaRec[]>([]);
+  const [loading, setLoading] = useState(() => hasAnimeHistory());
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -27,7 +32,10 @@ export function useBecauseYouWatched(): WatchedMangaRec[] {
         }
       }
       const anime = [...byAnime.values()].sort((a, b) => b.savedAt - a.savedAt).slice(0, MAX_ANIME);
-      if (anime.length === 0) return;
+      if (anime.length === 0) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       const { searchManga } = await import("@/lib/manga/api");
       const out: WatchedMangaRec[] = [];
       const seenManga = new Set<string>();
@@ -42,10 +50,11 @@ export function useBecauseYouWatched(): WatchedMangaRec[] {
         if (!cancelled) setRecs(out.slice());
         if (out.length >= MAX_RECS) break;
       }
+      if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
-  return recs;
+  return { recs, loading };
 }

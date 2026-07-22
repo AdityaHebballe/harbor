@@ -1,4 +1,5 @@
 mod anime4k;
+mod asr_model;
 mod binary_lookup;
 mod browser;
 mod cast;
@@ -15,6 +16,7 @@ mod download;
 mod dvr;
 mod fonts;
 mod fullscreen;
+mod gamepad;
 mod hdr_overlay;
 mod http_fetch;
 mod local_lib;
@@ -35,6 +37,7 @@ mod pip_mac;
 mod power;
 mod airplay;
 mod settings_store;
+mod shaders;
 mod song_id;
 mod stream_proxy;
 mod streams;
@@ -559,6 +562,7 @@ pub fn run() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || discord_rp::run_loop(handle));
             }
+            gamepad::spawn(app.handle().clone());
             #[cfg(desktop)]
             if let Err(e) = tray::build(&app.handle()) {
                 eprintln!("[harbor::tray] build failed: {:?}", e);
@@ -640,6 +644,7 @@ pub fn run() {
             subsync::asr::asr_transcribe_windows,
             subsync::asr::asr_verify,
             sub_extract::subtitle_extract,
+            sub_extract::subtitle_extract_ass,
             cast_server::stop_stremio_sidecar,
             cast_server::cast_server_stop,
             web_server::web_serve_start,
@@ -649,6 +654,10 @@ pub fn run() {
             web_server::remote_ws_client_count,
             anime4k::anime4k_download,
             anime4k::anime4k_dir,
+            asr_model::asr_ensure_model,
+            asr_model::asr_model_path,
+            shaders::shader_download,
+            shaders::shader_dir,
             svp::svp_status,
             svp::svp_launch,
             svp::svp_ensure_running,
@@ -736,6 +745,8 @@ pub fn run() {
             discord_rp::discord_clear,
             media_controls::media_controls_update,
             media_controls::media_controls_clear,
+            gamepad::gamepad_list,
+            gamepad::gamepad_set_enabled,
             discord_rp::discord_set_enabled,
             cast::cast_discover,
             dlna::lan_ip,

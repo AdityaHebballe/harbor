@@ -1,4 +1,4 @@
-import { authToken } from "@/lib/theme-auth";
+import { authToken, refreshToken } from "@/lib/theme-auth";
 
 const API = "https://harbor.site/themes/api";
 
@@ -22,15 +22,21 @@ async function unwrap<T>(r: Response): Promise<T> {
 }
 
 export async function socialGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const r = await fetch(`${API}${path}`, { headers: headers(false), signal });
+  let r = await fetch(`${API}${path}`, { headers: headers(false), signal });
+  if (r.status === 401 && (await refreshToken())) {
+    r = await fetch(`${API}${path}`, { headers: headers(false), signal });
+  }
   return unwrap<T>(r);
 }
 
 export async function socialPost<T>(path: string, body?: Record<string, unknown>): Promise<T> {
-  const r = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: headers(!!body),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const send = () =>
+    fetch(`${API}${path}`, {
+      method: "POST",
+      headers: headers(!!body),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  let r = await send();
+  if (r.status === 401 && (await refreshToken())) r = await send();
   return unwrap<T>(r);
 }

@@ -12,11 +12,13 @@ import { AutoSyncPanel } from "./settings/autosync-panel";
 import { SettingsNav } from "./settings/nav";
 import { SettingsJumpBar } from "./settings/jump-bar";
 import { HotkeysPanel } from "./settings/hotkeys-panel";
+import { ControllersPanel } from "./settings/controllers-panel";
 import { PlayerLayoutPanel } from "./settings/player-layout-panel";
 import { QualityPanel } from "./settings/quality-panel";
 import { MpvPanel } from "./settings/mpv-panel";
 import { P2PPanel } from "./settings/p2p-panel";
 import { AnimePanel } from "./settings/anime-panel";
+import { ShadersPanel } from "./settings/shaders-panel";
 import { TraktPanel } from "./settings/trakt-panel";
 import { AnilistPanel } from "./settings/anilist-panel";
 import { MalPanel } from "./settings/mal-panel";
@@ -29,6 +31,7 @@ import { StreamBadgesPanel } from "./settings/stream-badges-panel";
 import { AwardIconsPanel } from "./settings/award-icons-panel";
 import { StreamFiltersPanel } from "./settings/stream-filters-panel";
 import { ThemePanel } from "./settings/theme-panel";
+import { useThemeLibraryOpen } from "./settings/theme-panel/library-open-store";
 import { WebhooksPanel } from "./settings/webhooks-panel";
 import { BackToTop } from "@/components/back-to-top";
 import { resetOmdbBudget } from "@/lib/providers/omdb";
@@ -111,7 +114,11 @@ const SECTION_META: Record<SectionId, { label: string; sub: string }> = {
   },
   anime: {
     label: "Anime tweaks",
-    sub: "Anime4K real-time upscaling, smooth motion, and where SVP fits in. All the anime-specific picture enhancements in one place.",
+    sub: "Smooth motion and where SVP fits in. Frame interpolation for anime lives here; picture shaders moved to their own tab.",
+  },
+  shaders: {
+    label: "Shaders",
+    sub: "GPU shaders that reshape the picture as it plays: Anime4K upscaling, HDR tone-mapping, neural upscalers, and sharpeners. Download the ones you want and Harbor applies them in the mpv engine.",
   },
   playerLayout: {
     label: "Player layout",
@@ -120,6 +127,10 @@ const SECTION_META: Record<SectionId, { label: string; sub: string }> = {
   hotkeys: {
     label: "Hotkeys",
     sub: "Every shortcut Harbor responds to. Click a binding to rebind it.",
+  },
+  controllers: {
+    label: "Controllers",
+    sub: "Use a game controller to browse Harbor and control playback. Tune the sticks and see the button map.",
   },
   theme: {
     label: "Theme & appearance",
@@ -264,6 +275,13 @@ export function Settings() {
     setTimeout(() => setSavedKey((s) => (s === which ? null : s)), 1400);
   };
 
+  const themeLibOpen = useThemeLibraryOpen();
+  const wide = active === "theme" && themeLibOpen;
+
+  useEffect(() => {
+    if (themeLibOpen) scrollRef.current?.scrollTo({ top: 0 });
+  }, [themeLibOpen]);
+
   return (
     <SettingsActiveContext.Provider value={{ setActive }}>
     <div className="flex h-full bg-canvas">
@@ -272,8 +290,11 @@ export function Settings() {
         ref={scrollRef}
         className="flex-1 overflow-y-auto pt-28 pb-16"
       >
-        <div data-tauri-drag-region className="mx-auto flex max-w-3xl flex-col gap-10 px-12">
-          {!(active === "relay" && relayMode !== "panel") && (
+        <div
+          data-tauri-drag-region
+          className={wide ? "mx-auto flex w-full max-w-[1500px] flex-col gap-8 px-8" : "mx-auto flex max-w-3xl flex-col gap-10 px-12"}
+        >
+          {!wide && !(active === "relay" && relayMode !== "panel") && (
             <header className="flex flex-col gap-2">
               <h1 className="font-display text-[44px] font-medium leading-[1.05] tracking-tight text-ink">
                 {t(SECTION_META[active].label)}
@@ -340,9 +361,13 @@ export function Settings() {
 
           {active === "anime" && <AnimePanel />}
 
+          {active === "shaders" && <ShadersPanel />}
+
           {active === "playerLayout" && <PlayerLayoutPanel />}
 
           {active === "hotkeys" && <HotkeysPanel />}
+
+          {active === "controllers" && <ControllersPanel />}
 
           {active === "trakt" && <TraktPanel />}
 

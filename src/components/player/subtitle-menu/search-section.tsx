@@ -5,6 +5,7 @@ import type { Addon } from "@/lib/addons";
 import { gatherSubtitleAddons } from "@/lib/subtitles/addon-source";
 import { languageName } from "@/lib/subtitles/language";
 import { searchSubtitles } from "@/lib/subtitles/search";
+import { providerLabel, releaseOf } from "@/lib/subtitles/provider-label";
 import type { SubResult } from "@/lib/subtitles/types";
 import {
   bestCandidate,
@@ -110,7 +111,13 @@ export function SearchSection(props: SubtitleMenuProps) {
         },
         addons: addons ?? [],
         preferredLangs: settings.preferredSubLangs ?? [],
-        extra: { userAgent: "Harbor", netAllowed: true },
+        extra: {
+          userAgent: "Harbor",
+          netAllowed: true,
+          subdlApiKey: settings.subdlApiKey || null,
+          subsourceApiKey: settings.subsourceApiKey || null,
+          enabled: { subdl: enabled.subdl === true, subsource: enabled.subsource === true },
+        },
       };
       const r = await searchSubtitles(searchQuery, searchOpts);
       setResults(r);
@@ -271,7 +278,7 @@ export function SearchSection(props: SubtitleMenuProps) {
         </button>
       </div>
 
-      {showTargetBar && (
+      {(showTargetBar || (results !== null && results.length > 0)) && (
         <TargetBar
           label={labelOf(target) || t("Current title")}
           type={target.type}
@@ -281,21 +288,22 @@ export function SearchSection(props: SubtitleMenuProps) {
           onEpisode={(n) => changeEp({ episode: n })}
           onClear={clearOverride}
           showClear={isOverride}
+          trailing={
+            results && results.length > 0 ? (
+              <>
+                <FilterChip active={!hideHI} onClick={() => setHideHI((v) => !v)}>
+                  {t("Show HI/SDH")}
+                </FilterChip>
+                <FilterChip active={forcedOnly} onClick={() => setForcedOnly((v) => !v)}>
+                  {t("Forced only")}
+                </FilterChip>
+                <span className="ms-auto text-[11.5px] tabular-nums text-ink-subtle">
+                  {t("{shown} of {total}", { shown: filtered?.length ?? 0, total: results.length })}
+                </span>
+              </>
+            ) : null
+          }
         />
-      )}
-
-      {results && results.length > 0 && (
-        <div className="flex items-center gap-1.5 px-4 pb-2.5">
-          <FilterChip active={!hideHI} onClick={() => setHideHI((v) => !v)}>
-            {t("Show HI/SDH")}
-          </FilterChip>
-          <FilterChip active={forcedOnly} onClick={() => setForcedOnly((v) => !v)}>
-            {t("Forced only")}
-          </FilterChip>
-          <span className="ms-auto text-[11.5px] tabular-nums text-ink-subtle">
-            {t("{shown} of {total}", { shown: filtered?.length ?? 0, total: results.length })}
-          </span>
-        </div>
       )}
 
       {loading && results == null && (
@@ -320,7 +328,14 @@ export function SearchSection(props: SubtitleMenuProps) {
             lang={lang}
             items={items}
             defaultOpen={i === 0}
-            onAdd={(r) => onAddSubtitle(r.url, r.lang, r.title, { format: r.format, encoding: r.encoding })}
+            onAdd={(r) =>
+              onAddSubtitle(r.url, r.lang, providerLabel(r), {
+                format: r.format,
+                encoding: r.encoding,
+                release: releaseOf(r),
+                provider: providerLabel(r),
+              })
+            }
           />
         ))}
       </div>

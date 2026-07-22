@@ -1,4 +1,4 @@
-import { fetchAdjacentEpisodes } from "@/lib/series-episodes";
+import { fetchAdjacentEpisodes, fetchEpisodeList, nextUnwatchedAfter } from "@/lib/series-episodes";
 import { relatedLibraryIds } from "@/lib/providers/anime-mapping";
 import type { Meta } from "@/lib/cinemeta";
 import {
@@ -79,16 +79,16 @@ export async function resurfaceCandidates(
     const key = `${i._id}:${cur.season}:${cur.episode}`;
     const cached = cache.get(key);
     let nx: { season: number; episode: number } | null;
+    const meta: Meta = {
+      id: i._id,
+      type: libraryMetaType(i.type),
+      name: i.name,
+      poster: i.poster,
+      background: i.background,
+    };
     if (cached && now - cached.t < RESURFACE_TTL) {
       nx = cached.next;
     } else {
-      const meta: Meta = {
-        id: i._id,
-        type: libraryMetaType(i.type),
-        name: i.name,
-        poster: i.poster,
-        background: i.background,
-      };
       nx = await fetchAdjacentEpisodes(meta, cur, { tmdbKey: opts.tmdbKey })
         .then((adj) =>
           adj.next && resurfaceAired(adj.next.airDate)
@@ -98,7 +98,19 @@ export async function resurfaceCandidates(
         .catch(() => null);
       cache.set(key, { next: nx, t: now });
     }
-    if (nx && watchedFor && watchedFor(i, cur)(nx.season, nx.episode)) nx = null;
+    if (nx && watchedFor && watchedFor(i, cur)(nx.season, nx.episode)) {
+      nx = await fetchEpisodeList(meta, { tmdbKey: opts.tmdbKey })
+        .then((list) => {
+          const target = nextUnwatchedAfter(list, cur, watchedFor(i, cur));
+          if (!target) return null;
+          const entry = list.find((e) => e.season === target.season && e.episode === target.episode);
+          return entry && resurfaceAired(entry.airDate)
+            ? { season: target.season, episode: target.episode }
+            : null;
+        })
+        .catch(() => null);
+      cache.set(key, { next: nx, t: now });
+    }
     if (nx) {
       const related = await relatedLibraryIds(i._id).catch(() => []);
       if (related.some((r) => inCw.has(r))) continue;

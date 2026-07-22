@@ -2,6 +2,7 @@ import { Check, ChevronDown, Loader2, RotateCcw, ThumbsDown, ThumbsUp, Wand2, X 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useT } from "@/lib/i18n";
 import { openSyncBar } from "@/lib/player/sub-sync";
+import { useAsrModelProgress } from "@/lib/subtitles/autosync/asr-model-progress";
 import type { AutoSyncHandle } from "@/views/player/hooks/use-auto-sync";
 import type { PipelineOutcome } from "@/lib/subtitles/autosync/pipeline";
 import type { SyncTransform } from "@/lib/subtitles/autosync/fp-gate";
@@ -15,6 +16,7 @@ function phaseOf(h: AutoSyncHandle): Phase | null {
     case "analyzing":
       return "analyzing";
     case "synced":
+    case "best-effort":
       return "synced";
     case "offer":
       return h.offer?.subSwap ? "wrong" : "offer";
@@ -55,6 +57,7 @@ function dwellFor(phase: Phase, thumb: Thumb | null): number | null {
 export function AutosyncPopover({ handle }: { handle: AutoSyncHandle }) {
   const t = useT();
   const phase = phaseOf(handle);
+  const modelDl = useAsrModelProgress();
   const [open, setOpen] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [thumb, setThumb] = useState<Thumb | null>(null);
@@ -125,7 +128,13 @@ export function AutosyncPopover({ handle }: { handle: AutoSyncHandle }) {
         >
           <Lead phase={phase} />
           <span role="status" aria-live="polite" className="whitespace-nowrap text-[13px] font-semibold text-ink">
-            {chipLabel(t, phase)}
+            {phase === "analyzing" && modelDl.active
+              ? modelDl.total > 0
+                ? t("Downloading speech model {pct}%", {
+                    pct: Math.round((modelDl.received / modelDl.total) * 100),
+                  })
+                : t("Downloading speech model")
+              : chipLabel(t, phase)}
           </span>
           {hasPanel && (
             <ChevronDown

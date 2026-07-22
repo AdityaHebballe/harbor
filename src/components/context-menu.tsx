@@ -1,6 +1,9 @@
-import { ArrowDownToLine, Bookmark, BookmarkCheck, CheckCheck, ClipboardPaste, Copy, Download, EyeOff, Info, Maximize, Navigation, RotateCcw, Star, UserPlus, Wallpaper } from "lucide-react";
+import { ArrowDownToLine, Bookmark, BookmarkCheck, CheckCheck, ClipboardPaste, Copy, Download, ExternalLink, EyeOff, Info, Link2, Magnet, Maximize, Navigation, RotateCcw, Star, UserPlus, Wallpaper } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useActiveAddon } from "@/lib/active-addon";
+import { copyText } from "@/components/player/copy-link-button";
+import { magnetFromHash } from "@/lib/debrid/types";
+import { openUrl } from "@/lib/window";
 import { useContextMenu, type ViewSummonable } from "@/lib/context-menu";
 import { useT } from "@/lib/i18n";
 import { usePlayerActions } from "@/lib/player-actions";
@@ -131,18 +134,11 @@ export function ContextMenu() {
 
   useEffect(() => {
     if (!state) return;
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) close();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") close();
     };
-    document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [state, close]);
 
   if (!state) return null;
@@ -304,6 +300,49 @@ export function ContextMenu() {
           />,
         );
       }
+      const streamUrl = playerActions.streamUrl;
+      const httpUrl = streamUrl && /^https?:\/\//i.test(streamUrl) ? streamUrl : null;
+      const magnet = playerActions.infoHash ? magnetFromHash(playerActions.infoHash) : null;
+      if (httpUrl || magnet) {
+        items.push(<Separator key="stream-sep" />);
+        if (httpUrl) {
+          items.push(
+            <Item
+              key="copy-stream"
+              icon={<Link2 size={14} strokeWidth={2} />}
+              label={t("Copy stream link")}
+              onClick={() => {
+                void copyText(httpUrl);
+                close();
+              }}
+            />,
+          );
+          items.push(
+            <Item
+              key="open-browser"
+              icon={<ExternalLink size={14} strokeWidth={2} />}
+              label={t("Open in browser")}
+              onClick={() => {
+                openUrl(httpUrl);
+                close();
+              }}
+            />,
+          );
+        }
+        if (magnet) {
+          items.push(
+            <Item
+              key="copy-magnet"
+              icon={<Magnet size={14} strokeWidth={2} />}
+              label={t("Copy magnet link")}
+              onClick={() => {
+                void copyText(magnet);
+                close();
+              }}
+            />,
+          );
+        }
+      }
     }
   } else if (state.target.kind === "view") {
     const { view, label } = state.target;
@@ -433,14 +472,22 @@ export function ContextMenu() {
   if (items.length === 0) return null;
 
   return (
-    <div
-      ref={ref}
-      role="menu"
-      style={{ left, top, width: MENU_WIDTH }}
-      className="fixed z-[145] flex flex-col rounded-xl border border-edge bg-elevated p-1 shadow-[0_18px_50px_-15px_rgba(0,0,0,0.7)] animate-popover-in"
-    >
-      {items}
-    </div>
+    <>
+      <div
+        aria-hidden
+        className="fixed inset-0 z-[144]"
+        onClick={close}
+        onWheel={close}
+      />
+      <div
+        ref={ref}
+        role="menu"
+        style={{ left, top, width: MENU_WIDTH }}
+        className="fixed z-[145] flex flex-col rounded-xl border border-edge bg-elevated p-1 shadow-[0_18px_50px_-15px_rgba(0,0,0,0.7)] animate-popover-in"
+      >
+        {items}
+      </div>
+    </>
   );
 }
 

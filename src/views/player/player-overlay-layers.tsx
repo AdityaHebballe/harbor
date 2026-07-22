@@ -1,4 +1,4 @@
-import { type ComponentProps, type RefObject } from "react";
+import { memo, type ComponentProps, type RefObject } from "react";
 import { DrawCanvas, StrokesLayer, type Stroke } from "@/components/player/draw-canvas";
 import { StreamSwitcher } from "@/components/player/stream-switcher";
 import { StreamCheckPill } from "@/components/player/stream-check-pill";
@@ -8,6 +8,7 @@ import { P2pStatusChip } from "@/components/player/p2p-status-chip";
 import type { VolumeHudPosition, VolumeIndicatorState } from "@/components/player/volume-indicator";
 import type { ParentalCategory } from "@/lib/providers/harbor-imdb";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
+import { writePlayerPrefs } from "@/lib/player-prefs";
 import type { PlayerSrc, PlayEpisode } from "@/lib/view";
 import { CastLayer } from "./cast-layer";
 import { DragClickStage } from "./drag-click-stage";
@@ -185,7 +186,7 @@ export type PlayerOverlayLayersProps = {
   onSyncPlayPause: () => void;
 };
 
-export function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
+export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
   return (
     <>
       <StageOverlays
@@ -201,7 +202,7 @@ export function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
         videoFillPill={p.videoFillPill}
         subDropToast={p.subDropToast}
         contentAdvisory={p.contentAdvisory}
-        onSubDelay={(s) => { p.bridgeRef.current?.setSubDelay(s); }}
+        onSubDelay={(s) => { p.bridgeRef.current?.setSubDelay(s); writePlayerPrefs(p.metaId, { subDelaySec: s }); }}
         onEnterSync={p.onEnterSync}
         chromeVisible={p.showChrome}
       />
@@ -468,4 +469,4 @@ export function PlayerOverlayLayers(p: PlayerOverlayLayersProps) {
       />
     </>
   );
-}
+});

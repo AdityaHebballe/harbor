@@ -23,13 +23,6 @@ export type StreamHints = {
   preferHearingImpaired?: boolean;
 };
 
-function isOpenSubtitlesAddon(a: Addon): boolean {
-  const id = (a.manifest?.id ?? "").toLowerCase();
-  const name = (a.manifest?.name ?? "").toLowerCase();
-  const url = (a.transportUrl ?? "").toLowerCase();
-  return id.includes("opensubtitles") || name.includes("opensubtitles") || url.includes("opensubtitles");
-}
-
 export async function searchSubtitles(
   q: SubSearchQuery,
   opts: SearchOptions,
@@ -37,8 +30,7 @@ export async function searchSubtitles(
   const want = opts.providers ?? {};
   const wyzieOn = want.wyzie === true;
   const addonsOn = want.addons ?? true;
-  const hasOpenSubAddon = addonsOn && (opts.addons ?? []).some(isOpenSubtitlesAddon);
-  const osOn = (want.opensubtitles ?? true) && !hasOpenSubAddon;
+  const osOn = want.opensubtitles ?? true;
   dinfo("[subs] search", { q, providers: { osOn, addonsOn, wyzieOn }, addons: opts.addons?.length ?? 0 });
   const tasks: Array<{ name: string; p: Promise<SubResult[]> }> = [];
   if (osOn)
@@ -100,7 +92,7 @@ function sourceTokens(source: string | null | undefined): string[] {
   return [s];
 }
 
-function streamMatchScore(r: SubResult, hints: StreamHints | undefined): number {
+export function streamMatchScore(r: SubResult, hints: StreamHints | undefined): number {
   if (!hints) return 0;
   const release = extractReleaseGroup(hints.release);
   const subText = `${r.release ?? ""} ${r.title ?? ""} ${r.url ?? ""}`.toLowerCase();
@@ -134,6 +126,8 @@ function sourcePriority(source: SubResult["source"]): number {
     case "gestdown":
       return 2;
     case "subdl":
+      return 2;
+    case "subsource":
       return 2;
     case "jimaku":
       return 1;

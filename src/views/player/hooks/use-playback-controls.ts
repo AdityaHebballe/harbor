@@ -1,9 +1,11 @@
-import { useCallback, type RefObject } from "react";
+import { useCallback, useRef, type RefObject } from "react";
 import type { CastDeviceInfo } from "@/lib/cast";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition } from "@/lib/player/playback-clock";
 import { writePlayerPrefs } from "@/lib/player-prefs";
 import type { RoomCommand } from "@/lib/together/protocol";
+
+const SEEK_ACCUM_WINDOW_MS = 700;
 
 export function usePlaybackControls(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
@@ -82,32 +84,44 @@ export function usePlaybackControls(params: {
     else b.play().catch(() => {});
   };
 
+  const seekAccumRef = useRef<{ target: number; at: number } | null>(null);
+
   const seekStep = (delta: number) => {
-    const pos = getPlaybackPosition();
+    const now = performance.now();
+    const acc = seekAccumRef.current;
+    const base = acc && now - acc.at < SEEK_ACCUM_WINDOW_MS ? acc.target : getPlaybackPosition();
+    const dur = snapRef.current.durationSec;
+    const upper = dur > 0 ? dur : Number.POSITIVE_INFINITY;
+    const target = Math.min(upper, Math.max(0, base + delta));
     if (castDevice) {
-      void seekCast(Math.max(0, pos + delta));
+      seekAccumRef.current = { target, at: now };
+      void seekCast(target);
       return;
     }
     if (!canControl) return;
+    seekAccumRef.current = { target, at: now };
     if (inRoom && !isHost) {
-      sendCommand({ action: "seek", positionSeconds: Math.max(0, pos + delta) });
+      sendCommand({ action: "seek", positionSeconds: target });
       return;
     }
-    bridgeRef.current?.seek(Math.max(0, pos + delta));
+    bridgeRef.current?.seek(target);
   };
 
   const seekTo = useCallback(
     (sec: number) => {
+      const target = Math.max(0, sec);
       if (castDevice) {
-        void seekCast(Math.max(0, sec));
+        seekAccumRef.current = { target, at: performance.now() };
+        void seekCast(target);
         return;
       }
       if (!canControl) return;
+      seekAccumRef.current = { target, at: performance.now() };
       if (inRoom && !isHost) {
-        sendCommand({ action: "seek", positionSeconds: Math.max(0, sec) });
+        sendCommand({ action: "seek", positionSeconds: target });
         return;
       }
-      bridgeRef.current?.seek(Math.max(0, sec));
+      bridgeRef.current?.seek(target);
     },
     [castDevice, canControl, inRoom, isHost, sendCommand, seekCast, bridgeRef],
   );

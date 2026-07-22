@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Check, Download, Link2, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import {
   badgeLabel,
+  defaultBadgeSrc,
   FormatBadge,
   RuleBadgeChip,
   streamBadges,
@@ -30,7 +31,11 @@ import {
 import { openUrl } from "@/lib/window";
 import { useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
-import { Section, ToggleRow } from "./shared";
+import { removeStreamBadgePack, useStreamBadgePacks } from "@/lib/community-badge-packs";
+import { Section, ToggleRow, useSettingsActiveContext } from "./shared";
+import { requestThemeLibrary } from "@/views/settings/theme-panel/library-open-store";
+import { MarketCta } from "@/views/settings/theme-panel/custom-themes-section/community-store/market/market-cta";
+import type { IconThumb } from "@/views/settings/theme-panel/custom-themes-section/community-store/market/icon-fan";
 
 const GROUPS: Array<{ label: string; kinds: BadgeKind[] }> = [
   {
@@ -51,6 +56,10 @@ const GROUPS: Array<{ label: string; kinds: BadgeKind[] }> = [
 ];
 
 const MAX_UPLOAD_BYTES = 260_000;
+
+const BADGE_DOORWAY_PREVIEW: IconThumb[] = (
+  ["4k-uhd", "dv", "atmos", "remux", "hevc"] as BadgeKind[]
+).map((kind) => ({ src: defaultBadgeSrc(kind), alt: badgeLabel(kind) }));
 
 function importToast(t: ReturnType<typeof useT>, r: BadgeImportResult): void {
   if (r.remapped === 0 && r.rules === 0) {
@@ -607,6 +616,10 @@ function PacksSection() {
   const [busy, setBusy] = useState<string | null>(null);
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const installFromUrl = async (packUrl: string, id: string) => {
     setBusy(id);
@@ -657,6 +670,7 @@ function PacksSection() {
   };
 
   return (
+    <div ref={rootRef} className="scroll-mt-24">
     <Section
       title={t("Packs & import")}
       subtitle={t("One-click community packs. Rulesets bring full badge sets with their own matching; art remaps only swap the pictures on Harbor's built-in badges. Anything shared as a badges.json link on the Nuvio Discord or Reddit imports here too.")}
@@ -761,6 +775,46 @@ function PacksSection() {
         </div>
       </div>
     </Section>
+    </div>
+  );
+}
+
+function CommunityInstalledSection() {
+  const t = useT();
+  const packs = useStreamBadgePacks();
+  if (packs.length === 0) return null;
+  return (
+    <Section
+      title={t("Downloaded from community")}
+      subtitle={t("Badge art packs you installed from the community store. Remove one to put its badges back to default.")}
+    >
+      <div className="overflow-hidden rounded-xl border border-edge-soft bg-surface/40">
+        {packs.map((p) => (
+          <div
+            key={p.id}
+            className="flex items-center gap-3 border-b border-edge-soft/50 px-3.5 py-2.5 last:border-b-0"
+          >
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink" title={p.name}>
+              {p.name}
+              {p.author ? <span className="text-ink-subtle"> {t("by {name}", { name: p.author })}</span> : null}
+            </span>
+            <span className="shrink-0 text-[12px] tabular-nums text-ink-subtle">
+              {t("{n} badges", { n: p.kinds.length })}
+            </span>
+            <button
+              onClick={() => {
+                removeStreamBadgePack(p.id);
+                emitListToast(t("Pack removed, badges back to default"));
+              }}
+              aria-label={t("Remove pack")}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-subtle transition-colors hover:bg-danger/10 hover:text-danger"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 
@@ -769,7 +823,13 @@ export function StreamBadgesPanel() {
   const state = useBadgeState();
   const { settings, update } = useSettings();
   const [selected, setSelected] = useState<BadgeKind | null>(null);
+  const [browseOpen, setBrowseOpen] = useState(false);
   const overrideCount = Object.keys(state.overrides).length;
+  const { setActive } = useSettingsActiveContext();
+  const onMarketplace = () => {
+    setActive("theme");
+    requestThemeLibrary({ tab: "community", storeTab: "badges" });
+  };
 
   return (
     <>
@@ -850,7 +910,25 @@ export function StreamBadgesPanel() {
 
       <RulesManager />
 
-      <PacksSection />
+      <MarketCta
+        variant="browse"
+        label={t("View community badge packs")}
+        sublabel={t("User-made badge packs from the community store")}
+        preview={BADGE_DOORWAY_PREVIEW}
+        onClick={onMarketplace}
+      />
+
+      <button
+        type="button"
+        onClick={() => setBrowseOpen((v) => !v)}
+        className="-mt-3 self-start text-[13px] font-semibold text-accent transition-colors hover:text-accent/80"
+      >
+        {browseOpen ? t("Hide curated packs") : t("Or browse curated packs and import a link")}
+      </button>
+
+      <CommunityInstalledSection />
+
+      {browseOpen && <PacksSection />}
     </>
   );
 }

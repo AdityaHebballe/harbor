@@ -84,13 +84,17 @@ export function MangaRail({
       src={art}
       alt=""
       draggable={false}
-      className="h-9 w-auto shrink-0 object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]"
+      width={36}
+      height={36}
+      className="h-9 w-9 shrink-0 object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.5)]"
     />
   ) : award ? (
     <Award size={17} className="shrink-0 text-accent" strokeWidth={2.2} />
   ) : undefined;
 
-  const row = <MangaPosterRow items={items} onOpen={onOpen} award={award} art={art} />;
+  const row = (
+    <MangaPosterRow items={items} onOpen={onOpen} award={award} art={art} scrollKey={`manga:${title}`} />
+  );
 
   if (collapsibleKey) {
     return (

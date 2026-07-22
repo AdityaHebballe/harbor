@@ -111,6 +111,7 @@ function ResultRow({
       podnapisi: "text-rose-400",
       subdl: "text-teal-400",
       gestdown: "text-orange-400",
+      subsource: "text-sky-400",
     }[result.source] || "text-ink-subtle";
 
   return (

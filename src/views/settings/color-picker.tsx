@@ -199,7 +199,7 @@ export function ColorPopoverTrigger({
   );
 }
 
-function CustomColorPanel({
+export function CustomColorPanel({
   value,
   onChange,
 }: {

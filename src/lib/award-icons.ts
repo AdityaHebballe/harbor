@@ -81,6 +81,11 @@ export async function installPackFromUrl(url: string): Promise<AwardPack> {
   return pack;
 }
 
+export function installAwardPack(pack: AwardPack): void {
+  state = { ...state, packs: [...state.packs.filter((p) => p.name !== pack.name), pack] };
+  persist();
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {

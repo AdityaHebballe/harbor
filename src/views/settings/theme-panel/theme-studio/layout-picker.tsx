@@ -72,7 +72,7 @@ export function LayoutPicker({
             className={`group relative flex flex-col gap-2 overflow-hidden rounded-lg border p-3 text-start transition-colors ${
               active
                 ? "border-accent/80 bg-accent-soft"
-                : "border-edge-soft bg-canvas/40 hover:border-edge hover:bg-white/[0.04]"
+                : "border-edge-soft bg-canvas/40 hover:border-edge hover:bg-elevated/40"
             }`}
           >
             <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-soft bg-surface">

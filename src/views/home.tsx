@@ -39,7 +39,9 @@ import { dismissManualWatched, manualWatchedLibraryItems, manualWatchedVersion, 
 import { repairLibraryNames } from "@/lib/stremio-repair";
 import { reconcileRemoteWatched } from "@/lib/stremio-watched-pull";
 import { isCorruptAnimeEntry } from "@/lib/anime-cw-repair";
+import { absorbCloudAnimeCw } from "@/lib/anime-cw-absorb";
 import {
+  ANIME_CLOUD_ID,
   cwSortKey,
   episodeFromVideoId,
   isAnimeCwItem,
@@ -389,6 +391,7 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
             ? libItems.filter((i) => !isCorruptAnimeEntry(i))
             : libItems;
           setItems(view);
+          if (!settings.cwPerProfile) absorbCloudAnimeCw(view);
           reconcileRemoteWatched(view);
           const importKey = `harbor.discover.libImported.${user?._id ?? "anon"}`;
           let importedSince = 0;
@@ -461,7 +464,7 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
     return () => {
       cancelled = true;
     };
-  }, [authKey, active]);
+  }, [authKey, active, settings.cwPerProfile]);
 
   const localCwVer = useSyncExternalStore(subscribeLocalCw, localCwVersion);
   const manualWatchedVer = useSyncExternalStore(subscribeManualWatched, manualWatchedVersion);
@@ -471,8 +474,9 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
     for (const i of items) if ((i.state?.flaggedWatched ?? 0) > 0) s.add(i._id);
     return s;
   }, [items]);
-  const continueWatching = useMemo(() => {
-    const localCwItems: LibraryItem[] = listLocalCw().map((e) => ({
+  const localCwItems = useMemo<LibraryItem[]>(() => {
+    void localCwVer;
+    return listLocalCw().map((e) => ({
       _id: e.id,
       type: e.type,
       name: e.name,
@@ -495,7 +499,11 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
       _mtime: new Date(e.t).toISOString(),
       local: true,
     }));
-    const cwBase = settings.cwPerProfile ? [] : [...items, ...simklCw];
+  }, [localCwVer]);
+  const continueWatching = useMemo(() => {
+    const cwBase = settings.cwPerProfile
+      ? []
+      : [...items.filter((i) => !ANIME_CLOUD_ID.test(i._id)), ...simklCw];
     const eligible = [...cwBase, ...localCwItems]
       .filter(
         (i) =>
@@ -509,30 +517,49 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
       .sort((a, b) => b.k - a.k)
       .map((e) => e.i);
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-    const seenId = new Set<string>();
-    const seenName = new Set<string>();
-    const out: typeof eligible = [];
+    const lastWatchedOf = (i: LibraryItem) => {
+      const lw = Date.parse(i.state?.lastWatched ?? "");
+      if (Number.isFinite(lw) && lw > 0) return lw;
+      const m = i._mtime as unknown;
+      const mt = typeof m === "number" ? m : Date.parse(String(m ?? ""));
+      return Number.isFinite(mt) ? mt : 0;
+    };
+    const byId = new Map<string, LibraryItem>();
+    const byName = new Map<string, LibraryItem>();
     for (const i of eligible) {
-      if (seenId.has(i._id)) continue;
+      if (byId.has(i._id)) continue;
       const nm = norm(i.name ?? "");
       const key = `${i.type}:${nm}`;
-      if (nm && seenName.has(key)) continue;
-      seenId.add(i._id);
-      if (nm) seenName.add(key);
-      out.push(i);
-      if (out.length >= 100) break;
+      if (nm) {
+        const held = byName.get(key);
+        if (held) {
+          if (lastWatchedOf(i) > lastWatchedOf(held)) {
+            byId.delete(held._id);
+            byName.set(key, i);
+            byId.set(i._id, i);
+          }
+          continue;
+        }
+        byName.set(key, i);
+      }
+      byId.set(i._id, i);
+      if (byId.size >= 100) break;
     }
-    return out;
-  }, [items, simklCw, localCwVer, cwVersion, settings.animeOnlyInAnimeRoom, settings.hideContent.anime, settings.cwPerProfile, animeDetectVer]);
+    return [...byId.values()].sort((a, b) => cwSortKey(b) - cwSortKey(a));
+  }, [items, simklCw, localCwItems, cwVersion, settings.animeOnlyInAnimeRoom, settings.hideContent.anime, settings.cwPerProfile, animeDetectVer]);
   const resurfaceLibrary = useMemo(() => {
+    const pool = [
+      ...items.filter((i) => !ANIME_CLOUD_ID.test(i._id)),
+      ...localCwItems.filter((i) => i.type === "series"),
+    ];
     const manual = manualWatchedLibraryItems();
-    if (manual.length === 0) return items;
-    const cwMemberIds = new Set(items.filter(isCwMember).map((i) => i._id));
+    if (manual.length === 0) return pool;
+    const cwMemberIds = new Set(pool.filter(isCwMember).map((i) => i._id));
     const usable = manual.filter((i) => !cwMemberIds.has(i._id));
-    if (usable.length === 0) return items;
+    if (usable.length === 0) return pool;
     const overrideIds = new Set(usable.map((i) => i._id));
-    return [...items.filter((i) => !overrideIds.has(i._id)), ...usable];
-  }, [items, manualWatchedVer]);
+    return [...pool.filter((i) => !overrideIds.has(i._id)), ...usable];
+  }, [items, localCwItems, manualWatchedVer]);
   useEffect(() => {
     if (!anilistConnected) {
       setAnilistWatchedMap((prev) => (prev.size ? new Map() : prev));
@@ -575,9 +602,16 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
 
   const onDismissCw = useCallback(
     (item: LibraryItem) => {
-      if (item.manualWatched) dismissManualWatched(item._id);
-      else if (item.local) clearLocalCw(item._id);
-      else dismissCw(item, authKey);
+      if (item.manualWatched) {
+        dismissManualWatched(item._id);
+        return;
+      }
+      if (item.local) {
+        clearLocalCw(item._id);
+        dismissCw(item, authKey);
+        return;
+      }
+      dismissCw(item, authKey);
     },
     [authKey],
   );

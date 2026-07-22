@@ -1,4 +1,5 @@
 import { Film, Loader2, Minus, Plus, Tv, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { useT } from "@/lib/i18n";
 import type { TitleCandidate } from "@/lib/subtitles/title-search";
 
@@ -68,6 +69,7 @@ export function TargetBar({
   onEpisode,
   onClear,
   showClear,
+  trailing,
 }: {
   label: string;
   type: "movie" | "series";
@@ -77,14 +79,15 @@ export function TargetBar({
   onEpisode: (n: number) => void;
   onClear: () => void;
   showClear: boolean;
+  trailing?: ReactNode;
 }) {
   const t = useT();
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 pb-2">
-      <span className="flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-1 text-[12px] font-semibold text-ink">
-        {type === "series" ? <Tv size={12} className="text-accent" /> : <Film size={12} className="text-accent" />}
-        <span className="max-w-[170px] truncate">{label}</span>
-        {showClear && (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-4 pb-2.5">
+      {showClear && (
+        <span className="flex items-center gap-1.5 rounded-full bg-raised px-2.5 py-1 text-[12px] font-semibold text-ink">
+          {type === "series" ? <Tv size={12} className="text-accent" /> : <Film size={12} className="text-accent" />}
+          <span className="max-w-[150px] truncate">{label}</span>
           <button
             type="button"
             onClick={onClear}
@@ -93,14 +96,15 @@ export function TargetBar({
           >
             <X size={12} strokeWidth={2.4} />
           </button>
-        )}
-      </span>
+        </span>
+      )}
       {type === "series" && (
         <div className="flex items-center gap-1.5">
           <NumStepper label={t("Season")} value={season ?? 1} onChange={onSeason} />
           <NumStepper label={t("Ep")} value={episode ?? 1} onChange={onEpisode} />
         </div>
       )}
+      {trailing && <span className="flex flex-1 items-center gap-1.5">{trailing}</span>}
     </div>
   );
 }

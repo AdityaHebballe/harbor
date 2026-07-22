@@ -32,3 +32,31 @@ export function badgeIconUrl(key?: string): string | undefined {
   if (/^https?:\/\//i.test(key.trim())) return key.trim();
   return undefined;
 }
+
+export const SHOWN_BADGE_KEY_RE = /^[a-z0-9_-]{1,40}$/;
+
+export function badgeKey(name?: string): string {
+  return (name ?? "").trim().toLowerCase();
+}
+
+export function orderShownBadges<T extends { name: string }>(badges: T[], shown?: string[]): T[] {
+  const visible = badges.filter((b) => badgeKey(b.name) !== "verified");
+  if (!shown || shown.length === 0) return visible;
+  const byKey = new Map<string, T>();
+  for (const b of visible) {
+    const k = badgeKey(b.name);
+    if (!byKey.has(k)) byKey.set(k, b);
+  }
+  const out: T[] = [];
+  const used = new Set<string>();
+  for (const s of shown) {
+    const k = badgeKey(s);
+    if (used.has(k)) continue;
+    const b = byKey.get(k);
+    if (b) {
+      out.push(b);
+      used.add(k);
+    }
+  }
+  return out;
+}

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, ChevronUp, Loader2, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Loader2, RefreshCw, X } from "lucide-react";
 import { useT } from "@/lib/i18n";
 
 export function ReaderLoading() {
@@ -81,11 +81,13 @@ export function EndOfChapterHint({
   atLastChapter,
   nextLabel,
   onNext,
+  onDismiss,
 }: {
   visible: boolean;
   atLastChapter: boolean;
   nextLabel?: string;
   onNext: () => void;
+  onDismiss?: () => void;
 }) {
   const t = useT();
   return (
@@ -95,8 +97,8 @@ export function EndOfChapterHint({
         visible ? "translate-y-0 opacity-100" : "translate-y-5 opacity-0"
       }`}
     >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-edge-soft/70 bg-canvas/90 py-2 pe-2 ps-5 shadow-[0_18px_44px_-16px_rgba(0,0,0,0.65)] backdrop-blur-md">
-        <span className="flex flex-col leading-tight">
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-edge-soft/70 bg-canvas/90 py-2 pe-2 ps-5 shadow-[0_18px_44px_-16px_rgba(0,0,0,0.65)] backdrop-blur-md">
+        <span className="flex flex-col leading-tight pe-1">
           <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-ink-subtle">
             {atLastChapter ? t("All caught up") : t("Chapter finished")}
           </span>
@@ -112,6 +114,17 @@ export function EndOfChapterHint({
           >
             {t("Next chapter")}
             <ChevronRight className="h-4 w-4" strokeWidth={2.8} />
+          </button>
+        )}
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label={t("Dismiss")}
+            title={t("Dismiss")}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-ink-subtle transition-colors hover:bg-elevated hover:text-ink"
+          >
+            <X className="h-4 w-4" strokeWidth={2.4} />
           </button>
         )}
       </div>

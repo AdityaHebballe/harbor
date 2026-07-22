@@ -45,6 +45,7 @@ pub struct MpvStartArgs {
     pub anime4k: Option<bool>,
     pub hdr_to_sdr: Option<bool>,
     pub rtx_hdr: Option<bool>,
+    pub rtx_vsr: Option<bool>,
     pub embed: Option<bool>,
     pub anime4k_shaders: Option<Vec<String>>,
     pub d3d11_flip: Option<bool>,
@@ -66,6 +67,7 @@ pub struct MpvGeometry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub(crate) struct NativeMpvRect {
     pub x: f64,
     pub y: f64,
@@ -73,6 +75,7 @@ pub(crate) struct NativeMpvRect {
     pub height: f64,
 }
 
+#[cfg_attr(not(any(windows, test)), allow(dead_code))]
 pub(crate) fn map_css_geometry(
     css: &MpvGeometry,
     native_width: f64,
@@ -315,6 +318,10 @@ fn apply_pre_init(
         set("http-header-fields", &header_fields.join(","));
     }
     let rtx = cfg!(windows) && args.rtx_hdr.unwrap_or(false);
+    let rtx_vsr = cfg!(windows) && args.rtx_vsr.unwrap_or(false);
+    // RTX Video HDR and RTX Video Super Resolution both need native D3D11
+    // hardware frames for mpv's d3d11vpp filter.
+    let rtx_video = rtx || rtx_vsr;
     let on_mac_embed = cfg!(target_os = "macos") && embed_hwnd.is_some();
     if on_mac_embed {
         set("hwdec", "videotoolbox-copy");
@@ -327,10 +334,10 @@ fn apply_pre_init(
             set("force-window", "yes");
         }
     } else if cfg!(windows) {
-        set("hwdec", if rtx { "d3d11va" } else { "auto" });
+        set("hwdec", if rtx_video { "d3d11va" } else { "auto-safe" });
         set("force-window", "immediate");
     } else {
-        set("hwdec", "auto");
+        set("hwdec", "auto-safe");
         set("force-window", "immediate");
     }
     if args.embed.unwrap_or(false) && (cfg!(target_os = "macos") || cfg!(target_os = "linux")) {
@@ -393,11 +400,16 @@ fn apply_pre_init(
         opt("target-prim", "bt.709");
         #[cfg(any(windows, target_os = "macos"))]
         opt("target-colorspace-hint", "yes");
+        // VSR still needs the D3D11 backend even while tonemapping HDR to SDR.
+        #[cfg(windows)]
+        if rtx_vsr {
+            opt("gpu-api", "d3d11");
+        }
     } else {
         #[cfg(windows)]
         {
             opt("target-colorspace-hint", "yes");
-            if embed_hwnd.is_some() {
+            if embed_hwnd.is_some() || rtx_vsr {
                 opt("gpu-api", "d3d11");
             }
         }
@@ -408,10 +420,10 @@ fn apply_pre_init(
     }
 
     if let Some(shaders) = &args.anime4k_shaders {
-        let cleaned: Vec<&str> = shaders
+        let cleaned: Vec<String> = shaders
             .iter()
             .filter(|s| !s.is_empty())
-            .map(|s| s.as_str())
+            .map(|s| s.replace('\\', "/"))
             .collect();
         if !cleaned.is_empty() {
             let sep = if cfg!(windows) { ";" } else { ":" };
@@ -1107,12 +1119,12 @@ pub async fn mpv_set_geometry(
             g.as_ref().map(|s| s.embedded).unwrap_or(false)
         };
         if embedded {
-            let (tx, rx) = std::sync::mpsc::sync_channel::<()>(1);
+            // GLArea fills the full window via GTK expand flags, so
+            // geometry tracking is redundant. We still dispatch to the
+            // main thread as a rendering tickle for the GLArea.
             let _ = app.run_on_main_thread(move || {
                 let _ = crate::mpv_render_linux::resize_to(geom);
-                let _ = tx.send(());
             });
-            let _ = rx.recv_timeout(std::time::Duration::from_millis(300));
             return Ok(());
         }
     }

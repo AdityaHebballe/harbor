@@ -4,6 +4,8 @@ import { createPortal } from "react-dom";
 import { Poster } from "@/components/poster";
 import { useT } from "@/lib/i18n";
 import type { FeaturedList } from "@/lib/social/featured-lists";
+import { ListHeart } from "./list-heart";
+import { ListShareButton } from "./list-share-button";
 import { timeAgo } from "./profile-bits";
 import { ACTIVITY_VERB, ActivityGlyph } from "./recent-activity";
 import type { ActivityItem, Badge } from "./profile-types";
@@ -21,6 +23,9 @@ export function ProfileViewAll({
   lists,
   badges,
   activity,
+  signedIn,
+  isOwner,
+  handle,
   onOpenMeta,
   onClose,
 }: {
@@ -28,6 +33,9 @@ export function ProfileViewAll({
   lists: FeaturedList[];
   badges: Badge[];
   activity: ActivityItem[];
+  signedIn?: boolean;
+  isOwner?: boolean;
+  handle?: string;
   onOpenMeta?: (metaId: string, kind?: string, hint?: { name?: string; poster?: string }) => void;
   onClose: () => void;
 }) {
@@ -70,7 +78,15 @@ export function ProfileViewAll({
           </button>
         </header>
         <div className="flex-1 overflow-y-auto px-7 py-6">
-          {section === "lists" && <ListsSection lists={lists} onOpenMeta={onOpenMeta} />}
+          {section === "lists" && (
+            <ListsSection
+              lists={lists}
+              onOpenMeta={onOpenMeta}
+              signedIn={signedIn}
+              isOwner={isOwner}
+              handle={handle}
+            />
+          )}
           {section === "badges" && <BadgesSection badges={badges} />}
           {section === "activity" && <ActivitySection activity={activity} onOpenMeta={onOpenMeta} />}
         </div>
@@ -84,17 +100,39 @@ function Empty({ label }: { label: string }) {
   return <div className="flex h-40 items-center justify-center text-[13.5px] text-ink-muted">{label}</div>;
 }
 
-function ListsSection({ lists, onOpenMeta }: { lists: FeaturedList[]; onOpenMeta?: (id: string, kind?: string, hint?: { name?: string; poster?: string }) => void }) {
+function ListsSection({
+  lists,
+  onOpenMeta,
+  signedIn,
+  isOwner,
+  handle,
+}: {
+  lists: FeaturedList[];
+  onOpenMeta?: (id: string, kind?: string, hint?: { name?: string; poster?: string }) => void;
+  signedIn?: boolean;
+  isOwner?: boolean;
+  handle?: string;
+}) {
   const t = useT();
   const shown = lists.filter((l) => l.items.length > 0);
   if (shown.length === 0) return <Empty label={t("No lists to show")} />;
   return (
     <div className="space-y-8">
       {shown.map((list, i) => (
-        <div key={`${list.name}:${i}`}>
-          <div className="mb-3 flex items-baseline gap-2">
+        <div key={list.id || `${list.name}:${i}`}>
+          <div className="mb-3 flex items-center gap-2">
             <h3 className="font-display text-[18px] text-ink">{list.name || "Untitled list"}</h3>
             <span className="text-[12px] tabular-nums text-ink-subtle">{list.items.length}</span>
+            <div className="ml-auto flex items-center gap-2">
+              <ListHeart
+                handle={handle ?? ""}
+                listId={list.id}
+                count={list.likeCount ?? 0}
+                liked={!!list.liked}
+                interactive={!!signedIn && !isOwner}
+              />
+              <ListShareButton handle={handle ?? ""} listId={list.id} name={list.name} />
+            </div>
           </div>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-x-4 gap-y-5">
             {list.items.map((item) => (

@@ -1,6 +1,7 @@
 import { Check, Loader2, Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Linkify } from "@/components/linkify";
+import { useT } from "@/lib/i18n";
 
 const ANCHOR = "absolute bottom-[80%] left-[100%] z-30";
 const BUBBLE =
@@ -30,6 +31,7 @@ export function StatusBubble({
   isOwner: boolean;
   onSave: (next: string) => Promise<void>;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(slogan ?? "");
   const [busy, setBusy] = useState(false);
@@ -73,12 +75,12 @@ export function StatusBubble({
                 if (e.key === "Enter") void commit(value);
                 if (e.key === "Escape") setEditing(false);
               }}
-              placeholder="What's on your mind?"
+              placeholder={t("What's on your mind?")}
               className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-subtle"
             />
             <button
               type="button"
-              aria-label="Save status"
+              aria-label={t("Save status")}
               disabled={busy}
               onClick={() => void commit(value)}
               className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-success transition-colors hover:bg-success/12 disabled:opacity-40"
@@ -88,7 +90,7 @@ export function StatusBubble({
             {trimmed && (
               <button
                 type="button"
-                aria-label="Clear status"
+                aria-label={t("Clear status")}
                 disabled={busy}
                 onClick={() => {
                   setValue("");
@@ -102,7 +104,7 @@ export function StatusBubble({
           </div>
           <div className="mt-0.5 flex items-center justify-between text-[10.5px]">
             <span className={error ? "text-danger" : "text-ink-subtle"}>
-              {error ? "Try again" : "Enter to save"}
+              {error ? t("Try again") : t("Enter to save")}
             </span>
             <span className="tabular-nums text-ink-subtle">{value.length}/100</span>
           </div>
@@ -121,7 +123,7 @@ export function StatusBubble({
               <Linkify text={slogan} />
             </span>
           ) : (
-            "No status"
+            t("No status")
           )}
         </div>
         <Tail />
@@ -142,7 +144,7 @@ export function StatusBubble({
           <span className="block max-w-[216px] truncate">{slogan}</span>
         ) : (
           <span className="inline-flex items-center gap-1">
-            <Plus size={13} strokeWidth={2.4} /> Add status
+            <Plus size={13} strokeWidth={2.4} /> {t("Add status")}
           </span>
         )}
       </button>

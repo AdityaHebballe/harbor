@@ -17,6 +17,9 @@ export type TrackInfo = {
   default?: boolean;
   hearingImpaired?: boolean;
   url?: string;
+  release?: string;
+  provider?: string;
+  matchScore?: number;
 };
 
 export type Chapter = {
@@ -82,6 +85,7 @@ export type PlayerBridge = {
   setStretch: (on: boolean) => void;
   setVideoEq: (name: string, value: number) => void;
   setAnime4kShaders: (shaders: string[]) => void;
+  setShaderProps?: (props: Record<string, string>) => void;
   addSubtitle: (
     url: string,
     lang?: string,

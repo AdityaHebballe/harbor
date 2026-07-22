@@ -1,5 +1,5 @@
 import { RotateCcw, Trash2, Upload } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { defaultAwardIcon } from "@/components/icons/award-logo";
 import { useT } from "@/lib/i18n";
 import {
@@ -13,6 +13,12 @@ import {
   setCustomIcon,
   useAwardPacks,
 } from "@/lib/award-icons";
+import { MarketCta } from "@/views/settings/theme-panel/custom-themes-section/community-store/market/market-cta";
+import type { IconThumb } from "@/views/settings/theme-panel/custom-themes-section/community-store/market/icon-fan";
+import { requestThemeLibrary } from "@/views/settings/theme-panel/library-open-store";
+import { useSettingsActiveContext } from "./shared";
+
+const AWARD_DOORWAY_KEYS = ["venice", "berlin", "cesar", "annie", "saturn"];
 
 function pickAndUpload(key: string) {
   const input = document.createElement("input");
@@ -56,6 +62,16 @@ export function AwardIconsPanel() {
   const [err, setErr] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const packUrlRef = useRef<HTMLInputElement>(null);
+  const { setActive } = useSettingsActiveContext();
+  const awardPreview: IconThumb[] = AWARD_DOORWAY_KEYS.map((key) => ({
+    src: resolveAwardIcon(key) ?? defaultAwardIcon(key),
+    alt: key,
+  }));
+  const onBrowse = () => {
+    setActive("theme");
+    requestThemeLibrary({ tab: "community", storeTab: "awards" });
+  };
 
   const copyFilename = (key: string) => {
     navigator.clipboard?.writeText(`${key}.png`).catch(() => {});
@@ -140,10 +156,19 @@ export function AwardIconsPanel() {
         </p>
       </div>
 
+      <MarketCta
+        variant="browse"
+        label={t("View community award packs")}
+        sublabel={t("Icon packs and single-award art from the community")}
+        preview={awardPreview}
+        onClick={onBrowse}
+      />
+
       <section className="flex flex-col gap-3">
         <h3 className="text-[14px] font-semibold text-ink">{t("Install a pack")}</h3>
         <div className="flex gap-2">
           <input
+            ref={packUrlRef}
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && install()}
@@ -183,6 +208,9 @@ export function AwardIconsPanel() {
         {err && <p className="text-[12.5px] text-danger">{err}</p>}
         {packs.length > 0 && (
           <div className="flex flex-col gap-2">
+            <span className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-ink-subtle">
+              {t("Installed packs")}
+            </span>
             {packs.map((p) => (
               <div
                 key={p.name}

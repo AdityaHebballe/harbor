@@ -7,6 +7,7 @@ type SelectableSubtitleTrack = {
   external?: boolean;
   title?: string;
   label?: string;
+  matchScore?: number;
 };
 
 function isForcedTrack(track: SelectableSubtitleTrack): boolean {
@@ -32,6 +33,8 @@ export function pickDesiredSubtitleTrack<T extends SelectableSubtitleTrack>(
     const languageDelta =
       langScore(b.lang ?? "", preferredLanguages) - langScore(a.lang ?? "", preferredLanguages);
     if (languageDelta !== 0) return languageDelta;
+    const matchDelta = (b.matchScore ?? 0) - (a.matchScore ?? 0);
+    if (matchDelta !== 0) return matchDelta;
     const sourceDelta = sourceRank(b, preferEmbedded) - sourceRank(a, preferEmbedded);
     if (sourceDelta !== 0) return sourceDelta;
     return Number(b.default === true) - Number(a.default === true);

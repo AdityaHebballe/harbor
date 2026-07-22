@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Check, Copy, Download, ImagePlus, Loader2, Trash2 } from "lucide-react";
 import { setCustomThemePreview } from "@/lib/custom-themes";
 import type { ThemePreset } from "@/lib/theme";
+import { Fit } from "./community-store/market/fit";
+import { tokensFromPreset } from "./community-store/market/fit-palette";
+import { PaletteSeam } from "./community-store/market/palette-seam";
 import { fileToPreviewDataUrl } from "./theme-upload/upload-utils";
 
 export function BrowserCard({
@@ -22,7 +25,7 @@ export function BrowserCard({
   onRemove: () => void;
 }) {
   const hasImage = !!theme.previewImage;
-  const bg = theme.background?.image ?? `linear-gradient(135deg, ${theme.swatch[0]}, ${theme.swatch[1]})`;
+  const cover = theme.previewImage ?? theme.background?.image ?? null;
   const [busy, setBusy] = useState(false);
   const addImage = () => {
     const input = document.createElement("input");
@@ -40,62 +43,44 @@ export function BrowserCard({
   };
   return (
     <div
-      className={`group flex flex-col overflow-hidden rounded-[4px] border transition-all ${
-        active
-          ? "border-accent shadow-[0_0_0_2px_var(--color-accent-soft),0_18px_40px_-22px_rgba(0,0,0,0.35)]"
-          : "border-edge-soft bg-surface hover:border-edge"
+      className={`group/card relative flex flex-col overflow-hidden rounded-[14px] bg-surface transition-[transform,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-24px_rgba(0,0,0,0.65)] motion-reduce:transform-none motion-reduce:transition-none ${
+        active ? "ring-2 ring-accent" : "ring-1 ring-edge-soft"
       }`}
     >
-      <div
-        className="relative h-40 w-full"
-        style={
-          hasImage
-            ? {
-                backgroundImage: `url(${theme.previewImage})`,
-                backgroundSize: "contain",
-                backgroundPosition: "center",
-                backgroundRepeat: "no-repeat",
-                backgroundColor: theme.swatch[0],
-              }
-            : { background: bg }
-        }
-      >
+      <div className="relative aspect-[16/10] overflow-hidden bg-elevated">
+        <Fit kind="theme" tokens={tokensFromPreset(theme)} cover={cover} />
         {active && (
-          <span className="absolute end-3 top-3 flex h-7 items-center gap-1.5 rounded-full bg-accent px-2.5 text-[10.5px] font-bold uppercase tracking-[0.18em] text-canvas shadow-[0_4px_12px_-4px_rgba(0,0,0,0.4)]">
+          <span className="absolute end-2.5 top-2.5 z-10 flex h-7 items-center gap-1.5 rounded-[8px] bg-accent px-2.5 text-[10.5px] font-bold uppercase tracking-[0.16em] text-canvas">
             <Check size={11} strokeWidth={3} /> Active
           </span>
         )}
-        <div className="absolute bottom-0 left-0 right-0 flex h-2">
-          {theme.swatch.map((c, i) => (
-            <span key={i} className="flex-1" style={{ background: c }} />
-          ))}
-        </div>
         {removable && !hasImage && (
           <button
             type="button"
             onClick={addImage}
             disabled={busy}
-            className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-canvas/45 text-[12px] font-semibold text-ink-muted opacity-0 backdrop-blur-[1px] transition-opacity hover:text-ink group-hover:opacity-100"
+            className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-canvas/45 text-[12px] font-semibold text-ink-muted opacity-0 backdrop-blur-[1px] transition-opacity hover:text-ink group-hover/card:opacity-100"
           >
             {busy ? <Loader2 size={18} className="animate-spin" /> : <ImagePlus size={18} strokeWidth={1.9} />}
             {busy ? "Adding" : "Add image"}
           </button>
         )}
+        <div className="absolute inset-x-0 bottom-0 z-10">
+          <PaletteSeam swatch={theme.swatch} />
+        </div>
       </div>
       <div className="flex flex-col gap-3 p-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[16px] font-semibold tracking-tight text-ink">{theme.name}</span>
-          {theme.blurb && (
-            <span className="line-clamp-2 text-[12.5px] leading-relaxed text-ink-muted">{theme.blurb}</span>
-          )}
+          <span className="truncate text-[14.5px] font-semibold tracking-tight text-ink">{theme.name}</span>
+          {theme.blurb && <span className="line-clamp-2 text-[12px] leading-relaxed text-ink-muted">{theme.blurb}</span>}
         </div>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={onActivate}
             disabled={active}
-            className={`h-10 flex-1 rounded-[6px] text-[13px] font-semibold transition-opacity ${
-              active ? "bg-elevated/70 text-ink ring-1 ring-edge" : "bg-ink text-canvas hover:opacity-90"
+            className={`h-10 flex-1 rounded-[10px] text-[13px] font-semibold transition-opacity ${
+              active ? "bg-elevated text-ink ring-1 ring-edge" : "bg-ink text-canvas hover:opacity-90"
             }`}
           >
             {active ? "Active" : "Apply"}
@@ -134,8 +119,8 @@ function IconButton({
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={`flex h-10 w-10 items-center justify-center rounded-[6px] border border-edge-soft text-ink-muted transition-colors ${
-        danger ? "hover:border-danger/40 hover:text-danger" : "hover:border-edge hover:text-ink"
+      className={`flex h-10 w-10 items-center justify-center rounded-[10px] text-ink-muted ring-1 ring-edge-soft transition-colors ${
+        danger ? "hover:text-danger hover:ring-danger/40" : "hover:text-ink hover:ring-edge"
       }`}
     >
       {children}
