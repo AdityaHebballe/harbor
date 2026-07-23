@@ -80,8 +80,8 @@ export function useResumeAutosave(params: {
     const finished =
       (sn.durationSec > 0 && pos / sn.durationSec >= WATCHED_RATIO) || sn.status === "ended";
     lastSavedRef.current = pos * 1000;
-    if (finished) clearResume(id, cs, ep);
-    else saveResumeMs(id, pos * 1000, cs, ep);
+    if (finished) clearResume(id, se, ep);
+    else saveResumeMs(id, pos * 1000, se, ep, cs);
     if (typeof cs === "number") setViewedSeason(id, cs);
     if (isExternalPlaylistId(id)) return;
     if (s.streamRef) {
