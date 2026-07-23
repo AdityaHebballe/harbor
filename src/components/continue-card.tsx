@@ -228,10 +228,10 @@ export const ContinueCard = memo(function ContinueCard({ item, watched = false, 
       : null;
   const sub = animeSeasonMapped
     ? `S${animeSeasonMapped.season} · E${String(animeSeasonMapped.episode).padStart(2, "0")}`
-    : animeEp && Number.isFinite(animeEp) && animeEp > 0
-      ? `Ep ${animeEp}`
-      : ep
-        ? `S${ep.season}E${ep.episode}`
+    : ep
+      ? `S${ep.season}E${ep.episode}`
+      : animeEp && Number.isFinite(animeEp) && animeEp > 0
+        ? `Ep ${animeEp}`
         : "";
 
   const meta: Meta = hydratedMeta
