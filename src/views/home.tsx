@@ -40,6 +40,7 @@ import { repairLibraryNames } from "@/lib/stremio-repair";
 import { reconcileRemoteWatched } from "@/lib/stremio-watched-pull";
 import { isCorruptAnimeEntry } from "@/lib/anime-cw-repair";
 import { absorbCloudAnimeCw } from "@/lib/anime-cw-absorb";
+import { franchiseRoot, franchiseRootSync } from "@/lib/providers/anime-franchise-root";
 import {
   ANIME_CLOUD_ID,
   cwSortKey,
@@ -112,6 +113,7 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
   }, [active, heroReady, onReady]);
   const [items, setItems] = useState<LibraryItem[]>([]);
   const cwVersion = useCwDismissVersion();
+  const [cwRootVersion, setCwRootVersion] = useState(0);
   const [tmdbProvidedByAddon, setTmdbProvidedByAddon] = useState(false);
   const [addonsTick, setAddonsTick] = useState(0);
   const [buildTick, setBuildTick] = useState(0);
@@ -545,8 +547,28 @@ export function Home({ active = true, onReady }: { active?: boolean; onReady?: (
       byId.set(i._id, i);
       if (byId.size >= 100) break;
     }
+    const seenRoot = new Set<string>();
+    for (const i of [...byId.values()].sort((a, b) => lastWatchedOf(b) - lastWatchedOf(a))) {
+      const root = franchiseRootSync(i._id);
+      if (root && seenRoot.has(root)) byId.delete(i._id);
+      if (root) seenRoot.add(root);
+    }
     return [...byId.values()].sort((a, b) => cwSortKey(b) - cwSortKey(a));
-  }, [items, simklCw, localCwItems, cwVersion, settings.animeOnlyInAnimeRoom, settings.hideContent.anime, settings.cwPerProfile, animeDetectVer]);
+  }, [items, simklCw, localCwItems, cwVersion, cwRootVersion, settings.animeOnlyInAnimeRoom, settings.hideContent.anime, settings.cwPerProfile, animeDetectVer]);
+  useEffect(() => {
+    let cancelled = false;
+    const ids = [...localCwItems, ...simklCw]
+      .filter((i) => isCwMember(i))
+      .map((i) => i._id);
+    if (ids.length === 0) return;
+    if (ids.every((id) => franchiseRootSync(id))) return;
+    const load = async () => {
+      await Promise.allSettled(ids.map((id) => franchiseRoot(id)));
+      if (!cancelled) setCwRootVersion((v) => v + 1);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [localCwItems, simklCw]);
   const resurfaceLibrary = useMemo(() => {
     const pool = [
       ...items.filter((i) => !ANIME_CLOUD_ID.test(i._id)),
