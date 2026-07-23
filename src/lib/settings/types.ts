@@ -377,6 +377,7 @@ export type Settings = {
   preferCustomMetaAddon: boolean;
   animeOnlyInAnimeRoom: boolean;
   cwAdvanceNext: boolean;
+  cwHideCaughtUp: boolean;
   useNativeTitleBar: boolean;
   hybridTitleBar: boolean;
   topbarScrollBlur: boolean;

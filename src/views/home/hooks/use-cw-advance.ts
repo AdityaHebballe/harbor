@@ -7,6 +7,7 @@ import { simklWatchedForId, statusForId, type WatchlistStatus } from "@/lib/simk
 import { episodeFromVideoId, isAnimeCwItem, libraryMetaType, type LibraryItem } from "@/lib/stremio";
 import { isEpisodeHidden } from "@/lib/hidden-episodes";
 import { isNextAired, resurfaceCandidates, type AnimeMode } from "@/lib/cw-resurface";
+import { useSettings } from "@/lib/settings";
 
 const FINISHED_RATIO = 0.9;
 const ANIME_ID = /^(kitsu|mal|anilist|anidb):/;
@@ -30,6 +31,26 @@ function currentEpisode(i: LibraryItem): { season: number; episode: number } | n
   const episode = i.state?.episode;
   if (season && episode) return { season, episode };
   return episodeFromVideoId(i.state?.video_id ?? "");
+}
+
+export function shouldDropFinished(
+  list: PlayEpisode[],
+  fetchOk: boolean,
+  state: { duration?: number; timeOffset?: number } | undefined,
+  animeMode: AnimeMode,
+  effCur: { season: number; episode: number },
+  nextEp: PlayEpisode | null | undefined,
+  hideCaughtUp = false,
+): boolean {
+  if (!fetchOk || list.length === 0) return false;
+  const finaleEp = list[list.length - 1];
+  const dur = state?.duration ?? 0;
+  const off = state?.timeOffset ?? 0;
+  const midEpisode = off > 0 && dur > 0 && off / dur < FINISHED_RATIO;
+  const freshMidResume =
+    animeMode === "only" && midEpisode && finaleEp != null && effCur.episode < finaleEp.episode;
+  if (freshMidResume || midEpisode) return false;
+  return hideCaughtUp || !nextEp;
 }
 
 function nextEpAired(list: PlayEpisode[], nextEp: PlayEpisode, isAnime: boolean): boolean {
@@ -114,6 +135,7 @@ export function useCwAdvance(
   animeVersion = 0,
   episodeHiding = false,
 ): LibraryItem[] {
+  const hideCaughtUp = useSettings().settings.cwHideCaughtUp;
   const [advanced, setAdvanced] = useState<Map<string, LibraryItem>>(new Map());
   const [extra, setExtra] = useState<LibraryItem[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -203,17 +225,8 @@ export function useCwAdvance(
             },
             upNext: true,
           });
-        } else if (fetchOk && list.length > 0) {
-          const finaleEp = list[list.length - 1];
-          const dur = i.state?.duration ?? 0;
-          const off = i.state?.timeOffset ?? 0;
-          const midEpisode = off > 0 && dur > 0 && off / dur < FINISHED_RATIO;
-          const freshMidResume =
-            animeMode === "only" &&
-            midEpisode &&
-            finaleEp != null &&
-            effCur.episode < finaleEp.episode;
-          if (!freshMidResume && !midEpisode) remove.add(i._id);
+        } else if (shouldDropFinished(list, fetchOk, i.state, animeMode, effCur, nextEp, hideCaughtUp)) {
+          remove.add(i._id);
         }
       }
       const lib = library ?? items;
@@ -251,7 +264,7 @@ export function useCwAdvance(
     return () => {
       cancelled = true;
     };
-  }, [items, tmdbKey, enabled, library, animeMode, watchedVersion, traktWatched, simklWatched, anilistWatched, simklStatus, animeVersion, episodeHiding]);
+  }, [items, tmdbKey, enabled, library, animeMode, watchedVersion, traktWatched, simklWatched, anilistWatched, simklStatus, animeVersion, episodeHiding, hideCaughtUp]);
 
   if (!enabled) return items;
   const base =
