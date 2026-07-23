@@ -1161,7 +1161,7 @@ export function DetailView({
   const smartPlayLabel = inSession && !liveContext
     ? t("Play Together")
     : isSeries && lastPlay
-      ? t("Resume S{s}:E{e}", { s: lastPlay.season, e: lastPlay.episode })
+      ? t("Resume S{s}:E{e}", { s: (lastPlay as { displaySeason?: number }).displaySeason ?? lastPlay.season, e: lastPlay.episode })
       : t("Play");
 
   const heroPills = (

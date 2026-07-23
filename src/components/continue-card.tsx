@@ -228,10 +228,10 @@ export const ContinueCard = memo(function ContinueCard({ item, watched = false, 
       : null;
   const sub = animeSeasonMapped
     ? `S${animeSeasonMapped.season} · E${String(animeSeasonMapped.episode).padStart(2, "0")}`
-    : animeEp && Number.isFinite(animeEp) && animeEp > 0
-      ? `Ep ${animeEp}`
-      : ep
-        ? `S${ep.season}E${ep.episode}`
+    : ep
+      ? `S${ep.season}E${ep.episode}`
+      : animeEp && Number.isFinite(animeEp) && animeEp > 0
+        ? `Ep ${animeEp}`
         : "";
 
   const meta: Meta = hydratedMeta
@@ -283,8 +283,17 @@ export const ContinueCard = memo(function ContinueCard({ item, watched = false, 
                   ? aniZipByAnidb
                   : aniZipByKitsu;
           const az = await lookup(nid).catch(() => null);
-          const tv = az?.episodes?.[String(epRef.episode)]?.tvdbId;
-          if (tv) epRef.tvdbEpisodeId = tv;
+          const azEp = az?.episodes?.[String(epRef.episode)];
+          if (azEp?.tvdbId) epRef.tvdbEpisodeId = azEp.tvdbId;
+          if (!kitsuVideo) {
+            const m = az?.mappings;
+            if (m?.kitsu_id) epRef.kitsuStreamId = `kitsu:${m.kitsu_id}:${epRef.episode}`;
+            if (m?.imdb_id) epRef.imdbId = m.imdb_id;
+            if (azEp?.seasonNumber != null && azEp?.episodeNumber != null) {
+              epRef.imdbSeason = azEp.seasonNumber;
+              epRef.imdbEpisode = azEp.episodeNumber;
+            }
+          }
         }
       }
     }
