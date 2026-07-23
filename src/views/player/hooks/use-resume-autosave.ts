@@ -67,30 +67,34 @@ export function useResumeAutosave(params: {
     [],
   );
 
+  const canonSeason = (s: PlayerSrc, se?: number): number | undefined =>
+    s.episode?.imdbSeason != null && s.episode.imdbSeason >= 1 ? s.episode.imdbSeason : se;
+
   const record = (s: PlayerSrc, sn: PlayerSnapshot, se?: number, ep?: number): void => {
     const id = s.meta.id;
     if (!id || id.startsWith("iptv:")) return;
     if (sn.durationSec > 0 && sn.durationSec < STUB_MAX_SEC) return;
     const pos = getPlaybackPosition() || lastGoodPosRef.current;
     if (pos < MIN_POSITION_SEC) return;
+    const cs = canonSeason(s, se);
     const finished =
       (sn.durationSec > 0 && pos / sn.durationSec >= WATCHED_RATIO) || sn.status === "ended";
     lastSavedRef.current = pos * 1000;
-    if (finished) clearResume(id, se, ep);
-    else saveResumeMs(id, pos * 1000, se, ep);
-    if (typeof se === "number") setViewedSeason(id, se);
+    if (finished) clearResume(id, cs, ep);
+    else saveResumeMs(id, pos * 1000, cs, ep);
+    if (typeof cs === "number") setViewedSeason(id, cs);
     if (isExternalPlaylistId(id)) return;
     if (s.streamRef) {
-      savePlayback(id, { ...s.streamRef, url: s.url, title: s.meta.name }, se, ep);
+      savePlayback(id, { ...s.streamRef, url: s.url, title: s.meta.name }, cs, ep);
     } else {
-      savePlayback(id, { title: s.meta.name, parsedTitle: s.meta.name }, se, ep);
+      savePlayback(id, { title: s.meta.name, parsedTitle: s.meta.name }, cs, ep);
     }
     if (
       (s.meta.type === "series" || s.meta.type === "anime" || isAnimeId(id)) &&
-      typeof se === "number" &&
+      typeof cs === "number" &&
       typeof ep === "number" &&
       finished &&
-      !isManuallyWatched(id, se, ep)
+      !isManuallyWatched(id, cs, ep)
     ) {
       recordManualWatchedMeta(id, {
         type: "series",
@@ -98,7 +102,7 @@ export function useResumeAutosave(params: {
         poster: s.meta.poster,
         background: s.meta.background,
       });
-      setManualWatched(id, se, ep, true);
+      setManualWatched(id, cs, ep, true);
       const { resolvedImdbId: rid, resolvedImdbVerified: rv } = latestRef.current;
       void syncSeriesWatchedToStremio(s.meta, rv ? rid : null);
     }
@@ -118,7 +122,7 @@ export function useResumeAutosave(params: {
         name: s.meta.name,
         poster: s.meta.poster,
         background: s.meta.background,
-        season: se,
+        season: cs,
         episode: ep,
         videoId: s.episode?.videoId ?? s.episode?.kitsuStreamId,
         positionMs: Math.floor(pos * 1000),
