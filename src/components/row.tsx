@@ -448,6 +448,8 @@ export function Row({
   };
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    dockPointerXRef.current = null;
+    resetPosterDock();
     if (e.button !== 0 || e.pointerType === "touch") return;
     if (!(e.target as Element).closest("button")) return;
     const el = trackRef.current;
