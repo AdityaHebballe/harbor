@@ -1,5 +1,5 @@
 import { Check, Copy, LogOut, MousePointer2, Plus } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { Meta } from "@/lib/cinemeta";
 import { useSettings } from "@/lib/settings";
@@ -137,6 +137,35 @@ export function TogetherPopover({
             ? "rounded-2xl rounded-es-none"
             : "rounded-2xl rounded-se-none"
       }`;
+  const surfaceCorners: CSSProperties | undefined = modal
+    ? undefined
+    : connectStyle === "tab"
+      ? placement === "above-left"
+        ? {
+            borderStartStartRadius: "16px",
+            borderStartEndRadius: "16px",
+            borderEndStartRadius: 0,
+            borderEndEndRadius: 0,
+          }
+        : {
+            borderStartStartRadius: 0,
+            borderStartEndRadius: 0,
+            borderEndStartRadius: "16px",
+            borderEndEndRadius: "16px",
+          }
+      : placement === "above-left"
+        ? {
+            borderStartStartRadius: "16px",
+            borderStartEndRadius: "16px",
+            borderEndStartRadius: 0,
+            borderEndEndRadius: "16px",
+          }
+        : {
+            borderStartStartRadius: "16px",
+            borderStartEndRadius: 0,
+            borderEndStartRadius: "16px",
+            borderEndEndRadius: "16px",
+          };
 
   const returnToVideo = () => {
     if (!roomMedia?.mediaId) return;
@@ -151,7 +180,7 @@ export function TogetherPopover({
   };
 
   return (
-    <TogetherSurface liquid={settings.liquidGlass} label={t("Watch together")} shapeClass={surfaceShape}>
+    <TogetherSurface liquid={settings.liquidGlass} label={t("Watch together")} shapeClass={surfaceShape} cornerStyle={surfaceCorners}>
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-semibold tracking-tight text-ink">
           {view === "link" ? t("Invite via link") : t("Watch together")}
@@ -386,11 +415,13 @@ function TogetherSurface({
   liquid,
   label,
   shapeClass,
+  cornerStyle,
   children,
 }: {
   liquid: boolean;
   label: string;
   shapeClass: string;
+  cornerStyle?: CSSProperties;
   children: React.ReactNode;
 }) {
   const surfaceClass = `harbor-together-surface w-[400px] max-w-[calc(100vw-2rem)] border ${shapeClass}`;
@@ -415,6 +446,7 @@ function TogetherSurface({
       interactive={false}
       alwaysActive
       style={{
+        ...cornerStyle,
         background:
           "linear-gradient(145deg, rgba(7,11,17,0.50), rgba(7,11,17,0.38) 56%, rgba(7,11,17,0.44))",
         boxShadow:

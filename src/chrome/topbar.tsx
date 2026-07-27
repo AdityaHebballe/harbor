@@ -271,7 +271,7 @@ export function TogetherButton({
     : variant === "ghost"
       ? "h-9 w-9 justify-center"
       : "h-11 w-11 justify-center";
-  const sizing = tabOpen ? (live ? "h-14 gap-2 px-3" : "h-14 w-11 justify-center") : idleSize;
+  const sizing = idleSize;
   const idleChrome = `${glassControls ? "border border-white/[0.10]" : "border border-transparent"} ${variant === "ghost" ? "rounded-full" : "rounded-xl"} ${
     live
       ? variant === "ghost"
@@ -345,7 +345,7 @@ export function TogetherButton({
   );
 
   return (
-    <div ref={wrapRef} className={`relative ${tabOpen ? "harbor-wt-wrap flex flex-col self-stretch justify-end" : ""}`}>
+    <div ref={wrapRef} className="relative">
       {glassControls ? (
         <ThreeLiquidGlassSurface
           radius={tabOpen ? (above ? "0 0 8px 8px" : "8px 8px 0 0") : variant === "ghost" ? "9999px" : "12px"}
