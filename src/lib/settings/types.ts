@@ -392,6 +392,7 @@ export type Settings = {
   hybridTitleBar: boolean;
   topbarScrollBlur: boolean;
   transparentTopBar: boolean;
+  topbarAppearance: "transparent" | "glass" | "filled";
   dragAnywhere: boolean;
   resumeDetailScroll: boolean;
   cwPerProfile: boolean;

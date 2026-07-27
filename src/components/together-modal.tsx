@@ -15,6 +15,7 @@ import { InvitePanel } from "./together-modal/invite-panel";
 import { LinkGlyph } from "./together-modal/link-glyph";
 import { ReturnToVideo } from "./together-modal/return-to-video";
 import { TogetherRelayBanner } from "./together-relay-banner";
+import { ThreeLiquidGlassSurface } from "@/components/ThreeLiquidGlassSurface";
 
 export function TogetherModalShell() {
   const { closeModal } = useTogether();
@@ -125,6 +126,17 @@ export function TogetherPopover({
 
   const roomMedia = snapshot.syncState;
   const canReturn = inSession && !!roomMedia?.mediaId && topKind !== "player";
+  const surfaceShape = modal
+    ? "rounded-2xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]"
+    : `animate-popover-in shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ${
+        connectStyle === "tab"
+          ? placement === "above-left"
+            ? "rounded-t-2xl rounded-b-none"
+            : "rounded-b-2xl rounded-t-none"
+          : placement === "above-left"
+            ? "rounded-2xl rounded-es-none"
+            : "rounded-2xl rounded-se-none"
+      }`;
 
   const returnToVideo = () => {
     if (!roomMedia?.mediaId) return;
@@ -139,24 +151,7 @@ export function TogetherPopover({
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("Watch together")}
-      className={`harbor-together-surface flex max-h-[85vh] w-[400px] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-y-auto border border-edge p-5 ${
-        modal
-          ? "rounded-2xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.8)]"
-          : `animate-popover-in shadow-[0_24px_60px_-20px_rgba(0,0,0,0.7)] ${
-              connectStyle === "tab"
-                ? placement === "above-left"
-                  ? "rounded-t-2xl rounded-b-none"
-                  : "rounded-b-2xl rounded-t-none"
-                : placement === "above-left"
-                  ? "rounded-2xl rounded-es-none"
-                  : "rounded-2xl rounded-se-none"
-            }`
-      }`}
-    >
+    <TogetherSurface liquid={settings.liquidGlass} label={t("Watch together")} shapeClass={surfaceShape}>
       <header className="flex items-center justify-between gap-3">
         <h2 className="text-[14px] font-semibold tracking-tight text-ink">
           {view === "link" ? t("Invite via link") : t("Watch together")}
@@ -383,6 +378,52 @@ export function TogetherPopover({
         </>
       )}
       </div>
-    </div>
+    </TogetherSurface>
+  );
+}
+
+function TogetherSurface({
+  liquid,
+  label,
+  shapeClass,
+  children,
+}: {
+  liquid: boolean;
+  label: string;
+  shapeClass: string;
+  children: React.ReactNode;
+}) {
+  const surfaceClass = `harbor-together-surface w-[400px] max-w-[calc(100vw-2rem)] border ${shapeClass}`;
+  const contentClass = "flex max-h-[85vh] w-full flex-col gap-4 overflow-y-auto p-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
+  if (!liquid) {
+    return (
+      <div role="dialog" aria-modal="true" aria-label={label} className={`${surfaceClass} ${contentClass} border-edge`}>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <ThreeLiquidGlassSurface
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      radius="16px"
+      shaderRadius={0.58}
+      intensity={0.2}
+      interactive={false}
+      alwaysActive
+      style={{
+        background:
+          "linear-gradient(145deg, rgba(7,11,17,0.50), rgba(7,11,17,0.38) 56%, rgba(7,11,17,0.44))",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 0 rgba(110,185,255,0.07), 0 28px 72px -24px rgba(0,0,0,0.78)",
+      }}
+      className={`${surfaceClass} border-white/[0.16]`}
+      contentClassName={`${contentClass} text-white/[0.94] [text-shadow:0_1px_2px_rgba(0,0,0,0.66)] [&_.text-ink]:!text-white/[0.96] [&_.text-ink-muted]:!text-white/[0.80] [&_.text-ink-subtle]:!text-white/[0.64] [&_.border-edge]:!border-white/[0.16] [&_.border-edge-soft]:!border-white/[0.10] [&_input]:!border-white/[0.16] [&_input]:!bg-black/[0.24] [&_input]:!text-white [&_input::placeholder]:!text-white/35 [&_textarea]:!border-white/[0.16] [&_textarea]:!bg-black/[0.24] [&_textarea]:!text-white [&_textarea::placeholder]:!text-white/35 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-1 [&_button]:focus-visible:ring-white/30`}
+    >
+      {children}
+    </ThreeLiquidGlassSurface>
   );
 }
