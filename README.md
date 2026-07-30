@@ -381,11 +381,11 @@ Harbor is built to keep your data on your machine.
 
 Download the latest build for macOS or Windows from the [Releases page][releases], use the [official Linux builds](https://github.com/harborstremio-linux/harbor-linux-builds), or open Harbor in your browser.
 
-| Platform    | Format                                                                                                   |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
-| **macOS**   | `.dmg` (macOS 11.0 or newer)                                                                             |
-| **Windows** | `.exe` NSIS installer (current user install)                                                             |
-| **Web**     | Open in any modern browser, nothing to install                                                           |
+| Platform    | Format                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------- |
+| **macOS**   | `.dmg` (macOS 11.0 or newer)                                                                                        |
+| **Windows** | `.exe` NSIS installer (current user install)                                                                        |
+| **Web**     | Open in any modern browser, nothing to install                                                                      |
 | **Linux**   | [Official `.deb`, `.rpm`, Flatpak, and AppImage builds](https://github.com/harborstremio-linux/harbor-linux-builds) |
 
 **Out of the box, Harbor works on Cinemeta.** You can browse, play, and cast immediately. Adding a free **TMDB key** in Settings is optional and unlocks the richer trending, theaters, per service, and Watch on experiences described above. Your installed Stremio addons merge in automatically when you sign in, deduplicated against the built in rails.
