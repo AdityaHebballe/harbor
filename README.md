@@ -632,9 +632,12 @@ Thank you to everyone, named and unnamed, whose open work Harbor builds upon.
 <sub>Built with care for the people who love good cinema and an open web. <a href="#readme-top">&#9650; back to top</a></sub>
 </div>
 
-<a href="https://cloudsmith.com"><img alt="OSS hosting by Cloudsmith" src="https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&amp;style=flat-square" /></a>
+<br/>
 
 Package repository hosting for Linux is graciously provided by [Cloudsmith](https://cloudsmith.com).
+<br/>
+
+<a href="https://cloudsmith.com"><img alt="OSS hosting by Cloudsmith" src="https://img.shields.io/badge/OSS%20hosting%20by-cloudsmith-blue?logo=cloudsmith&amp;style=flat-square" /></a>
 
 <!-- reference links -->
 
